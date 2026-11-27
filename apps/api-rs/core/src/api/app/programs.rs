@@ -22,7 +22,7 @@ fn optional_profile(cx: &mut Cx<'_>) -> Value {
     }
 }
 
-fn integer(req: &Req, key: &str) -> Result<Option<i64>, HttpError> {
+fn integer(req: &Req, key: &str) -> Result<Option<f64>, HttpError> {
     let Some(raw) = req.query(key).filter(|s| !s.is_empty()) else {
         return Ok(None);
     };
@@ -56,7 +56,7 @@ fn integer(req: &Req, key: &str) -> Result<Option<i64>, HttpError> {
         s.parse::<f64>().ok()
     };
     match number {
-        Some(n) if n.is_finite() && n >= 0.0 && n.fract() == 0.0 => Ok(Some(n as i64)),
+        Some(n) if n.is_finite() && n >= 0.0 && n.fract() == 0.0 => Ok(Some(n)),
         _ => Err(HttpError::bad(&format!("{key} 값이 올바르지 않아요"))),
     }
 }
@@ -113,7 +113,14 @@ pub async fn list(cx: &mut Cx<'_>, req: &Req) -> HResult {
     }
     for key in ["offset", "limit"] {
         if let Some(v) = integer(req, key)? {
-            q.insert(key.into(), json!(v));
+            // list_programs consumes integer pagination; larger values are equivalent
+            // to an offset past the end or the maximum page size respectively.
+            let bounded = if key == "limit" {
+                v.min(100.0)
+            } else {
+                v.min(i64::MAX as f64)
+            };
+            q.insert(key.into(), json!(bounded as i64));
         }
     }
     let programs = Store::new(cx.kv, cx.now).programs();

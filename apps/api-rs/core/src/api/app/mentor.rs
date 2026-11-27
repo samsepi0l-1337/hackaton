@@ -17,8 +17,10 @@ fn user_id(cx: &Cx<'_>) -> Result<String, HttpError> {
 fn load(cx: &mut Cx<'_>, id: &str) -> Value {
     Store::new(cx.kv, cx.now).mentor(id)
 }
-fn save(cx: &mut Cx<'_>, id: &str, m: Value) {
-    let _ = Store::new(cx.kv, cx.now).set_mentor(id, m);
+fn save(cx: &mut Cx<'_>, id: &str, m: Value) -> Result<(), HttpError> {
+    Store::new(cx.kv, cx.now)
+        .set_mentor(id, m)
+        .map_err(|_| HttpError::bad("요청을 처리하지 못했어요"))
 }
 fn view(m: &Value) -> Value {
     json!({"step":m["step"],"profile":m["profile"],"profileComplete":profile::is_profile_complete(&m["profile"]),"messages":m["messages"],"questionIndex":m["questionIndex"],"summary":m["summary"],"updatedAt":m["updatedAt"]})
@@ -111,7 +113,7 @@ pub async fn delete_session(cx: &mut Cx<'_>, _req: &Req) -> HResult {
     let id = user_id(cx)?;
     let m = empty_mentor(load(cx, &id)["profile"].clone());
     let result = view(&m);
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(result)
 }
 /// PUT /api/mentor/profile
@@ -132,7 +134,7 @@ pub async fn put_profile(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let at = iso(cx.now);
     m["profile"] = p.clone();
     m["updatedAt"] = json!(at);
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(json!({"profile":p,"errors":errors,"savedAt":at}))
 }
 /// POST /api/mentor/chat
@@ -182,7 +184,7 @@ pub async fn chat(cx: &mut Cx<'_>, req: &Req) -> HResult {
     m["step"] = json!("chat");
     m["updatedAt"] = json!(at);
     let result = json!({"messages":m["messages"],"questionIndex":index,"done":index >= 3});
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(result)
 }
 /// POST /api/mentor/summary
@@ -211,7 +213,7 @@ pub async fn post_summary(cx: &mut Cx<'_>, _req: &Req) -> HResult {
     m["summary"] = summary.clone();
     m["step"] = json!("summary");
     m["updatedAt"] = json!(iso(cx.now));
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(json!({"summary":summary}))
 }
 /// PUT /api/mentor/summary
@@ -236,7 +238,7 @@ pub async fn put_summary(cx: &mut Cx<'_>, req: &Req) -> HResult {
     m["summary"] = out.clone();
     m["step"] = json!("summary");
     m["updatedAt"] = json!(iso(cx.now));
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(json!({"summary":out}))
 }
 /// GET /api/mentor/result
@@ -287,7 +289,7 @@ pub async fn get_result(cx: &mut Cx<'_>, _req: &Req) -> HResult {
     m["plan"] = plan.clone();
     m["step"] = json!("result");
     let survey = m["survey"].clone();
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(json!({"top":top,"agencies":agencies,"plan":plan,"survey":survey}))
 }
 /// PUT /api/mentor/plan
@@ -315,7 +317,7 @@ pub async fn put_plan(cx: &mut Cx<'_>, req: &Req) -> HResult {
         .ok_or_else(|| HttpError::not_found("계획 항목이 없어요"))?;
     item["done"] = json!(done);
     let plan = m["plan"].clone();
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(json!({"plan":plan}))
 }
 /// POST /api/mentor/feedback
@@ -339,7 +341,7 @@ pub async fn post_feedback(cx: &mut Cx<'_>, req: &Req) -> HResult {
         return Err(HttpError::not_found("공고를 찾을 수 없어요"));
     }
     m["feedback"][program] = json!(relevant);
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(json!({"ok":true}))
 }
 /// POST /api/mentor/survey
@@ -352,6 +354,41 @@ pub async fn post_survey(cx: &mut Cx<'_>, req: &Req) -> HResult {
         .and_then(Value::as_bool)
         .ok_or_else(|| HttpError::bad("discovered가 필요해요"))?;
     m["survey"] = json!(discovered);
-    save(cx, &id, m);
+    save(cx, &id, m)?;
     Resp::ok(json!({"ok":true}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        app::AppOpts,
+        kv::MemKv,
+        ports::Env,
+        testkit::{block_on, FakePorts},
+    };
+
+    #[test]
+    fn invalid_profile_persistence_returns_bad_request() {
+        let mut kv = MemKv::default();
+        let env = Env::new();
+        let opts = AppOpts::default();
+        let ports = FakePorts::default();
+        let mut cx = Cx {
+            env: &env,
+            kv: &mut kv,
+            ports: &ports,
+            opts: &opts,
+            now: 1_795_741_200_000,
+            user: Some(json!({"id":"u"})),
+        };
+        let req = Req {
+            body: Some(json!({"profile":{"age":24.5}}).to_string()),
+            ..Req::default()
+        };
+        let err = block_on(put_profile(&mut cx, &req)).err();
+        assert!(err.is_some_and(|e| e.status == 400
+            && e.code == "bad_request"
+            && e.message == "요청을 처리하지 못했어요"));
+    }
 }
