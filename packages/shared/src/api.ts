@@ -2,7 +2,7 @@
 // 모든 경로 앞에 /api. 인증은 HttpOnly 세션 쿠키 `sid`. 오류는 ApiError 모양, 상태 코드는 아래 주석.
 import type {
   ExplorationOrigin, DirectionStatus, Exploration, ProblemCard, RegionalContext, RegionalContextCard, PrepItem,
-  ResourceCard, StartProfile, SummaryV2,
+  ResourceCard, StartProfile, SummaryV2, ConsultQuota, FieldQuestion,
 } from './explore';
 import type { READINESS_OPTIONS } from './explore';
 import type {
@@ -20,10 +20,11 @@ export type ErrorCode =
   | 'not_found' // 404
   | 'conflict' // 409 이미 가입한 이메일, 중복 제출
   | 'closed' // 409 마감 지남
-  | 'approval_required'; // 409 승인 없이 제출
+  | 'approval_required' // 409 승인 없이 제출
+  | 'limit'; // 429 상담 횟수 초과 (error.quota 포함)
 
 export interface ApiError {
-  error: { code: ErrorCode; message: string; fields?: FieldError[] };
+  error: { code: ErrorCode; message: string; fields?: FieldError[]; quota?: ConsultQuota };
 }
 
 export const ROUTES = {
@@ -64,7 +65,7 @@ export const ROUTES = {
   explore: '/api/explore/session', // GET → ExploreSession, DELETE → 초기화 (서버 기록·쿠키 삭제)
   start: '/api/explore/start', // PUT StartRequest → ExploreSession (F1 자동 저장, 최소 입력만 검사)
   exploration: '/api/explore/exploration', // PUT ExplorationRequest → ExploreSession (문제 선택·변경·보류, 방향 선택)
-  exploreChat: '/api/explore/chat', // POST ExploreChatRequest → ExploreChatResponse (최대 3문항)
+  exploreChat: '/api/explore/chat', // POST ExploreChatRequest → ExploreChatResponse (최대 3문항). 첫 질문 요청이 상담 1회 → 초과 시 429 limit
   exploreSummary: '/api/explore/summary', // POST → { summary, regional } 생성, PUT { summary } → 수정 (준비 완료 표시 초기화)
   exploreResult: '/api/explore/result', // GET → ExploreResultResponse
   conditions: '/api/explore/conditions', // PUT { conditions: UserConditions } → ExploreResultResponse ('모름' 허용)
@@ -97,6 +98,8 @@ export interface ExploreSession {
   summary: SummaryV2 | null;
   regional: RegionalContextCard | null;
   updatedAt: string | null;
+  quota?: ConsultQuota; // 상담 횟수 (1인당 7일 3회). API 는 항상 채운다
+  counted?: boolean; // 이 세션이 이미 상담 1회로 세어졌는지
 }
 export interface StartRequest { start: Partial<StartProfile> }
 export interface ExplorationRequest {
@@ -130,6 +133,7 @@ export interface ExploreResultResponse {
   noMatchReason: string | null; // 맞는 경로가 없을 때
   coverageNote: string; // 실제 제공 지역·자료 범위 안내
   conditionNote: string; // CONDITION_NOTE
+  fieldQuestions?: FieldQuestion[]; // 현장에 확인할 질문 최대 3개 (상태: 현장 확인 전). 문제가 바뀌면 다시 만든다
 }
 export type ExploreEventType = 'start' | 'chat_done' | 'result' | 'resource_link' | 'regional_expand' | 'feedback';
 export interface ExploreFeedbackRequest {
