@@ -41,6 +41,8 @@ function ApplyCard({ resourceId }: { resourceId: string }) {
       {!user
         ? <div><Link className="btn" to={`/login?next=${encodeURIComponent(`/programs/${resourceId}`)}`}>로그인하고 지원서 쓰기</Link></div>
         : mine.loading ? <p className="muted">확인하는 중이에요.</p>
+        : !user.emailVerified
+          ? <p style={{ margin: 0 }}>이메일 인증을 마치면 지원서를 쓸 수 있어요. <Link to="/me">인증하러 가기</Link></p>
         : existing
           ? <div><Link className="btn" to={`/applications/${existing.id}`}>내 지원서 이어 쓰기</Link></div>
           : <div><button className="btn" type="button" disabled={busy || blocked} onClick={create}>{busy ? '초안을 쓰는 중...' : '지원서 작성'}</button></div>}

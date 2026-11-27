@@ -19,6 +19,8 @@ await step('first non-closed program starts 지원서 작성 and opens applicati
   await page.waitForSelector('.program-detail h1');
   programTitle = await page.evaluate(() => document.querySelector('.program-detail h1').textContent.trim());
   await page.waitForSelector('.program-detail section button:has-text("지원서 작성")');
+  // 버튼이 화면 밖이면 클릭이 실패한다. 먼저 화면 안으로 옮긴다.
+  await page.evaluate(() => [...document.querySelectorAll('.program-detail section button')].find(b => b.textContent.includes('지원서 작성'))?.scrollIntoView({ block: 'center' }));
   await page.click('.program-detail section button:has-text("지원서 작성")');
   await page.waitForURL('**/applications/*', { timeout: 60000 });
   applicationPath = new URL(await page.url()).pathname;

@@ -45,8 +45,8 @@ export function RegionPicker({ id, region, district, onChange, allLabel = '전�
   const extra = extras.find((x) => x.value === region);
   const current = region ? (extra ? extra.label : district ? `${region} ${district}` : region) : allLabel;
   return (
-    <div className="region-picker" ref={root}>
-      <button ref={trigger} id={id} type="button" className="input region-trigger" aria-haspopup="true" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}>
+    <div className="region-picker" ref={root} onBlur={(e) => { if (open && root.current && !root.current.contains(e.relatedTarget as Node | null)) setOpen(false); }}>
+      <button ref={trigger} id={id} type="button" className="input region-trigger" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}>
         <span>{current}</span><span aria-hidden="true">{open ? '▴' : '▾'}</span>
       </button>
       {open && (
