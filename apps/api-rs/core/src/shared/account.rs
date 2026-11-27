@@ -7,7 +7,7 @@ pub const PASSWORD_RULE: (usize, usize) = (8, 64);
 /// TS: `export const PASSWORD_RULE_TEXT: string`.
 pub const PASSWORD_RULE_TEXT: &str = "8~64자, 영문과 숫자를 모두 포함";
 /// TS: `export const EMAIL_RE: RegExp`.
-pub const EMAIL_RE: &str = r"^[^\s@]+@[^\s@]+\.[^\s@]+$";
+pub const EMAIL_RE: &str = r"^[^\t\n\x0B\f\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}@]+@[^\t\n\x0B\f\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}@]+\.[^\t\n\x0B\f\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}@]+$";
 /// TS: `export const VERIFY_TTL_HOURS = 24`.
 pub const VERIFY_TTL_HOURS: u32 = 24;
 /// TS: `export const VERIFY_RESEND_SECONDS = 60`.

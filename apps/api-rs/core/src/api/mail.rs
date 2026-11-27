@@ -49,7 +49,14 @@ pub async fn send(env: &Env, ports: &dyn Ports, mail: &Mail) -> Result<(), Strin
             return match ports.send_email(from, mail).await {
                 Some(Ok(())) => Ok(()),
                 Some(Err(err)) => {
-                    ports.log("error", &format!("[mail] 전송 실패 code={err}"));
+                    let code = if !err.is_empty()
+                        && err.bytes().all(|b| b.is_ascii_uppercase() || b == b'_')
+                    {
+                        err.as_str()
+                    } else {
+                        "unknown"
+                    };
+                    ports.log("error", &format!("[mail] 전송 실패 code={code}"));
                     Err(err)
                 }
                 None => {
@@ -81,6 +88,8 @@ pub async fn send(env: &Env, ports: &dyn Ports, mail: &Mail) -> Result<(), Strin
             ports.log("log", &format!("[mail:e2e] to={} body={text}", mail.to));
         }
     }
-    let _ = ports.send_email("", mail).await;
+    if !env.contains_key("EMAIL") {
+        let _ = ports.send_email("", mail).await;
+    }
     Ok(())
 }

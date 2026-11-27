@@ -21,7 +21,7 @@ pub fn hash_legacy_password(password: &str, ports: &dyn Ports) -> String {
     format!(
         "pbkdf2${ITER}${}${}",
         hex::encode(&salt),
-        format_args!("${}", derive(password, &salt, ITER))
+        derive(password, &salt, ITER)
     )
 }
 /// TS: `export async function verifyLegacyPassword(password: string, stored: string): Promise<boolean>`.
@@ -119,6 +119,39 @@ pub fn create_passwords<'a>(pepper: Option<&str>, ports: &'a dyn Ports) -> Passw
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ports::{HttpReq, HttpResp, Mail};
+    use async_trait::async_trait;
+    use serde_json::Value;
+
+    struct TestPorts;
+    #[async_trait(?Send)]
+    impl Ports for TestPorts {
+        async fn fetch(&self, _: HttpReq) -> Result<HttpResp, String> {
+            Err("unused".into())
+        }
+        async fn doc_worker(&self, _: &str, _: &Value) -> Option<Result<HttpResp, String>> {
+            None
+        }
+        async fn ai_run(&self, _: &str, _: &Value, _: &Value) -> Option<Result<Value, String>> {
+            None
+        }
+        async fn send_email(&self, _: &str, _: &Mail) -> Option<Result<(), String>> {
+            None
+        }
+        fn random_bytes(&self, n: usize) -> Vec<u8> {
+            vec![42; n]
+        }
+        fn log(&self, _: &str, _: &str) {}
+    }
+
+    #[test]
+    fn legacy_round_trip() {
+        let stored = hash_legacy_password("demo1234!", &TestPorts);
+        assert_eq!(stored.split('$').count(), 4);
+        assert!(verify_legacy_password("demo1234!", &stored));
+        assert!(!verify_legacy_password("wrong", &stored));
+    }
+
     #[test]
     fn ts_hashes_verify() {
         let bcrypt_hash = "bcrypt$$2b$10$n1.adS/qRPnMmRVkHP.53uuNZIfwK8Gc.KH8gjO9qIpB3vky9gh52";
