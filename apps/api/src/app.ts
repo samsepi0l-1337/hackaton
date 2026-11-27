@@ -26,6 +26,8 @@ export interface AppOptions {
   fetch?: typeof fetch;
   /** 공고 양식을 읽을 doc-worker 클라이언트. 없으면 모의 양식. (Workers: DOC_WORKER Durable Object) */
   docWorkerFor?: (env: Bindings) => DocWorkerClient | null;
+  /** 저장소. 기본은 메모리. Workers 에서는 Durable Object KV. */
+  store?: () => Promise<Store>;
 }
 
 type Env = { Bindings: Bindings; Variables: { store: Store; user: UserRecord | null; now: Date; ai: ReturnType<typeof createAiTasks> } };
@@ -91,7 +93,7 @@ export function createApp(opts: AppOptions = {}) {
   const clock = opts.now ?? (() => new Date());
   const app = new Hono<Env>();
   let storeP: Promise<Store> | null = null;
-  const getStore = () => (storeP ??= createStore(clock()));
+  const getStore = () => (storeP ??= (opts.store ? opts.store() : createStore(clock())));
 
   app.use('/api/*', cors({ origin: 'http://localhost:5173', credentials: true }));
   app.use('/api/*', async (c, next) => {
@@ -102,7 +104,11 @@ export function createApp(opts: AppOptions = {}) {
     const token = getCookie(c, SESSION_COOKIE);
     const uid = token ? store.userIdOfSession(token) : undefined;
     c.set('user', (uid && store.findUser(uid)) || null);
-    await next();
+    try {
+      await next();
+    } finally {
+      store.flush(); // 바뀐 레코드를 Zod 로 검사해 저장
+    }
   });
 
   const requireUser = (c: Ctx): UserRecord => {
@@ -177,7 +183,7 @@ export function createApp(opts: AppOptions = {}) {
   const startSession = (c: Ctx, userId: string) => {
     const token = randomToken();
     c.get('store').createSession(token, userId);
-    setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: 60 * 60 * 24 * 14 });
+    setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: 60 * 60 * 24 * 14, secure: new URL(c.req.url).protocol === 'https:' });
   };
 
   app.post('/api/auth/signup', async (c) => {

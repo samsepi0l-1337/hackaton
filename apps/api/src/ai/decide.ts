@@ -1,5 +1,5 @@
 // Solar Decide 관련도. 후보 공고 id 를 선택지로 보내 확률을 받는다. 실패하면 null → 규칙 점수.
-import { AI_TIMEOUT_MS, DECIDE_MAX_CHOICES, DECIDE_MODEL, UPSTAGE_BASE_URL, type Program } from '@gil/shared';
+import { DECIDE_ATTEMPTS, DECIDE_MAX_CHOICES, DECIDE_MODEL, DECIDE_TIMEOUT_MS, UPSTAGE_BASE_URL, type Program } from '@gil/shared';
 import type { Bindings } from '../env';
 import { resolveMode, type AiDeps } from './solar';
 
@@ -29,9 +29,10 @@ export function createDecide(env: Partial<Bindings> = {}, deps: AiDeps = {}): De
     async relevance(stateText, candidates) {
       const list = candidates.slice(0, DECIDE_MAX_CHOICES);
       if (!enabled || list.length < 2) return null;
+    const once = async (): Promise<Record<string, number> | null> => {
       const ctl = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => { ctl.abort(); rej(new Error('timeout')); }, AI_TIMEOUT_MS); });
+      const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => { ctl.abort(); rej(new Error('timeout')); }, DECIDE_TIMEOUT_MS); });
       try {
         const criteria = Object.fromEntries(list.map((p) => [p.id, clip(`${p.title} / ${p.category} / ${p.content}`, 200)]));
         const headers: Record<string, string> = { 'content-type': 'application/json', authorization: `Bearer ${env.UPSTAGE_API_KEY}` };
@@ -51,10 +52,15 @@ export function createDecide(env: Partial<Bindings> = {}, deps: AiDeps = {}): De
         for (const p of list) { const v = probs[p.id]; if (typeof v === 'number' && Number.isFinite(v)) clean[p.id] = v; }
         const out = normalizeByMax(clean);
         return Object.keys(out).length ? out : null;
-      } catch (e) {
-        console.warn(`[ai] decide 실패, 규칙 점수를 씁니다: ${e instanceof Error ? e.message : String(e)}`);
-        return null;
       } finally { clearTimeout(timer); }
+    };
+      for (let i = 1; i <= DECIDE_ATTEMPTS; i++) {
+        try { return await once(); } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (i === DECIDE_ATTEMPTS || !/timeout|http 5/.test(msg)) { console.warn(`[ai] decide 실패, 규칙 점수를 씁니다: ${msg}`); return null; }
+        }
+      }
+      return null;
     },
   };
 }

@@ -1,5 +1,5 @@
 // 문장 생성 어댑터. 어떤 실패든 null 을 돌려주고 호출한 쪽이 규칙 문장을 쓴다. 절대 throw 하지 않는다.
-import { AI_GATEWAY_ID_DEFAULT, AI_ROUTE, AI_TIMEOUT_MS, SOLAR_MODELS, UPSTAGE_BASE_URL, type AiMetadata, type AiMode, type AiTask } from '@gil/shared';
+import { AI_GATEWAY_ID_DEFAULT, AI_ROUTE, AI_TIMEOUT_MS, AI_TIMEOUT_BY_TASK, SOLAR_MODELS, UPSTAGE_BASE_URL, type AiMetadata, type AiMode, type AiTask } from '@gil/shared';
 import type { Bindings } from '../env';
 
 export interface ChatMsg { role: 'system' | 'user' | 'assistant'; content: string }
@@ -26,10 +26,10 @@ export function createTextAi(env: Partial<Bindings> = {}, deps: AiDeps = {}): Te
   const doFetch = deps.fetch ?? fetch;
   const base = (env.UPSTAGE_BASE_URL || UPSTAGE_BASE_URL).replace(/\/+$/, '');
 
-  const withTimeout = async <T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+  const withTimeout = async <T>(run: (signal: AbortSignal) => Promise<T>, ms = AI_TIMEOUT_MS): Promise<T> => {
     const ctl = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => { ctl.abort(); rej(new Error('timeout')); }, AI_TIMEOUT_MS); });
+    const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => { ctl.abort(); rej(new Error('timeout')); }, ms); });
     try { return await Promise.race([run(ctl.signal), timeout]); } finally { clearTimeout(timer); }
   };
 
@@ -40,7 +40,7 @@ export function createTextAi(env: Partial<Bindings> = {}, deps: AiDeps = {}): Te
       const metadata: AiMetadata = { app: 'gil', task, user_id: meta.userId ?? 'anon' };
       try {
         if (mode === 'route') {
-          const out = await withTimeout(() => env.AI!.run(AI_ROUTE as any, { messages } as any, { gateway: { id: env.AI_GATEWAY_ID || AI_GATEWAY_ID_DEFAULT, metadata } } as any));
+          const out = await withTimeout(() => env.AI!.run(AI_ROUTE as any, { messages } as any, { gateway: { id: env.AI_GATEWAY_ID || AI_GATEWAY_ID_DEFAULT, metadata } } as any), AI_TIMEOUT_BY_TASK[task]);
           return contentOf(out);
         }
         const headers: Record<string, string> = { 'content-type': 'application/json', authorization: `Bearer ${env.UPSTAGE_API_KEY}`, 'cf-aig-metadata': JSON.stringify(metadata) };
@@ -49,7 +49,7 @@ export function createTextAi(env: Partial<Bindings> = {}, deps: AiDeps = {}): Te
           const res = await doFetch(`${base}/chat/completions`, { method: 'POST', headers, signal, body: JSON.stringify({ model: SOLAR_MODELS[task], messages }) });
           if (!res.ok) throw new Error(`http ${res.status}`);
           return contentOf(await res.json());
-        });
+        }, AI_TIMEOUT_BY_TASK[task]);
       } catch (e) {
         console.warn(`[ai] ${task} 실패, 규칙 결과를 씁니다: ${e instanceof Error ? e.message : String(e)}`);
         return null;

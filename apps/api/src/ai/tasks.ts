@@ -32,13 +32,15 @@ export function createAiTasks(env: Partial<Bindings> = {}, deps: AiDeps = {}) {
         { role: 'user', content: `프로필: ${profileText(profile)}\n답변:\n${answers.join('\n')}` },
       ], { userId });
       const j = parseJson(out) as Record<string, unknown> | null;
-      if (!j || typeof j !== 'object' || Array.isArray(j)) return null;
+      if (!j || typeof j !== 'object' || Array.isArray(j)) { if (out) console.warn('[ai] summary JSON 파싱 실패, 규칙 요약을 씁니다'); return null; }
       const res = {} as IdeaSummary;
+      // 모델이 키 이름을 바꿔 쓸 때가 있다 (예: keyProblem). 소문자로 키 이름을 포함하면 받는다.
+      const pick = (k: string) => j[k] ?? Object.entries(j).find(([key]) => key.toLowerCase().includes(k))?.[1];
       for (const k of SUMMARY_KEYS) {
-        const v = j[k];
-        if (!str(v)) return null;
+        const v = pick(k);
+        if (!str(v)) { console.warn(`[ai] summary.${k} 비어 있음, 규칙 요약을 씁니다`); return null; }
         const g = guardText(v, { allowedText: [profileText(profile), ...answers], maxLength: 400 });
-        if (!g) return null;
+        if (!g) { console.warn(`[ai] summary.${k} 사실 검사 탈락, 규칙 요약을 씁니다`); return null; }
         res[k] = g;
       }
       return res;
