@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { relevanceCandidates, type Program } from '@gil/shared';
+import { relevanceCandidates, type Program, DECIDE_MODEL } from '@gil/shared';
 import { createDecide, normalizeByMax } from '../src/ai/decide';
 import { guardText, parseJson } from '../src/ai/guard';
 import { createTextAi } from '../src/ai/solar';
@@ -118,7 +118,7 @@ describe('decide', () => {
     const ok = fake(() => new Response(JSON.stringify({ answers: { fit: { probabilities: { a: 0.1, b: 0.3 } } } })));
     expect(await createDecide(env, { fetch: ok.f }).relevance('s', cands)).toEqual({ a: 0.1 / 0.3, b: 1 });
     expect(ok.calls[0]!.url).toEndWith('/systemone');
-    expect(ok.calls[0]!.body.model).toBe('solar-decide');
+    expect(ok.calls[0]!.body.model).toBe(DECIDE_MODEL);
     expect(Object.keys(ok.calls[0]!.body.questions.fit.criteria)).toEqual(['a', 'b']);
     expect(await createDecide(env, { fetch: fake(() => new Response('{}', { status: 403 })).f }).relevance('s', cands)).toBeNull();
     expect(await createDecide(env, { fetch: fake(() => new Response('{"answers":{}}')).f }).relevance('s', cands)).toBeNull();
@@ -232,5 +232,21 @@ describe('app integration', () => {
     expect(by('problem').value.length).toBeLessThanOrEqual(by('problem').maxLength ?? 1e9);
     const off = await (await demo(setup({ env: ON, fetch: fake(() => new Response('', { status: 500 })).f }))).post('/api/applications', { programId: p });
     expect(off.body.fields.find((x: any) => x.key === 'plan').value).toBe('');
+  });
+});
+
+describe('decide 재시도', () => {
+  test('5xx 면 한 번 더 시도한다', async () => {
+    const { createDecide } = await import('../src/ai/decide');
+    let n = 0;
+    const f = (async () => {
+      n += 1;
+      if (n === 1) return new Response('busy', { status: 503 });
+      return new Response(JSON.stringify({ answers: { fit: { probabilities: { a: 0.2, b: 0.8 } } } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const env = { AI_MODE: 'upstage', UPSTAGE_API_KEY: 'k', DECIDE_ENABLED: '1' };
+    const cands = [{ id: 'a', title: 'A', category: 'c', content: '' }, { id: 'b', title: 'B', category: 'c', content: '' }] as any;
+    expect(await createDecide(env, { fetch: f }).relevance('s', cands)).toEqual({ a: 0.25, b: 1 });
+    expect(n).toBe(2);
   });
 });

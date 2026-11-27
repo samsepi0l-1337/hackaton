@@ -28,6 +28,8 @@ export const AI_GATEWAY_ID_DEFAULT = 'gil-gateway';
 export const UPSTAGE_BASE_URL = 'https://api.upstage.ai/v1';
 /** AI 응답을 기다리는 최대 시간. 넘으면 규칙 결과를 쓴다. */
 export const AI_TIMEOUT_MS = 8000;
+/** 작업별 시간 제한. Solar Pro 로 긴 JSON 을 만드는 작업은 더 기다린다. */
+export const AI_TIMEOUT_BY_TASK: Record<AiTask, number> = { mentor: 8000, reason: 8000, summary: 15000, prep: 15000, draft: 15000, extract: 20000 };
 
 /**
  * AI 모드.
@@ -45,7 +47,10 @@ export interface AiMetadata {
 }
 
 // ---- Solar Decide (/v1/systemone) ----
-export const DECIDE_MODEL = 'solar-decide';
+export const DECIDE_MODEL = 'solar-decide-flash'; // 지연이 짧은 변형. 같은 요청·응답 형식
+/** Decide 는 보통 1초 안에 답한다. 가끔 멈추는 연결을 대비해 짧게 끊고 한 번 더 시도한다. */
+export const DECIDE_TIMEOUT_MS = 3000;
+export const DECIDE_ATTEMPTS = 2;
 export const DECIDE_MAX_CHOICES = 26;
 
 // ---- Document Parse ----

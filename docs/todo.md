@@ -14,7 +14,8 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | 목업 웹 | 완료 (#8) |
 | 국내 AI (Upstage Solar·Decide·Document Parse) + AI Gateway | 구현 완료 (#11, #12), 실제 키 확인 남음 |
 | Cloudflare Containers doc-worker | 구현·로컬 통합 완료, 실제 공고 확인은 배포 후 |
-| 배포 | 시작 전 (아래 5절 선행 조건) |
+| DB (Durable Object SQLite + Zod) | 완료 |
+| 배포 | 진행 중 |
 
 ## 1. 공통·기반
 
@@ -68,11 +69,14 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] `apps/api/src/ai/`: Solar 클라이언트(upstage 직접 / route), 시간 초과, 규칙 폴백, 사실 검사
 - [x] 작업별 연결: F2 질문 문장, F3 요약, F6 이유, F12 계획, F13 초안
 - [x] Solar Decide 관련도 → Top3 점수 (jev와 같은 형식이라 base URL만 바꿔 비교 가능)
-- [ ] 실제 키로 Solar·Decide 응답 확인 (문서 기준으로만 구현됨)
+- [x] 실제 키로 Solar·Decide 응답 확인 (Decide ~1초, Solar Mini ~1.5초, Solar Pro 요약 ~11초)
+- [x] Decide 는 `solar-decide-flash`, 3초 제한 + 1회 재시도 (로컬 workerd 에서 연결이 가끔 멈춤)
+- [x] Solar Pro 작업 시간 제한 15초, 요약 JSON 키 이름 흔들림 대응
 - [x] `apps/api/src/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기, discover→download→parse 파이프라인
 - [x] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답·Document Parse 응답
-- [ ] Upstage API 키 **입력 필요** (`wrangler secret put UPSTAGE_API_KEY`, 로컬은 `.dev.vars`)
-- [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요**
+- [x] Upstage API 키 `gil-hackathon` 발급, 로컬 `apps/api/.dev.vars` (git 제외)
+- [ ] 배포 환경 secret `UPSTAGE_API_KEY`
+- [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요** — 지금은 동의 없이도 호출됨
 - [ ] AI Gateway 생성(인증 켜기), 커스텀 프로바이더 `upstage` (base `https://api.upstage.ai`) 등록, 라우트 업로드·배포
 - [ ] 라우트 모델 노드의 provider 값(`custom-upstage`?, `workers-ai`?)을 대시보드에서 확인
 - [ ] Upstage 콘솔·AI Gateway 대시보드에서 하루 사용량 확인
@@ -91,9 +95,9 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 
 ## 5. 배포 (선행 조건)
 
-- [ ] 저장소를 Durable Object 또는 D1로 옮김 (메모리 저장소는 isolate마다 따로라 로그인이 유지되지 않음)
-- [ ] 웹 정적 파일 배포 (Workers Static Assets)
-- [ ] 계정이 Workers Paid인지 확인 **입력 필요**
+- [x] DB: `GilApp` Durable Object 의 SQLite KV + Zod 스키마 검사 (`apps/api/src/db/schema.ts`, `store.ts`). 재시작해도 데이터 유지
+- [x] 웹 정적 파일을 같은 Worker 에서 제공 (Workers Static Assets, `/api/*` 만 Worker 가 먼저 받음)
+- [x] 계정: Workers Paid $5 (확인됨)
 - [ ] 사용량 경보 설정 (Containers·Workers AI) **입력 필요**
 - [ ] 첫 배포는 사용자 확인 후 (`wrangler deploy`)
 
