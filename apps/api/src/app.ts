@@ -4,22 +4,28 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
   MENTOR_PROGRAM_DEFLECT, MENTOR_QUESTION_COUNT, MOCK_FORM_FIELDS, PASSWORD_MIN, SESSION_COOKIE, STAGES,
   asksAboutPrograms, buildPlan, draftSummary, homeSummary, isClosed, isProfileComplete, listPrograms,
-  mentorOpening, parseVerdict, pickAgencies, pickMentorQuestions, recommend, scoreTypeTest, toCard,
+  mentorOpening, parseVerdict, pickAgencies, pickMentorQuestions, recommend, relevanceCandidates, scoreTypeTest, toCard,
   validateProfile, PROGRAM_CATEGORIES, TYPE_QUESTIONS,
   type ApiError, type Application, type ApplicationStatus, type ApplicationView, type ChatMessage,
   type ConsultProfile, type ErrorCode, type FieldError, type FormField, type IdeaSummary, type MentorSession,
   type Program, type ProgramListQuery, type Stats, type User,
 } from '@gil/shared';
 import { hashPassword, randomToken, verifyPassword } from './password';
+import type { Bindings } from './env';
+import { createAiTasks } from './ai/tasks';
 import { createStore, emptyMentor, type MentorState, type Store, type UserRecord } from './store';
 
 export interface AppOptions {
   now?: () => Date;
   /** 테스트·데모용: true를 돌려주면 첫 제출 시도가 실패한다. */
   failSubmit?: (a: Application) => boolean;
+  /** 테스트용: 바인딩을 직접 넣는다. 실제 실행에서는 요청의 c.env 가 우선한다. */
+  env?: Bindings;
+  /** 테스트용: AI 호출에 쓸 fetch. */
+  fetch?: typeof fetch;
 }
 
-type Env = { Variables: { store: Store; user: UserRecord | null; now: Date } };
+type Env = { Bindings: Bindings; Variables: { store: Store; user: UserRecord | null; now: Date; ai: ReturnType<typeof createAiTasks> } };
 type Ctx = Context<Env>;
 
 class HttpError extends Error {
@@ -82,6 +88,7 @@ export function createApp(opts: AppOptions = {}) {
     const store = await getStore();
     c.set('store', store);
     c.set('now', clock());
+    c.set('ai', createAiTasks({ ...opts.env, ...(c.env ?? {}) }, { fetch: opts.fetch }));
     const token = getCookie(c, SESSION_COOKIE);
     const uid = token ? store.userIdOfSession(token) : undefined;
     c.set('user', (uid && store.findUser(uid)) || null);
@@ -272,18 +279,20 @@ export function createApp(opts: AppOptions = {}) {
     const at = c.get('now').toISOString();
     const questions = pickMentorQuestions(profile);
     const added: ChatMessage[] = [];
-    const ask = (i: number) => added.push({ role: 'mentor', text: questions[i]!, at, questionIndex: i });
+    const ai = c.get('ai');
+    const lastAnswer = [...m.messages].reverse().find((x) => x.role === 'user' && x.text)?.text ?? '';
+    const ask = async (i: number, answer = lastAnswer) => { added.push({ role: 'mentor', text: await ai.mentorQuestion(questions[i]!, answer, u.id), at, questionIndex: i }); };
 
     if (m.messages.length === 0 && !text && !skip) {
       added.push({ role: 'mentor', text: mentorOpening(profile), at });
-      ask(0);
+      await ask(0, '');
     } else if (!text && !skip) {
       // 빈 요청, 이미 시작함: 새 메시지 없음
     } else if (m.questionIndex < MENTOR_QUESTION_COUNT) {
-      if (m.messages.length === 0) added.push({ role: 'mentor', text: mentorOpening(profile), at }), ask(0);
+      if (m.messages.length === 0) { added.push({ role: 'mentor', text: mentorOpening(profile), at }); await ask(0, ''); }
       added.push(skip ? { role: 'user', text: '', at, questionIndex: m.questionIndex, skipped: true } : { role: 'user', text, at, questionIndex: m.questionIndex });
       m.questionIndex += 1;
-      if (m.questionIndex < MENTOR_QUESTION_COUNT) ask(m.questionIndex);
+      if (m.questionIndex < MENTOR_QUESTION_COUNT) await ask(m.questionIndex, text);
     } else if (text) {
       added.push({ role: 'user', text, at });
       added.push({ role: 'mentor', text: asksAboutPrograms(text) ? MENTOR_PROGRAM_DEFLECT : '좋은 질문이에요. 지금 말씀해 주신 내용은 아이디어 요약에 반영해 둘게요.', at });
@@ -295,10 +304,12 @@ export function createApp(opts: AppOptions = {}) {
   });
 
   const SUMMARY_KEYS = ['problem', 'customer', 'solution', 'revenue', 'busan'] as const;
-  app.post('/api/mentor/summary', (c) => {
-    const m = c.get('store').mentor(requireUser(c).id);
+  app.post('/api/mentor/summary', async (c) => {
+    const u = requireUser(c);
+    const m = c.get('store').mentor(u.id);
     const profile = requireProfile(m);
-    m.summary = draftSummary(profile, m.messages.filter((x) => x.questionIndex !== undefined));
+    const answered = m.messages.filter((x) => x.questionIndex !== undefined);
+    m.summary = (await c.get('ai').summary(profile, answered.filter((x) => x.role === 'user' && x.text).map((x) => x.text), u.id)) ?? draftSummary(profile, answered);
     m.step = 'summary';
     m.updatedAt = c.get('now').toISOString();
     return c.json({ summary: m.summary });
@@ -320,17 +331,24 @@ export function createApp(opts: AppOptions = {}) {
     return c.json({ summary: out });
   });
 
-  const topOf = (c: Ctx, m: MentorState) => {
+  const topOf = async (c: Ctx, m: MentorState) => {
     const store = c.get('store');
     const excluded = Object.entries(m.feedback).filter(([, rel]) => !rel).map(([id]) => id);
-    return recommend({ programs: store.programs, profile: m.profile, now: c.get('now'), summary: m.summary, excludeIds: excluded, feedback: m.feedback });
+    const candidates = relevanceCandidates(store.programs, m.profile, c.get('now'), excluded);
+    const relevance = (await c.get('ai').relevance(m.profile, candidates)) ?? undefined; // 후보(자격 불가 제외)만 보내므로 Top3에 불가 공고가 들어갈 수 없다
+    return recommend({ programs: store.programs, profile: m.profile, now: c.get('now'), summary: m.summary, excludeIds: excluded, feedback: m.feedback, relevance });
   };
 
-  app.get('/api/mentor/result', (c) => {
-    const m = c.get('store').mentor(requireUser(c).id);
+  app.get('/api/mentor/result', async (c) => {
+    const u = requireUser(c);
+    const m = c.get('store').mentor(u.id);
     requireProfile(m);
-    const top = topOf(c, m);
-    if (!m.plan) m.plan = buildPlan(top, c.get('now'));
+    const ai = c.get('ai');
+    const top = await ai.reasons(await topOf(c, m), m.profile, c.get('now'), u.id);
+    if (!m.plan) {
+      const rule = buildPlan(top, c.get('now'));
+      m.plan = (await ai.plan(rule, top, m.profile, u.id)) ?? rule;
+    }
     m.step = 'result';
     return c.json({ top, agencies: pickAgencies(c.get('store').agencies, m.profile), plan: m.plan, survey: m.survey });
   });
@@ -341,7 +359,7 @@ export function createApp(opts: AppOptions = {}) {
     if (!Number.isInteger(b.day) || (b.day as number) < 1 || (b.day as number) > 7 || typeof b.done !== 'boolean') throw bad('day(1~7)와 done이 필요해요');
     if (!m.plan) {
       requireProfile(m);
-      m.plan = buildPlan(topOf(c, m), c.get('now'));
+      m.plan = buildPlan(await topOf(c, m), c.get('now'));
     }
     const item = m.plan.find((p) => p.day === b.day);
     if (!item) throw notFound('계획 항목이 없어요');
@@ -403,7 +421,8 @@ export function createApp(opts: AppOptions = {}) {
       market: s?.customer || [pr.customerType, pr.customerAges?.join('·'), pr.customerDesc].filter(Boolean).join(' / '),
       plan: '',
     };
-    const fields: FormField[] = MOCK_FORM_FIELDS.map((f) => ({ ...f, value: f.identity ? '' : trunc(prefill[f.key] ?? '', f.maxLength) }));
+    const ruleFields: FormField[] = MOCK_FORM_FIELDS.map((f) => ({ ...f, value: f.identity ? '' : trunc(prefill[f.key] ?? '', f.maxLength) }));
+    const fields = await c.get('ai').draft(ruleFields, pr, program, u.id);
     const at = c.get('now').toISOString();
     const a: Application = {
       id: `app-${crypto.randomUUID()}`, userId: u.id, programId: program.id, status: 'drafting', channel: 'mock',
