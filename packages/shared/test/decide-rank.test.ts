@@ -47,6 +47,7 @@ describe('Decide 관련도 순위', () => {
     expect(out.noMatchReason).not.toBeNull();
   });
   test('관련도가 없으면 규칙 순위', () => {
-    expect(recommendResources({ ...base, relevance: null }).items.map((x) => x.resource.id)).toEqual(recommendResources(base).items.map((x) => x.resource.id));
+    // 같은 함수끼리 비교하면 규칙 순서가 바뀌어도 통과한다. 기대 순서를 직접 적는다.
+    expect(recommendResources({ ...base, relevance: null }).items.map((x) => x.resource.id)).toEqual(['a', 'b']);
   });
 });

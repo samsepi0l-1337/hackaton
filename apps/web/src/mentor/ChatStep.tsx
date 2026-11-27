@@ -52,7 +52,7 @@ function ManualForm({ session, problem, onSaved }: { session: ExploreSession; pr
 
 function Suggestions({ list, status, direction, onChange }: {
   list: string[]; status: DirectionStatus; direction: string | null;
-  onChange: (direction: string | null, status: DirectionStatus) => Promise<void>;
+  onChange: (direction: string | null, status: DirectionStatus) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState<number | null>(null);
   const [text, setText] = useState('');
@@ -70,7 +70,7 @@ function Suggestions({ list, status, direction, onChange }: {
               <div className="stack">
                 <textarea className="input" rows={2} value={text} onChange={(e) => setText(e.target.value)} aria-label="방향 수정" />
                 <div className="row">
-                  <button className="btn primary small" disabled={!text.trim()} onClick={async () => { await onChange(text.trim(), 'user'); setEditing(null); }}>수정한 내용 저장</button>
+                  <button className="btn primary small" disabled={!text.trim()} onClick={async () => { if (await onChange(text.trim(), 'user')) setEditing(null); }}>수정한 내용 저장</button>
                   <button className="btn small" onClick={() => setEditing(null)}>취소</button>
                 </div>
               </div>
@@ -128,7 +128,8 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
       setMessages(r.messages); setQIndex(r.questionIndex);
       if (r.suggestions.length) setSuggestions(r.suggestions);
       if (r.failed) { setFailed(true); setManual(true); if (text !== undefined) setInput(text); return; }
-      setInput('');
+      // 답을 보낸 요청만 입력칸을 비운다. 건너뛰기·예시 보기 같은 요청은 쓰던 글을 남긴다.
+      if (req.message !== undefined) setInput('');
       if (r.done) { await goSummary(); return; }
     } catch (e) {
       if (e instanceof ApiClientError && e.code === 'limit') {
@@ -155,11 +156,17 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
 
   // 질문 문장은 다시 쓰지 않는다 (2026-11-27 평가: AI 가 다시 쓰면 뜻이 바뀜). 서버가 반응 한 문장 + 규칙 질문을 보낸다.
 
-  async function setDir(d: string | null, status: DirectionStatus) {
+  async function setDir(d: string | null, status: DirectionStatus): Promise<boolean> {
     try {
       onSession(await api.saveExploration({ direction: d, directionStatus: status }));
       setDirection({ text: d, status });
-    } catch (e) { setErr(errMessage(e)); }
+      return true;
+    } catch (e) { setErr(errMessage(e)); return false; }
+  }
+  // 다시 시도: 답을 보냈던 요청이면 지금 입력칸의 글을 보낸다 (실패 뒤에 고쳤을 수 있다).
+  function retry() {
+    const req = last.current.message !== undefined && input.trim() ? { ...last.current, message: input.trim() } : last.current;
+    void send(req, input);
   }
 
   const lastMentor = [...messages].reverse().find((m) => m.role === 'mentor');
@@ -194,7 +201,7 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
         <div className="card stack" role="alert">
           <p style={{ margin: 0 }}>AI 응답을 받지 못했어요. 입력한 내용은 그대로 남아 있어요.{err && ` (${err})`}</p>
           <div className="row">
-            <button className="btn primary" onClick={() => send(last.current, input)} disabled={sending}>다시 시도</button>
+            <button className="btn primary" onClick={retry} disabled={sending}>다시 시도</button>
             <button className="btn" onClick={() => setManual(true)}>직접 정리하기</button>
           </div>
         </div>
@@ -207,7 +214,7 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
           <div className="row">
             {session.summary && <button className="btn primary" onClick={() => onSummary(session.summary!)}>이미 만든 구상 요약 보기</button>}
             <Link className="btn" to="/programs">지역 지원 목록 보기</Link>
-            <button className="btn" onClick={() => send(last.current, input)} disabled={sending}>다시 확인</button>
+            <button className="btn" onClick={retry} disabled={sending}>다시 확인</button>
             <button className="btn ghost" onClick={onBackToStart}>이전</button>
           </div>
         </div>
