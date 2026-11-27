@@ -11,25 +11,31 @@
     {
       "id": "daily_budget",
       "type": "rate",
-      "properties": { "limitType": "cost", "key": "metadata.app", "limit": 0.1, "window": 86400 },
-      "outputs": { "success": { "elementId": "is_heavy" } }
+      "properties": { "limitType": "cost", "key": "metadata.app", "limit": 1, "window": 86400 },
+      "outputs": { "success": { "elementId": "is_fast" } }
     },
     {
-      "id": "is_heavy",
+      "id": "is_fast",
       "type": "conditional",
-      "properties": { "conditions": { "metadata.task": { "$in": ["summary", "extract"] } } },
-      "outputs": { "true": { "elementId": "large" }, "false": { "elementId": "small" } }
+      "properties": { "conditions": { "metadata.task": { "$in": ["mentor", "reason"] } } },
+      "outputs": { "true": { "elementId": "solar_mini" }, "false": { "elementId": "solar_pro" } }
     },
     {
-      "id": "large",
+      "id": "solar_pro",
       "type": "model",
-      "properties": { "provider": "workers-ai", "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "timeout": 15000, "retries": 1 },
-      "outputs": { "success": { "elementId": "end" }, "fallback": { "elementId": "small" } }
+      "properties": { "provider": "custom-upstage", "model": "solar-pro-4", "timeout": 15000, "retries": 1 },
+      "outputs": { "success": { "elementId": "end" }, "fallback": { "elementId": "solar_mini" } }
     },
     {
-      "id": "small",
+      "id": "solar_mini",
       "type": "model",
-      "properties": { "provider": "workers-ai", "model": "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "timeout": 8000, "retries": 1 },
+      "properties": { "provider": "custom-upstage", "model": "solar-mini-4-5-preview", "timeout": 8000, "retries": 1 },
+      "outputs": { "success": { "elementId": "end" }, "fallback": { "elementId": "workers_ai" } }
+    },
+    {
+      "id": "workers_ai",
+      "type": "model",
+      "properties": { "provider": "workers-ai", "model": "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "timeout": 8000, "retries": 0 },
       "outputs": { "success": { "elementId": "end" } }
     },
     { "id": "end", "type": "end", "outputs": {} }
