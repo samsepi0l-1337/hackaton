@@ -297,5 +297,18 @@ class FillTests(Base):
         self.assertEqual(post(self.w, "/fill", {"fileName": "a.docx"})[0], 400)
 
 
+
+class KStartupAttachmentNameTest(unittest.TestCase):
+    def test_name_from_sibling_text(self):
+        html = (
+            '<ul><li><a class="file_bg" title="[첨부파일] 신청서.hwpx">신청서.hwpx</a>'
+            '<a href="javascript:void(0)" onclick="fnPdfView(1)"><span>바로보기</span></a>'
+            '<a href="/afile/fileDownload/abc"><span>다운로드</span></a></li>'
+            '<li><a class="file_bg">공고문.pdf</a><a href="/afile/fileDownload/def"><span>다운로드</span></a></li></ul>'
+        )
+        _, atts = server.find_attachments(html, "https://www.k-startup.go.kr/web/view")
+        self.assertEqual([(a["name"], a["kind"]) for a in atts], [("신청서.hwpx", "hwpx"), ("공고문.pdf", "pdf")])
+        self.assertEqual(atts[0]["url"], "https://www.k-startup.go.kr/afile/fileDownload/abc")
+
 if __name__ == "__main__":
     unittest.main()

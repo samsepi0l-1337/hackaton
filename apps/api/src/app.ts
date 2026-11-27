@@ -360,11 +360,14 @@ export function createApp(opts: AppOptions = {}) {
     const m = c.get('store').mentor(u.id);
     requireProfile(m);
     const ai = c.get('ai');
-    const top = await ai.reasons(await topOf(c, m), m.profile, c.get('now'), u.id);
-    if (!m.plan) {
-      const rule = buildPlan(top, c.get('now'));
-      m.plan = (await ai.plan(rule, top, m.profile, u.id)) ?? rule;
-    }
+    const ranked = await topOf(c, m);
+    // 추천 이유와 7일 계획은 서로 기다리지 않게 동시에 만든다.
+    const rule = m.plan ? null : buildPlan(ranked, c.get('now'));
+    const [top, plan] = await Promise.all([
+      ai.reasons(ranked, m.profile, c.get('now'), u.id),
+      rule ? ai.plan(rule, ranked, m.profile, u.id).then((p) => p ?? rule) : Promise.resolve(m.plan),
+    ]);
+    m.plan = plan;
     m.step = 'result';
     return c.json({ top, agencies: pickAgencies(c.get('store').agencies, m.profile), plan: m.plan, survey: m.survey });
   });
@@ -543,6 +546,22 @@ export function createApp(opts: AppOptions = {}) {
 
   // ---- 통계 ----
   const rate = (n: number, d: number) => (d === 0 ? null : n / d);
+  // 팀 점검용: 실제 공고 상세 URL 로 F16 양식 읽기(doc-worker → Document Parse)를 끝까지 돌려 본다.
+  app.post('/api/admin/form-probe', async (c) => {
+    const u = requireUser(c);
+    if (!u.isTeam) throw new HttpError(403, 'forbidden', '팀 계정만 쓸 수 있어요');
+    const b = await json(c);
+    if (typeof b.pageUrl !== 'string' || !/^https?:\/\//.test(b.pageUrl)) throw bad('pageUrl(http/https)이 필요해요');
+    const env = { ...opts.env, ...(c.env ?? {}) } as Bindings;
+    const docWorker = opts.docWorkerFor?.(env) ?? null;
+    if (!docWorker) throw new HttpError(409, 'conflict', 'doc-worker 가 연결되어 있지 않아요');
+    const started = Date.now();
+    const r = await readAnnouncementForm(env, { docWorker, fetch: opts.fetch }, b.pageUrl);
+    const ms = Date.now() - started;
+    if ('error' in r) return c.json({ ok: false, ms, error: r.error });
+    return c.json({ ok: true, ms, attachment: r.attachment, kind: r.parsed.kind, warnings: r.parsed.warnings, fields: r.fields, textPreview: r.parsed.text.slice(0, 1500) });
+  });
+
   app.get('/api/admin/stats', (c) => {
     const u = requireUser(c);
     if (!u.isTeam) throw new HttpError(403, 'forbidden', '팀 계정만 볼 수 있어요');

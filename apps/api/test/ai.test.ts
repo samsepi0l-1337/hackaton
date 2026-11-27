@@ -184,7 +184,7 @@ describe('app integration', () => {
   test('plan: AI 7 days keeps rule day 1', async () => {
     const { top: base } = await rule();
     const tasks = JSON.stringify(Array.from({ length: 7 }, (_, i) => ({ day: i + 1, task: `AI 할 일 ${i + 1}` })));
-    const f = fake((_u, b) => chat(b.model === 'solar-pro-4' ? tasks : '이유예요.'));
+    const f = fake((_u, b) => chat(String(b.messages?.[0]?.content ?? '').includes('7일 준비 계획') ? tasks : '이유예요.'));
     const r = (await (await demo(setup({ env: ON, fetch: f.f }))).get('/api/mentor/result')).body;
     expect(r.plan[0]).toEqual(base.plan[0]);
     expect(r.plan[1].task).toBe('AI 할 일 2');
