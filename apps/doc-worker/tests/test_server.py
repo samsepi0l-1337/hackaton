@@ -296,6 +296,30 @@ class FillTests(Base):
         self.assertEqual(self.fill(b"not a zip", "a.docx", {"a": "b"})[0], 400)
         self.assertEqual(post(self.w, "/fill", {"fileName": "a.docx"})[0], 400)
 
+    def test_null_value_is_not_written(self):
+        st, body = self.fill(docx_bytes(), "a.docx", {"성명": None, "창업 아이템명": "길"})
+        self.assertEqual(st, 200)
+        self.assertEqual(body["filled"], ["창업 아이템명"])
+        xml = read_entry(base64.b64decode(body["fileBase64"]), "word/document.xml")
+        self.assertNotIn("None", xml)
+
+    def test_unzipped_size_limit(self):
+        old = server.UNZIP_MAX
+        server.UNZIP_MAX = 100
+        try:
+            st, body = self.fill(docx_bytes(), "a.docx", {"성명": "홍길동"})
+        finally:
+            server.UNZIP_MAX = old
+        self.assertEqual((st, body["error"]["code"]), (413, "too_large"))
+
+    def test_bad_content_length(self):
+        req = urllib.request.Request(self.w + "/fill", data=b"{}", headers={"Content-Length": "abc"})
+        try:
+            urllib.request.urlopen(req, timeout=10)
+            self.fail("expected 400")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 400)
+
 
 
 class KStartupAttachmentNameTest(unittest.TestCase):

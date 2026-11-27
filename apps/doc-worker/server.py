@@ -21,6 +21,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 HTML_MAX = 5 * 1024 * 1024
 DOWNLOAD_MAX = 50 * 1024 * 1024
 BODY_MAX = 80 * 1024 * 1024  # base64 요청 본문
+UNZIP_MAX = 100 * 1024 * 1024  # 압축을 푼 양식 전체 크기 (압축 폭탄 방지)
 TIMEOUT = 10
 DOC_EXTS = ("hwpx", "hwp", "docx", "pdf")
 
@@ -437,8 +438,15 @@ def fill_paragraphs_hwpx(xml, values, filled):
     return "".join(out)
 
 
+def _open_zip(data):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    if sum(i.file_size for i in z.infolist()) > UNZIP_MAX:
+        raise ApiError(413, "too_large", "압축을 푼 파일이 너무 큽니다")
+    return z
+
+
 def _rewrite_zip(data, edits):
-    src = zipfile.ZipFile(io.BytesIO(data))
+    src = _open_zip(data)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as dst:
         for info in src.infolist():
@@ -451,7 +459,7 @@ def _rewrite_zip(data, edits):
 
 
 def fill_docx(data, values):
-    z = zipfile.ZipFile(io.BytesIO(data))
+    z = _open_zip(data)
     if "word/document.xml" not in z.namelist():
         raise ApiError(400, "bad_request", "DOCX 구조가 아닙니다")
     xml = z.read("word/document.xml").decode("utf-8")
@@ -461,7 +469,7 @@ def fill_docx(data, values):
 
 
 def fill_hwpx(data, values):
-    z = zipfile.ZipFile(io.BytesIO(data))
+    z = _open_zip(data)
     sections = sorted(n for n in z.namelist() if re.fullmatch(r"Contents/section\d+\.xml", n))
     if not sections:
         raise ApiError(400, "bad_request", "HWPX 구조가 아닙니다")
@@ -486,7 +494,8 @@ def fill(body):
         data = base64.b64decode(b64, validate=True)
     except ValueError:
         raise ApiError(400, "bad_request", "fileBase64 가 올바르지 않습니다")
-    values = {str(k): str(v) for k, v in values.items()}
+    # null 은 채우지 않는다 (양식에 "None" 이 들어가지 않게).
+    values = {str(k): str(v) for k, v in values.items() if v is not None}
     kind = kind_of(name, data)
     if kind in ("hwp", "pdf"):
         raise ApiError(422, "unsupported", f"{kind.upper()} 는 채우기를 지원하지 않습니다 (DOCX·HWPX 만)")
@@ -532,7 +541,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if fn is None:
                 raise ApiError(404, "bad_request", "없는 경로입니다")
-            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                raise ApiError(400, "bad_request", "Content-Length 가 올바르지 않습니다")
+            if n < 0:
+                raise ApiError(400, "bad_request", "Content-Length 가 올바르지 않습니다")
             if n > BODY_MAX:
                 raise ApiError(413, "too_large", "요청이 너무 큽니다")
             try:
