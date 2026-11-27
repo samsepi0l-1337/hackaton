@@ -6,6 +6,8 @@
 //! - 정규식 lookaround 는 `fancy_regex` 로. 정렬은 안정 정렬만, `localeCompare` 는 쓰는 곳마다 확인한다.
 //! - 출력 JSON 은 `serde_json::Map`(입력 순서 유지)으로 만든다. `HashMap` 금지. undefined(키 없음)와 null 을 구분한다.
 //! - 시각은 ms 정수, 문자열은 `jsstr::iso`(밀리초 포함 Z).
+#![allow(clippy::result_large_err)]
+
 pub mod api;
 pub mod app;
 pub mod http;

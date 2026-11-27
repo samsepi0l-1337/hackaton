@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ego lite E2E 러너. API(메모리 저장소, AI 꺼짐)와 웹(Vite)을 전용 포트로 띄우고 spec 을 하나씩 ego-browser 로 돌린다.
 # 사용: e2e/run.sh [spec 파일 ...]   (없으면 e2e/specs/*.mjs 전부)
-# 환경: E2E_API_PORT(18787) E2E_WEB_PORT(15173) E2E_OUT(e2e/.out) E2E_PREVIEW(1 이면 운영 빌드를 vite preview 로)
+# 환경: E2E_API_PORT(18787) E2E_WEB_PORT(15173) E2E_OUT(e2e/.out) E2E_PREVIEW(1 이면 운영 빌드를 vite preview 로) E2E_BACKEND(ts|rust)
 set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 API_PORT=${E2E_API_PORT:-18787}
@@ -19,7 +19,14 @@ done
 
 # /bufs 관리자 비밀번호 (E2E 전용, 실제 값 아님). prelude 의 ADMIN_PASSWORD 와 같다.
 ADMIN_HASH=$(cd "$ROOT/apps/api" && bun -e "import { hashLegacyPassword } from './src/password'; console.log(await hashLegacyPassword('e2e-admin-pass-1234'))")
-(cd "$ROOT/apps/api" && exec env -i PATH="$PATH" HOME="$HOME" PORT="$API_PORT" AI_MODE=off DECIDE_ENABLED=0 PASSWORD_PEPPER=e2e-pepper-not-a-secret ADMIN_PASSWORD_HASH="$ADMIN_HASH" E2E_MAIL_LOG=1 bun src/server.ts >"$API_LOG" 2>&1) &
+if [ "${E2E_BACKEND:-ts}" = rust ]; then
+  # Rust(workers-rs) 백엔드: wrangler dev (workerd) 로 apps/api-rs/worker 를 띄운다. 첫 빌드는 몇 분 걸린다.
+  rm -rf "$OUT/rs-state"
+  (cd "$ROOT/apps/api-rs/worker" && PATH="$HOME/.cargo/bin:$PATH" exec "$ROOT/apps/api/node_modules/.bin/wrangler" dev -c wrangler.test.jsonc --port "$API_PORT" --ip 127.0.0.1 --persist-to "$OUT/rs-state" \
+    --var AI_MODE:off --var DECIDE_ENABLED:0 --var PASSWORD_PEPPER:e2e-pepper-not-a-secret --var "ADMIN_PASSWORD_HASH:$ADMIN_HASH" --var E2E_MAIL_LOG:1 >"$API_LOG" 2>&1) &
+else
+  (cd "$ROOT/apps/api" && exec env -i PATH="$PATH" HOME="$HOME" PORT="$API_PORT" AI_MODE=off DECIDE_ENABLED=0 PASSWORD_PEPPER=e2e-pepper-not-a-secret ADMIN_PASSWORD_HASH="$ADMIN_HASH" E2E_MAIL_LOG=1 bun src/server.ts >"$API_LOG" 2>&1) &
+fi
 API_PID=$!
 if [ "${E2E_PREVIEW:-0}" = 1 ]; then
   # 운영 빌드(코드 분할 청크·에러 경계)를 시험한다: vite build 후 vite preview (server 의 proxy·allowedHosts 를 그대로 쓴다)
@@ -29,13 +36,14 @@ else
   (cd "$ROOT/apps/web" && WEB_PORT="$WEB_PORT" API_URL="http://127.0.0.1:$API_PORT" exec bunx vite --host 127.0.0.1 --strictPort >"$OUT/web.log" 2>&1) &
 fi
 WEB_PID=$!
-cleanup() { kill "$API_PID" "$WEB_PID" 2>/dev/null; wait "$API_PID" "$WEB_PID" 2>/dev/null; }
+cleanup() { pkill -P "$API_PID" 2>/dev/null; kill "$API_PID" "$WEB_PID" 2>/dev/null; wait "$API_PID" "$WEB_PID" 2>/dev/null; }
 trap cleanup EXIT
 
-for i in $(seq 1 60); do
+WAIT=60; [ "${E2E_BACKEND:-ts}" = rust ] && WAIT=1200
+for i in $(seq 1 $WAIT); do
   curl -sf "http://127.0.0.1:$API_PORT/api/health" >/dev/null && curl -sf "$BASE/" >/dev/null && break
   sleep 0.5
-  [ "$i" = 60 ] && { echo "서버가 뜨지 않았어요. $OUT/*.log 를 보세요." >&2; exit 2; }
+  [ "$i" = $WAIT ] && { echo "서버가 뜨지 않았어요. $OUT/*.log 를 보세요." >&2; exit 2; }
 done
 
 SPECS=("$@")
