@@ -148,6 +148,13 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest' }); }, [messages.length]);
+  // 보내는 동안 fieldset 이 잠기면 포커스가 페이지 처음으로 빠진다. 끝나면 답변 칸으로 돌려준다.
+  const answerRef = useRef<HTMLTextAreaElement>(null);
+  const wasSending = useRef(false);
+  useEffect(() => {
+    if (wasSending.current && !sending && (document.activeElement === document.body || document.activeElement === null)) answerRef.current?.focus();
+    wasSending.current = sending;
+  }, [sending]);
   useEffect(() => { patchStore({ messages, questionIndex: qIndex, suggestions }); }, [messages, qIndex, suggestions]);
   useEffect(() => {
     const t = window.setTimeout(() => patchStore({ draft: input }), 400);
@@ -223,7 +230,7 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
 
       <fieldset className="stack" disabled={sending || !!limit} style={{ border: 0, padding: 0, margin: 0 }}>
         <Field label="내 답변" hint="편하게 적어 주세요. 모르면 아래 버튼을 눌러도 돼요.">
-          <textarea className="input" rows={3} value={input} onChange={(e) => setInput(e.target.value)} />
+          <textarea ref={answerRef} className="input" rows={3} value={input} onChange={(e) => setInput(e.target.value)} />
         </Field>
         <div className="row">
           <button className="btn primary" disabled={!input.trim()} onClick={() => send({ message: input.trim() }, input)}>보내기</button>
