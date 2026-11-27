@@ -106,7 +106,17 @@ fn view(cx: &mut Cx<'_>, mut a: Value) -> Value {
     if let (Some(o), Some(p)) = (a.as_object_mut(), p) {
         o.insert("program".into(), p);
     }
+    a["polishRemaining"] = json!(5_i64.saturating_sub(a["polishCount"].as_i64().unwrap_or(0)).max(0));
     a
+}
+fn draft_context(cx: &mut Cx<'_>, uid: &str) -> Value {
+    let mentor = Store::new(cx.kv, cx.now).mentor(uid);
+    let explore = Store::new(cx.kv, cx.now).explore(uid).unwrap_or(Value::Null);
+    let start = &explore["start"];
+    let summary = &explore["summary"];
+    if !summary.is_null() || nonempty(start, "idea").is_some() {
+        json!({"mentor":mentor["profile"],"start":start,"summary":summary,"answers":explore["answers"],"conditions":start["conditions"]})
+    } else { mentor["profile"].clone() }
 }
 fn save(cx: &mut Cx<'_>, a: Value) -> Result<(), HttpError> {
     Store::new(cx.kv, cx.now)
@@ -271,6 +281,7 @@ pub async fn create(cx: &mut Cx<'_>, req: &Req) -> HResult {
             .unwrap_or_else(|| value.to_owned()));
     }
     let mut channel = "mock";
+    let mut form_source = None;
     let mut filename = format!("application-form-{pid}.txt");
     if cx.env("DOC_WORKER") == Some("1") {
         if let Some(url) = p["url"].as_str().filter(|v| !v.is_empty()) {
@@ -286,6 +297,7 @@ pub async fn create(cx: &mut Cx<'_>, req: &Req) -> HResult {
                     f["value"] = json!(""); f
                 }).collect();
                 channel = "web";
+                form_source = Some((form["attachment"]["url"].clone(), form["attachment"]["kind"].as_str().unwrap_or("").to_lowercase()));
                 filename = form["attachment"]["name"].as_str().unwrap_or("").to_owned();
             } else {
                 let reason = result
@@ -299,12 +311,13 @@ pub async fn create(cx: &mut Cx<'_>, req: &Req) -> HResult {
             }
         }
     }
-    let draft_profile = if has_explore { json!({"mentor":profile,"start":start,"summary":es,"answers":explore["answers"],"conditions":start["conditions"]}) } else { profile.clone() };
+    let draft_profile = draft_context(cx, &uid);
     let fields = create_ai_tasks(cx.env, cx.ports)
         .draft(&fields, &draft_profile, &p, Some(&uid))
         .await;
     let at = iso(cx.now);
-    let a = json!({"id":uuid(cx),"userId":uid,"programId":pid,"status":"drafting","channel":channel,"formFileName":filename,"fields":fields,"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[{"status":"drafting","at":at}],"createdAt":at,"updatedAt":at});
+    let mut a = json!({"id":uuid(cx),"userId":uid,"programId":pid,"status":"drafting","channel":channel,"formFileName":filename,"fields":fields,"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[{"status":"drafting","at":at}],"createdAt":at,"updatedAt":at});
+    if let Some((url, kind)) = form_source { a["formUrl"] = url; a["formKind"] = json!(kind); }
     save(cx, a.clone())?;
     if let Some(limit) = cx.opts.application_limit {
         record_consult(&mut Store::new(cx.kv, cx.now), &[format!("app:{uid}")], cx.now, quota_config(Some(limit))).map_err(|_| HttpError::bad("요청을 처리하지 못했어요"))?;
@@ -379,6 +392,65 @@ pub async fn update(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     a["updatedAt"] = json!(at);
     save(cx, a.clone())?;
     Resp::ok(view(cx, a))
+}
+pub async fn polish(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
+    let mut a = own(cx, id)?;
+    if a["status"] != "drafting" { return Err(HttpError::new(409, "conflict", "지금은 다듬을 수 없어요")); }
+    let count = a["polishCount"].as_u64().unwrap_or(0);
+    if count >= 5 { return Err(HttpError::new(429, "polish_limit", "이 지원서는 AI 다듬기를 5번 모두 썼어요. 직접 고쳐 주세요.")); }
+    let body = req.json_or_empty();
+    let mut fields = a["fields"].as_array().cloned().unwrap_or_default();
+    for field in &mut fields {
+        if let Some(value) = field["key"].as_str().and_then(|k| body["values"].get(k)).and_then(Value::as_str) { field["value"] = json!(value); }
+    }
+    let uid = a["userId"].as_str().unwrap_or("");
+    let context = draft_context(cx, uid);
+    let p = program(cx, a["programId"].as_str().unwrap_or("")).ok_or_else(|| HttpError::bad("요청을 처리하지 못했어요"))?;
+    let suggestions = create_ai_tasks(cx.env, cx.ports).polish(&fields, &context, &p, Some(uid)).await.ok_or_else(|| HttpError::new(503, "ai_unavailable", "지금은 AI로 다듬을 수 없어요. 잠시 뒤 다시 시도해 주세요."))?;
+    a["polishCount"] = json!(count + 1);
+    save(cx, a)?;
+    Resp::ok(json!({"suggestions":suggestions,"remaining":4-count}))
+}
+pub async fn export(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
+    use base64::Engine;
+    let a = own(cx, id)?;
+    let format = req.query.iter().find(|(k, _)| k == "format").map(|(_, v)| v.as_str()).unwrap_or("");
+    if !["docx", "hwpx"].contains(&format) { return Err(HttpError::bad("format은 docx 또는 hwpx예요")); }
+    let p = program(cx, a["programId"].as_str().unwrap_or("")).ok_or_else(|| HttpError::bad("요청을 처리하지 못했어요"))?;
+    let mut values = Map::new();
+    let mut rows = Vec::new();
+    for f in a["fields"].as_array().into_iter().flatten() {
+        let key = f["key"].as_str().unwrap_or("");
+        let label = f["label"].as_str().unwrap_or("");
+        let value = match a["approval"]["values"].as_object() { Some(m) => m.get(key).and_then(Value::as_str).unwrap_or(""), None => f["value"].as_str().unwrap_or("") };
+        if !value.trim().is_empty() { values.insert(label.into(), json!(value)); }
+        rows.push((label.to_owned(), if value.is_empty() && f["identity"] == true { "(직접 작성)".into() } else { value.into() }));
+    }
+    let mime = if format == "docx" { "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } else { "application/hwp+zip" };
+    if cx.env("DOC_WORKER") == Some("1") && a["formKind"] == format && a["formUrl"].as_str().is_some_and(|s| !s.is_empty()) {
+        let ports = cx.ports;
+        let attempt = async {
+            let dl = ports.doc_worker("/download", &json!({"url":a["formUrl"],"referer":p["url"]})).await?.ok()?;
+            if !dl.ok() { return None; }
+            let dl = dl.json()?;
+            let name = dl["fileName"].as_str()?; let data = dl["fileBase64"].as_str()?;
+            let filled = ports.doc_worker("/fill", &json!({"fileName":name,"fileBase64":data,"values":values})).await?.ok()?;
+            if !filled.ok() { return None; }
+            let filled = filled.json()?;
+            Some((filled["fileName"].as_str()?.to_owned(), filled["fileBase64"].as_str()?.to_owned()))
+        };
+        if let Some(Some((file_name, data))) = crate::time::timeout(ports, 30_000, attempt).await {
+            return Resp::ok(json!({"fileName":file_name,"mimeType":mime,"fileBase64":data,"source":"form"}));
+        }
+        ports.log("warn", "[export] 양식 채우기 실패, 기본 양식을 씁니다");
+    }
+    let title = p["title"].as_str().unwrap_or("");
+    let agency = p["agency"].as_str().unwrap_or("");
+    let date = DateTime::<Utc>::from_timestamp_millis(cx.now + 9 * 3_600_000).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
+    let footer = format!("해보까에서 작성한 초안입니다. 제출 전에 공고 원본 양식과 내용을 확인해 주세요. 작성일 {date}");
+    let data = if format == "docx" { super::export::standard_docx(title, agency, &rows, &footer) } else { super::export::standard_hwpx(title, agency, &rows, &footer) };
+    let clean: String = title.chars().take(40).map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
+    Resp::ok(json!({"fileName":format!("{clean} 지원서.{format}"),"mimeType":mime,"fileBase64":base64::engine::general_purpose::STANDARD.encode(data),"source":"standard"}))
 }
 /// POST /api/applications/:id/approve
 pub async fn approve(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
@@ -457,6 +529,17 @@ mod tests {
         ports::Env,
         testkit::{block_on, FakePorts},
     };
+
+    #[test]
+    fn polish_status_and_ai_off_and_export_bad_format() {
+        let mut kv = MemKv::default();
+        let env = Env::new(); let opts = AppOpts::default(); let ports = FakePorts::default(); let now = 1_795_741_200_000;
+        Store::new(&mut kv, now).save_application(json!({"id":"a","userId":"u","programId":"missing","status":"completed","channel":"mock","formFileName":"form","fields":[],"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[],"createdAt":iso(now),"updatedAt":iso(now)})).unwrap();
+        let mut cx = Cx { env: &env, kv: &mut kv, ports: &ports, opts: &opts, now, user: Some(json!({"id":"u"})) };
+        let req = Req::default();
+        assert_eq!(block_on(polish(&mut cx, &req, "a")).unwrap_err().status, 409);
+        assert_eq!(block_on(export(&mut cx, &req, "a")).unwrap_err().status, 400);
+    }
 
     #[test]
     fn approval_validation_preserves_merged_values() {

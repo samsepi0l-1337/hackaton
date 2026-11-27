@@ -1,1 +1,547 @@
-[{"file":"applications-form","name":"applications-form.test.ts:27","opts":{"env":{"UPSTAGE_API_KEY":"test"},"consultLimit":null,"exploreAiLimit":null,"failSubmit":false,"custom":["fetch","docWorkerFor"]},"initNow":"2026-11-27T01:00:00.000Z","excluded":"Injected dependencies cannot be replayed: fetch, docWorkerFor","steps":[{"client":1,"method":"POST","path":"/api/auth/login","body":{"email":"demo@test.local","password":"demo1234!"},"now":"2026-11-27T01:00:00.000Z","status":200,"response":{"user":{"id":"u-demo","email":"demo@test.local","isTeam":false,"createdAt":"2026-11-27T01:00:00.000Z","emailVerified":true,"mustChangePassword":false}},"setCookie":["sid=e69c18bf8f5623be4af1609a5295fa991ff6c49e5000347de49da8c010c7f9df; Max-Age=1209600; Path=/; HttpOnly; SameSite=Lax"],"mails":[]},{"client":1,"method":"POST","path":"/api/applications","body":{"programId":"T-0001"},"now":"2026-11-27T01:00:00.000Z","status":201,"response":{"id":"app-ff1a1366-999b-4142-b0d5-04ddd6478790","userId":"u-demo","programId":"T-0001","status":"drafting","channel":"web","formFileName":"사업계획서 양식.hwpx","fields":[{"key":"f1","label":"창업아이템명","maxLength":null,"required":false,"value":""},{"key":"f2","label":"신청자 성명","maxLength":null,"required":false,"identity":true,"value":""},{"key":"f3","label":"생년월일","maxLength":null,"required":false,"identity":true,"value":""},{"key":"f4","label":"연락처(휴대전화)","maxLength":null,"required":false,"identity":true,"value":""},{"key":"f5","label":"이메일","maxLength":null,"required":false,"identity":true,"value":""},{"key":"f6","label":"사업 분야","maxLength":null,"required":false,"value":""},{"key":"f7","label":"문제 인식 (Problem)","maxLength":null,"required":false,"value":""},{"key":"f8","label":"창업 아이템 개요","maxLength":500,"required":false,"value":""},{"key":"f9","label":"개발 동기 및 필요성","maxLength":null,"required":true,"value":""},{"key":"f10","label":"실현 가능성 (Solution)","maxLength":null,"required":false,"value":""},{"key":"f11","label":"개발 방안 및 사업화 전략","maxLength":1000,"required":false,"value":""},{"key":"f12","label":"시장 분석","maxLength":null,"required":true,"value":""},{"key":"f13","label":"성장전략 (Scale-up)","maxLength":null,"required":false,"value":""},{"key":"f14","label":"자금 소요 및 조달계획","maxLength":null,"required":false,"value":""},{"key":"f15","label":"팀 구성 (Team)","maxLength":null,"required":false,"value":""},{"key":"f16","label":"대표자","maxLength":null,"required":false,"identity":true,"value":""},{"key":"f17","label":"팀원","maxLength":null,"required":false,"value":""}],"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[{"status":"drafting","at":"2026-11-27T01:00:00.000Z"}],"createdAt":"2026-11-27T01:00:00.000Z","updatedAt":"2026-11-27T01:00:00.000Z","program":{"id":"T-0001","title":"[테스트] 2026 부산 예비창업패키지 추가 모집","agency":"부산창조경제혁신센터","category":"사업화","region":"부산","recruiting":true,"target":"예비창업자","bizYears":"예비창업자","targetAge":"만 20세 이상 ~ 만 39세 이하","tags":["IT·플랫폼","사업화","시제품","플랫폼"],"content":"사업화 자금, 창업 교육, 전담 멘토링을 지원합니다. 시제품 제작과 마케팅에 쓸 수 있습니다.","startDate":"2026-11-07","endDate":"2026-12-02","registeredAt":"2026-11-07","url":"https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"}},"setCookie":[],"mails":[]}]},{"file":"applications-form","name":"applications-form.test.ts:39","opts":{"env":{"UPSTAGE_API_KEY":"test"},"consultLimit":null,"exploreAiLimit":null,"failSubmit":false,"custom":["fetch","docWorkerFor"]},"initNow":"2026-11-27T01:00:00.000Z","excluded":"Injected dependencies cannot be replayed: fetch, docWorkerFor","steps":[{"client":1,"method":"POST","path":"/api/auth/login","body":{"email":"demo@test.local","password":"demo1234!"},"now":"2026-11-27T01:00:00.000Z","status":200,"response":{"user":{"id":"u-demo","email":"demo@test.local","isTeam":false,"createdAt":"2026-11-27T01:00:00.000Z","emailVerified":true,"mustChangePassword":false}},"setCookie":["sid=aeb57a0cf7e343e7d775f22d5153354a5a9a0c0e09ccb6971ca6e010bdc87f72; Max-Age=1209600; Path=/; HttpOnly; SameSite=Lax"],"mails":[]},{"client":1,"method":"POST","path":"/api/applications","body":{"programId":"T-0001"},"now":"2026-11-27T01:00:00.000Z","status":201,"response":{"id":"app-4b96f395-b946-44e0-bd49-cad0563459fe","userId":"u-demo","programId":"T-0001","status":"drafting","channel":"mock","formFileName":"application-form-T-0001.txt","fields":[{"key":"name","label":"대표자 이름","maxLength":20,"required":true,"identity":true,"value":""},{"key":"phone","label":"연락처","maxLength":20,"required":true,"identity":true,"value":""},{"key":"email","label":"이메일","maxLength":100,"required":true,"identity":true,"value":""},{"key":"itemName","label":"창업 아이템명","maxLength":50,"required":true,"value":"부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"},{"key":"problem","label":"문제 인식","maxLength":500,"required":true,"value":"자취생은 1~2년만 살 집에 가전을 새로 사기 부담스럽고, 이사할 때 처분도 어렵다."},{"key":"solution","label":"해결 방안","maxLength":500,"required":true,"value":"부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"},{"key":"market","label":"목표 시장과 고객","maxLength":500,"required":true,"value":"B2C / 20대 / 부산 대학가 자취생"},{"key":"plan","label":"사업화 계획","maxLength":500,"required":false,"value":""}],"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[{"status":"drafting","at":"2026-11-27T01:00:00.000Z"}],"createdAt":"2026-11-27T01:00:00.000Z","updatedAt":"2026-11-27T01:00:00.000Z","program":{"id":"T-0001","title":"[테스트] 2026 부산 예비창업패키지 추가 모집","agency":"부산창조경제혁신센터","category":"사업화","region":"부산","recruiting":true,"target":"예비창업자","bizYears":"예비창업자","targetAge":"만 20세 이상 ~ 만 39세 이하","tags":["IT·플랫폼","사업화","시제품","플랫폼"],"content":"사업화 자금, 창업 교육, 전담 멘토링을 지원합니다. 시제품 제작과 마케팅에 쓸 수 있습니다.","startDate":"2026-11-07","endDate":"2026-12-02","registeredAt":"2026-11-07","url":"https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"}},"setCookie":[],"mails":[]}]},{"file":"applications-form","name":"applications-form.test.ts:47","opts":{"env":{},"consultLimit":null,"exploreAiLimit":null,"failSubmit":false,"custom":[]},"initNow":"2026-11-27T01:00:00.000Z","steps":[{"client":1,"method":"POST","path":"/api/auth/login","body":{"email":"demo@test.local","password":"demo1234!"},"now":"2026-11-27T01:00:00.000Z","status":200,"response":{"user":{"id":"u-demo","email":"demo@test.local","isTeam":false,"createdAt":"2026-11-27T01:00:00.000Z","emailVerified":true,"mustChangePassword":false}},"setCookie":["sid=2f48ef06ef880f10204bc401314f11a460c68b093b61da1f027f016cd007eff8; Max-Age=1209600; Path=/; HttpOnly; SameSite=Lax"],"mails":[]},{"client":1,"method":"POST","path":"/api/applications","body":{"programId":"T-0001"},"now":"2026-11-27T01:00:00.000Z","status":201,"response":{"id":"app-350f1aca-bca2-477f-815b-18a559d26d05","userId":"u-demo","programId":"T-0001","status":"drafting","channel":"mock","formFileName":"application-form-T-0001.txt","fields":[{"key":"name","label":"대표자 이름","maxLength":20,"required":true,"identity":true,"value":""},{"key":"phone","label":"연락처","maxLength":20,"required":true,"identity":true,"value":""},{"key":"email","label":"이메일","maxLength":100,"required":true,"identity":true,"value":""},{"key":"itemName","label":"창업 아이템명","maxLength":50,"required":true,"value":"부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"},{"key":"problem","label":"문제 인식","maxLength":500,"required":true,"value":"자취생은 1~2년만 살 집에 가전을 새로 사기 부담스럽고, 이사할 때 처분도 어렵다."},{"key":"solution","label":"해결 방안","maxLength":500,"required":true,"value":"부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"},{"key":"market","label":"목표 시장과 고객","maxLength":500,"required":true,"value":"B2C / 20대 / 부산 대학가 자취생"},{"key":"plan","label":"사업화 계획","maxLength":500,"required":false,"value":""}],"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[{"status":"drafting","at":"2026-11-27T01:00:00.000Z"}],"createdAt":"2026-11-27T01:00:00.000Z","updatedAt":"2026-11-27T01:00:00.000Z","program":{"id":"T-0001","title":"[테스트] 2026 부산 예비창업패키지 추가 모집","agency":"부산창조경제혁신센터","category":"사업화","region":"부산","recruiting":true,"target":"예비창업자","bizYears":"예비창업자","targetAge":"만 20세 이상 ~ 만 39세 이하","tags":["IT·플랫폼","사업화","시제품","플랫폼"],"content":"사업화 자금, 창업 교육, 전담 멘토링을 지원합니다. 시제품 제작과 마케팅에 쓸 수 있습니다.","startDate":"2026-11-07","endDate":"2026-12-02","registeredAt":"2026-11-07","url":"https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"}},"setCookie":[],"mails":[]}]}]
+[
+  {
+    "file": "applications-form",
+    "name": "applications-form.test.ts:27",
+    "opts": {
+      "env": {
+        "UPSTAGE_API_KEY": "test"
+      },
+      "consultLimit": null,
+      "exploreAiLimit": null,
+      "failSubmit": false,
+      "custom": [
+        "fetch",
+        "docWorkerFor"
+      ]
+    },
+    "initNow": "2026-11-27T01:00:00.000Z",
+    "excluded": "Injected dependencies cannot be replayed: fetch, docWorkerFor",
+    "steps": [
+      {
+        "client": 1,
+        "method": "POST",
+        "path": "/api/auth/login",
+        "body": {
+          "email": "demo@test.local",
+          "password": "demo1234!"
+        },
+        "now": "2026-11-27T01:00:00.000Z",
+        "status": 200,
+        "response": {
+          "user": {
+            "id": "u-demo",
+            "email": "demo@test.local",
+            "isTeam": false,
+            "createdAt": "2026-11-27T01:00:00.000Z",
+            "emailVerified": true,
+            "mustChangePassword": false
+          }
+        },
+        "setCookie": [
+          "sid=e69c18bf8f5623be4af1609a5295fa991ff6c49e5000347de49da8c010c7f9df; Max-Age=1209600; Path=/; HttpOnly; SameSite=Lax"
+        ],
+        "mails": []
+      },
+      {
+        "client": 1,
+        "method": "POST",
+        "path": "/api/applications",
+        "body": {
+          "programId": "T-0001"
+        },
+        "now": "2026-11-27T01:00:00.000Z",
+        "status": 201,
+        "response": {
+          "id": "app-ff1a1366-999b-4142-b0d5-04ddd6478790",
+          "userId": "u-demo",
+          "programId": "T-0001",
+          "status": "drafting",
+          "channel": "web",
+          "formFileName": "사업계획서 양식.hwpx",
+          "fields": [
+            {
+              "key": "f1",
+              "label": "창업아이템명",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f2",
+              "label": "신청자 성명",
+              "maxLength": null,
+              "required": false,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "f3",
+              "label": "생년월일",
+              "maxLength": null,
+              "required": false,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "f4",
+              "label": "연락처(휴대전화)",
+              "maxLength": null,
+              "required": false,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "f5",
+              "label": "이메일",
+              "maxLength": null,
+              "required": false,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "f6",
+              "label": "사업 분야",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f7",
+              "label": "문제 인식 (Problem)",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f8",
+              "label": "창업 아이템 개요",
+              "maxLength": 500,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f9",
+              "label": "개발 동기 및 필요성",
+              "maxLength": null,
+              "required": true,
+              "value": ""
+            },
+            {
+              "key": "f10",
+              "label": "실현 가능성 (Solution)",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f11",
+              "label": "개발 방안 및 사업화 전략",
+              "maxLength": 1000,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f12",
+              "label": "시장 분석",
+              "maxLength": null,
+              "required": true,
+              "value": ""
+            },
+            {
+              "key": "f13",
+              "label": "성장전략 (Scale-up)",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f14",
+              "label": "자금 소요 및 조달계획",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f15",
+              "label": "팀 구성 (Team)",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            },
+            {
+              "key": "f16",
+              "label": "대표자",
+              "maxLength": null,
+              "required": false,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "f17",
+              "label": "팀원",
+              "maxLength": null,
+              "required": false,
+              "value": ""
+            }
+          ],
+          "approval": null,
+          "receiptNo": null,
+          "receiptImageUrl": null,
+          "failReason": null,
+          "retries": 0,
+          "history": [
+            {
+              "status": "drafting",
+              "at": "2026-11-27T01:00:00.000Z"
+            }
+          ],
+          "createdAt": "2026-11-27T01:00:00.000Z",
+          "updatedAt": "2026-11-27T01:00:00.000Z",
+          "program": {
+            "id": "T-0001",
+            "title": "[테스트] 2026 부산 예비창업패키지 추가 모집",
+            "agency": "부산창조경제혁신센터",
+            "category": "사업화",
+            "region": "부산",
+            "recruiting": true,
+            "target": "예비창업자",
+            "bizYears": "예비창업자",
+            "targetAge": "만 20세 이상 ~ 만 39세 이하",
+            "tags": [
+              "IT·플랫폼",
+              "사업화",
+              "시제품",
+              "플랫폼"
+            ],
+            "content": "사업화 자금, 창업 교육, 전담 멘토링을 지원합니다. 시제품 제작과 마케팅에 쓸 수 있습니다.",
+            "startDate": "2026-11-07",
+            "endDate": "2026-12-02",
+            "registeredAt": "2026-11-07",
+            "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"
+          },
+          "polishRemaining": 5
+        },
+        "setCookie": [],
+        "mails": []
+      }
+    ]
+  },
+  {
+    "file": "applications-form",
+    "name": "applications-form.test.ts:39",
+    "opts": {
+      "env": {
+        "UPSTAGE_API_KEY": "test"
+      },
+      "consultLimit": null,
+      "exploreAiLimit": null,
+      "failSubmit": false,
+      "custom": [
+        "fetch",
+        "docWorkerFor"
+      ]
+    },
+    "initNow": "2026-11-27T01:00:00.000Z",
+    "excluded": "Injected dependencies cannot be replayed: fetch, docWorkerFor",
+    "steps": [
+      {
+        "client": 1,
+        "method": "POST",
+        "path": "/api/auth/login",
+        "body": {
+          "email": "demo@test.local",
+          "password": "demo1234!"
+        },
+        "now": "2026-11-27T01:00:00.000Z",
+        "status": 200,
+        "response": {
+          "user": {
+            "id": "u-demo",
+            "email": "demo@test.local",
+            "isTeam": false,
+            "createdAt": "2026-11-27T01:00:00.000Z",
+            "emailVerified": true,
+            "mustChangePassword": false
+          }
+        },
+        "setCookie": [
+          "sid=aeb57a0cf7e343e7d775f22d5153354a5a9a0c0e09ccb6971ca6e010bdc87f72; Max-Age=1209600; Path=/; HttpOnly; SameSite=Lax"
+        ],
+        "mails": []
+      },
+      {
+        "client": 1,
+        "method": "POST",
+        "path": "/api/applications",
+        "body": {
+          "programId": "T-0001"
+        },
+        "now": "2026-11-27T01:00:00.000Z",
+        "status": 201,
+        "response": {
+          "id": "app-4b96f395-b946-44e0-bd49-cad0563459fe",
+          "userId": "u-demo",
+          "programId": "T-0001",
+          "status": "drafting",
+          "channel": "mock",
+          "formFileName": "application-form-T-0001.txt",
+          "fields": [
+            {
+              "key": "name",
+              "label": "대표자 이름",
+              "maxLength": 20,
+              "required": true,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "phone",
+              "label": "연락처",
+              "maxLength": 20,
+              "required": true,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "email",
+              "label": "이메일",
+              "maxLength": 100,
+              "required": true,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "itemName",
+              "label": "창업 아이템명",
+              "maxLength": 50,
+              "required": true,
+              "value": "부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"
+            },
+            {
+              "key": "problem",
+              "label": "문제 인식",
+              "maxLength": 500,
+              "required": true,
+              "value": "자취생은 1~2년만 살 집에 가전을 새로 사기 부담스럽고, 이사할 때 처분도 어렵다."
+            },
+            {
+              "key": "solution",
+              "label": "해결 방안",
+              "maxLength": 500,
+              "required": true,
+              "value": "부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"
+            },
+            {
+              "key": "market",
+              "label": "목표 시장과 고객",
+              "maxLength": 500,
+              "required": true,
+              "value": "B2C / 20대 / 부산 대학가 자취생"
+            },
+            {
+              "key": "plan",
+              "label": "사업화 계획",
+              "maxLength": 500,
+              "required": false,
+              "value": ""
+            }
+          ],
+          "approval": null,
+          "receiptNo": null,
+          "receiptImageUrl": null,
+          "failReason": null,
+          "retries": 0,
+          "history": [
+            {
+              "status": "drafting",
+              "at": "2026-11-27T01:00:00.000Z"
+            }
+          ],
+          "createdAt": "2026-11-27T01:00:00.000Z",
+          "updatedAt": "2026-11-27T01:00:00.000Z",
+          "program": {
+            "id": "T-0001",
+            "title": "[테스트] 2026 부산 예비창업패키지 추가 모집",
+            "agency": "부산창조경제혁신센터",
+            "category": "사업화",
+            "region": "부산",
+            "recruiting": true,
+            "target": "예비창업자",
+            "bizYears": "예비창업자",
+            "targetAge": "만 20세 이상 ~ 만 39세 이하",
+            "tags": [
+              "IT·플랫폼",
+              "사업화",
+              "시제품",
+              "플랫폼"
+            ],
+            "content": "사업화 자금, 창업 교육, 전담 멘토링을 지원합니다. 시제품 제작과 마케팅에 쓸 수 있습니다.",
+            "startDate": "2026-11-07",
+            "endDate": "2026-12-02",
+            "registeredAt": "2026-11-07",
+            "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"
+          },
+          "polishRemaining": 5
+        },
+        "setCookie": [],
+        "mails": []
+      }
+    ]
+  },
+  {
+    "file": "applications-form",
+    "name": "applications-form.test.ts:47",
+    "opts": {
+      "env": {},
+      "consultLimit": null,
+      "exploreAiLimit": null,
+      "failSubmit": false,
+      "custom": []
+    },
+    "initNow": "2026-11-27T01:00:00.000Z",
+    "steps": [
+      {
+        "client": 1,
+        "method": "POST",
+        "path": "/api/auth/login",
+        "body": {
+          "email": "demo@test.local",
+          "password": "demo1234!"
+        },
+        "now": "2026-11-27T01:00:00.000Z",
+        "status": 200,
+        "response": {
+          "user": {
+            "id": "u-demo",
+            "email": "demo@test.local",
+            "isTeam": false,
+            "createdAt": "2026-11-27T01:00:00.000Z",
+            "emailVerified": true,
+            "mustChangePassword": false
+          }
+        },
+        "setCookie": [
+          "sid=2f48ef06ef880f10204bc401314f11a460c68b093b61da1f027f016cd007eff8; Max-Age=1209600; Path=/; HttpOnly; SameSite=Lax"
+        ],
+        "mails": []
+      },
+      {
+        "client": 1,
+        "method": "POST",
+        "path": "/api/applications",
+        "body": {
+          "programId": "T-0001"
+        },
+        "now": "2026-11-27T01:00:00.000Z",
+        "status": 201,
+        "response": {
+          "id": "app-350f1aca-bca2-477f-815b-18a559d26d05",
+          "userId": "u-demo",
+          "programId": "T-0001",
+          "status": "drafting",
+          "channel": "mock",
+          "formFileName": "application-form-T-0001.txt",
+          "fields": [
+            {
+              "key": "name",
+              "label": "대표자 이름",
+              "maxLength": 20,
+              "required": true,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "phone",
+              "label": "연락처",
+              "maxLength": 20,
+              "required": true,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "email",
+              "label": "이메일",
+              "maxLength": 100,
+              "required": true,
+              "identity": true,
+              "value": ""
+            },
+            {
+              "key": "itemName",
+              "label": "창업 아이템명",
+              "maxLength": 50,
+              "required": true,
+              "value": "부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"
+            },
+            {
+              "key": "problem",
+              "label": "문제 인식",
+              "maxLength": 500,
+              "required": true,
+              "value": "자취생은 1~2년만 살 집에 가전을 새로 사기 부담스럽고, 이사할 때 처분도 어렵다."
+            },
+            {
+              "key": "solution",
+              "label": "해결 방안",
+              "maxLength": 500,
+              "required": true,
+              "value": "부산 대학가 자취생을 위한 중고 가전 구독 플랫폼"
+            },
+            {
+              "key": "market",
+              "label": "목표 시장과 고객",
+              "maxLength": 500,
+              "required": true,
+              "value": "B2C / 20대 / 부산 대학가 자취생"
+            },
+            {
+              "key": "plan",
+              "label": "사업화 계획",
+              "maxLength": 500,
+              "required": false,
+              "value": ""
+            }
+          ],
+          "approval": null,
+          "receiptNo": null,
+          "receiptImageUrl": null,
+          "failReason": null,
+          "retries": 0,
+          "history": [
+            {
+              "status": "drafting",
+              "at": "2026-11-27T01:00:00.000Z"
+            }
+          ],
+          "createdAt": "2026-11-27T01:00:00.000Z",
+          "updatedAt": "2026-11-27T01:00:00.000Z",
+          "program": {
+            "id": "T-0001",
+            "title": "[테스트] 2026 부산 예비창업패키지 추가 모집",
+            "agency": "부산창조경제혁신센터",
+            "category": "사업화",
+            "region": "부산",
+            "recruiting": true,
+            "target": "예비창업자",
+            "bizYears": "예비창업자",
+            "targetAge": "만 20세 이상 ~ 만 39세 이하",
+            "tags": [
+              "IT·플랫폼",
+              "사업화",
+              "시제품",
+              "플랫폼"
+            ],
+            "content": "사업화 자금, 창업 교육, 전담 멘토링을 지원합니다. 시제품 제작과 마케팅에 쓸 수 있습니다.",
+            "startDate": "2026-11-07",
+            "endDate": "2026-12-02",
+            "registeredAt": "2026-11-07",
+            "url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do"
+          },
+          "polishRemaining": 5
+        },
+        "setCookie": [],
+        "mails": []
+      }
+    ]
+  }
+]

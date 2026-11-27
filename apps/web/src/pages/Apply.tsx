@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { APPLICATION_STATUS_LABEL } from '@gil/shared';
 import type { ApplicationView, FieldError } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
+import type { ExportFormat, PolishSuggestion } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { errMessage, safeHref } from '../lib/format';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
@@ -11,6 +12,19 @@ import '../styles/pages-apply.css';
 
 const isLong = (max: number | null) => max === null || max > 100;
 const when = (iso: string) => iso.slice(0, 16).replace('T', ' ');
+const POLISH_LIMIT = 5;
+
+/** base64 파일을 브라우저에서 내려받는다. */
+function saveFile(name: string, mime: string, b64: string) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export function Apply() {
   const { id = '' } = useParams();
@@ -22,11 +36,20 @@ export function Apply() {
   const [fieldErrs, setFieldErrs] = useState<FieldError[]>([]);
   const [saved, setSaved] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [polish, setPolish] = useState<Record<string, PolishSuggestion>>({});
+  const [polishMsg, setPolishMsg] = useState('');
+  const [polishLeft, setPolishLeft] = useState<number | null>(null);
+  const [polishing, setPolishing] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [exportMsg, setExportMsg] = useState('');
+  const [exportErr, setExportErr] = useState('');
 
   function adopt(a: ApplicationView) {
     setApp(a);
     setValues(Object.fromEntries(a.fields.map((f) => [f.key, f.value])));
     setConfirmed(false);
+    const left = (a as { polishRemaining?: number }).polishRemaining;
+    if (typeof left === 'number') setPolishLeft(left);
   }
   useEffect(() => { if (data) adopt(data); }, [data]);
 
@@ -52,6 +75,46 @@ export function Apply() {
   const editable = st === 'drafting';
   const fieldErr = (key: string) => fieldErrs.find((f) => f.field === key)?.message;
   const save = () => run(() => api.updateApplication(app.id, { values }), 'saved');
+  const left = polishLeft ?? POLISH_LIMIT;
+  const pending = Object.values(polish).filter((x) => values[x.key] !== x.after);
+
+  async function askPolish() {
+    if (!app) return;
+    setPolishing(true); setPolishMsg(''); setPolish({});
+    try {
+      const r = await api.polishApplication(app.id, values);
+      setPolishLeft(r.remaining);
+      setPolish(Object.fromEntries(r.suggestions.map((x) => [x.key, x])));
+      setPolishMsg(r.suggestions.length
+        ? `${r.suggestions.length}개 항목을 다듬었어요. 칸마다 확인하고 적용해 주세요.`
+        : '더 다듬을 곳을 찾지 못했어요. 지금 글을 그대로 써도 괜찮아요.');
+    } catch (x) {
+      if (x instanceof ApiClientError && x.code === 'polish_limit') setPolishLeft(0);
+      setPolishMsg(errMessage(x));
+    } finally { setPolishing(false); }
+  }
+  const apply = (keys: string[]) => {
+    setValues((o) => ({ ...o, ...Object.fromEntries(keys.map((k) => [k, polish[k].after])) }));
+    setSaved(false);
+  };
+  const dismiss = (key: string) => setPolish((o) => { const n = { ...o }; delete n[key]; return n; });
+
+  async function download(format: ExportFormat) {
+    if (!app) return;
+    setExporting(format); setExportErr(''); setExportMsg('');
+    try {
+      // 작성 중이면 지금 쓴 내용을 먼저 저장해서 파일에 담는다.
+      if (app.status === 'drafting') adopt(await api.updateApplication(app.id, { values }));
+      const f = await api.exportApplication(app.id, format);
+      saveFile(f.fileName, f.mimeType, f.fileBase64);
+      setExportMsg(f.source === 'form'
+        ? '공고 원본 양식에 내용을 채워 내려받았어요. 빈 칸이 없는지 한 번 더 확인해 주세요.'
+        : '표준 지원서 양식으로 내려받았어요. 공고에 정해진 양식이 있으면 내용을 그 양식에 옮겨 주세요.');
+    } catch (x) {
+      setExportErr(errMessage(x));
+    } finally { setExporting(null); }
+  }
+  const printValues = app.fields.map((f) => ({ ...f, value: editable ? (values[f.key] ?? '') : f.value }));
 
   return (
     <div className="container stack program-detail apply-page">
@@ -62,6 +125,23 @@ export function Apply() {
         연습용 초안이고 제출도 모의로 처리돼요. 실제 신청은 공식 사이트에서 해야 해요.
         {safeHref(p.url) && <> <a href={safeHref(p.url)} target="_blank" rel="noreferrer">공식 안내에서 신청하기</a></>}
       </p>
+
+      {editable && (
+        <section className="card apply-polish" aria-labelledby="apply-polish-h">
+          <div className="apply-polish-text">
+            <h2 id="apply-polish-h">AI로 다듬기</h2>
+            <p>적어 둔 내용과 상담에서 나눈 이야기를 바탕으로 Solar가 문장을 다듬어요. 고른 칸만 바뀌고, 없는 경험이나 숫자는 만들지 않아요.</p>
+          </div>
+          <div className="apply-polish-action">
+            <button className="btn primary" type="button" disabled={polishing || busy || left <= 0} onClick={askPolish}>
+              {polishing ? '다듬는 중...' : 'AI로 다듬기'}
+            </button>
+            <span className="muted">남은 횟수 {left}/{POLISH_LIMIT}</span>
+          </div>
+          {polishMsg && <p className="apply-polish-msg" role="status">{polishMsg}</p>}
+          {pending.length > 1 && <button className="btn" type="button" onClick={() => apply(pending.map((x) => x.key))}>다듬은 글 모두 적용</button>}
+        </section>
+      )}
 
       {editable && (
         <form className="card stack" onSubmit={(e) => e.preventDefault()} noValidate>
@@ -83,6 +163,17 @@ export function Apply() {
                 </label>
                 {isLong(f.maxLength) ? <textarea {...common} /> : <input type="text" {...common} />}
                 {f.identity && <p className="apply-note">이 칸은 AI가 채우지 않아요. 직접 적어 주세요.</p>}
+                {polish[f.key] && v !== polish[f.key].after && (
+                  <div className="apply-suggest">
+                    <p className="apply-suggest-label">다듬은 글</p>
+                    <p className="apply-suggest-text">{polish[f.key].after}</p>
+                    <div className="row">
+                      <button className="btn primary" type="button" onClick={() => apply([f.key])}>이 글로 바꾸기</button>
+                      <button className="btn" type="button" onClick={() => dismiss(f.key)}>그대로 두기</button>
+                    </div>
+                  </div>
+                )}
+                {polish[f.key] && v === polish[f.key].after && <p className="apply-note">다듬은 글을 적용했어요. 임시 저장을 눌러 저장해 주세요.</p>}
                 {e && <p className="error-text" role="alert">{e}</p>}
               </div>
             );
@@ -137,6 +228,34 @@ export function Apply() {
       {!['drafting', 'awaiting_approval', 'completed', 'failed'].includes(st) && (
         <section className="card"><p className="muted" style={{ margin: 0 }}>지금은 고칠 수 없는 상태예요.</p></section>
       )}
+
+      <section className="card stack apply-export" aria-labelledby="apply-export-h">
+        <h2 id="apply-export-h" style={{ margin: 0 }}>지원서 파일 내려받기</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          제출할 파일로 받아 공식 사이트에 직접 올려요. 공고 원본 양식(DOCX·HWPX)을 읽었다면 그 양식에 채우고, 아니면 표준 양식으로 만들어요.
+        </p>
+        <div className="row">
+          <button className="btn" type="button" disabled={!!exporting || busy} onClick={() => download('hwpx')}>{exporting === 'hwpx' ? '만드는 중...' : '한글(HWPX)'}</button>
+          <button className="btn" type="button" disabled={!!exporting || busy} onClick={() => download('docx')}>{exporting === 'docx' ? '만드는 중...' : '워드(DOCX)'}</button>
+          <button className="btn" type="button" disabled={!!exporting} onClick={() => window.print()}>PDF로 저장</button>
+        </div>
+        <p className="apply-note">HWPX는 한글 2014 이상에서 열려요. HWP 파일이 필요하면 한글에서 열고 'HWP로 저장'을 눌러 주세요. PDF는 인쇄 창에서 'PDF로 저장'을 골라 주세요.</p>
+        {exportMsg && <p role="status" style={{ margin: 0 }}>{exportMsg}</p>}
+        {exportErr && <p className="error-text" role="alert">{exportErr}</p>}
+      </section>
+
+      <article className="apply-print" aria-hidden="true">
+        <h1>{p.title} 지원서</h1>
+        <p>{p.agency}</p>
+        <table>
+          <tbody>
+            {printValues.map((f) => (
+              <tr key={f.key}><th scope="row">{f.label}</th><td>{f.value || (f.identity ? '(직접 작성)' : '')}</td></tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="apply-print-foot">해보까에서 작성한 초안입니다. 제출 전에 공고 원본 양식과 내용을 확인해 주세요.</p>
+      </article>
 
       {app.history.length > 0 && (
         <ul className="apply-history">
