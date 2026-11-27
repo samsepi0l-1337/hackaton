@@ -34,11 +34,14 @@ async function api(method, path, body, p = page) {
 }
 /** 개발용 메일러가 API 로그에 남긴 인증 링크 중 마지막 것. */
 async function lastVerifyLink(email) {
-  const log = await fs.readFile(API_LOG, 'utf8');
-  const lines = log.split('\n');
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const m = lines[i].match(/verify link: (\S+)/);
-    if (m && (!email || lines.slice(Math.max(0, i - 3), i).some((l) => l.includes(email)))) return m[1];
+  // wrangler dev 는 로그를 늦게 내보낼 수 있어서 3초까지 다시 읽는다.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const lines = (await fs.readFile(API_LOG, 'utf8')).split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const m = lines[i].match(/verify link: (\S+)/);
+      if (m && (!email || lines.slice(Math.max(0, i - 3), i).some((l) => l.includes(email)))) return m[1];
+    }
+    await new Promise((r) => setTimeout(r, 100));
   }
   throw new Error('인증 링크를 로그에서 찾지 못함: ' + email);
 }
