@@ -64,6 +64,8 @@ pub trait Ports {
     ) -> Option<Result<serde_json::Value, String>>;
     /// EMAIL 바인딩 (`binding.send({to, from, subject, text, html})`). 바인딩이 없으면 None.
     async fn send_email(&self, from: &str, mail: &Mail) -> Option<Result<(), String>>;
+    /// ms 만큼 기다린다 (Workers: setTimeout). 시간 제한은 `crate::time::timeout` 으로.
+    async fn sleep(&self, ms: u64);
     /// 암호학적 난수.
     fn random_bytes(&self, n: usize) -> Vec<u8>;
     /// console.log / warn / error. level: "log" | "warn" | "error".
