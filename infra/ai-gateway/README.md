@@ -19,7 +19,7 @@
 - 노드 model 에 `custom-upstage/…` 를 넣으면 Upstage 까지 가지만 접두어가 붙은 모델 이름이라 거부.
 - 기본 provider `upstage`: `Model execution failed`.
 
-동적 라우트가 커스텀 provider 를 제대로 지원하면 `wrangler.jsonc` 의 `AI_MODE` 를 `route` 로 바꾸면 된다 (코드는 `apps/api/src/ai/solar.ts` 에 있다).
+동적 라우트가 커스텀 provider 를 제대로 지원하면 `apps/api-rs/worker/wrangler.jsonc` 의 `AI_MODE` 를 `route` 로 바꾸면 된다 (코드는 `apps/api-rs/core/src/api/ai/` 에 있다).
 그때까지 작업별 모델 선택(`SOLAR_MODELS`)과 실패 시 규칙 결과는 앱이, 요청 수 한도와 로그는 게이트웨이가 맡는다.
 
 다시 만들기: `CF_API_TOKEN=… CF_ACCOUNT_ID=… infra/ai-gateway/setup.sh`

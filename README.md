@@ -15,7 +15,17 @@ ICT INNOHACK 2026 (동남권 이노베이션 해커톤) 참가 프로젝트. 기
   - cron: 매일 K-Startup 공고를 수집한다.
   - `DocWorker`: 공고 첨부 문서를 처리하는 컨테이너. Upstage Document Parse 를 쓴다.
 - AI: Upstage Solar 와 Document Parse. 모든 호출이 Cloudflare AI Gateway 를 지난다.
-- 웹 (`apps/web`): React + Vite. 빌드 결과를 Worker assets 로 배포한다.
+- 웹 (`apps/web`): React + Vite. 해보까 포털 디자인([DESIGN.md](DESIGN.md)). 빌드 결과를 Worker assets 로 배포한다.
+
+## 주요 기능
+
+- 공고 모음 (`/programs`): K-Startup 실제 공고와 팀이 검수한 부산 교육·상담 자료. 모집 상태와 내 조건 대조 결과를 배지로 보여 준다.
+- AI 창업 상담 (`/mentor`): 관심·상황 → 구상 정리 → 준비 안내 3단계. 로그인한 사용자만 쓴다.
+- 지원서 작성: 모집 중인 공고 상세(`/programs/:id`)에서 로그인한 사용자가 지원서 초안을 만든다. 공고 양식은 DocWorker 컨테이너가 받아 Upstage Document Parse 로 읽고(URL 별 캐시), Solar 가 신원 정보가 아닌 칸의 초안을 쓴다. `/applications/:id` 에서 수정 → 제출 전 확인 → 모의 제출 순서로 진행한다. 모의 제출은 영수증 번호(`MOCK-…`)만 만들고 실제로 제출하지 않는다. 실제 신청은 공식 사이트에서 한다. 내 지원서는 `/me` 에서 본다.
+- 창업 유형 테스트 (`/test`), 이용 방법 (`/guide`), 내 정보 (`/me`).
+- `/bufs`: 팀 관리자 화면. 메뉴에는 링크가 없다.
+
+페이지별 설명은 [docs/web-pages.md](docs/web-pages.md).
 
 ## 디렉터리
 
@@ -23,45 +33,37 @@ ICT INNOHACK 2026 (동남권 이노베이션 해커톤) 참가 프로젝트. 기
 |---|---|
 | `apps/api-rs/core` | `gil-core`: 자격 판정·추천 규칙 등 공용 로직 |
 | `apps/api-rs/worker` | `gil-worker`: Worker, `wrangler.jsonc`, `wrangler.test.jsonc` |
-| `apps/api-rs/goldens` | 동일성 검증용 기록 (`fn/`, `http/`) |
-| `apps/api-rs/harness` | 골든 기록·비교 도구 (TS) |
+| `apps/api-rs/goldens` | 고정 회귀 데이터 (`fn/`, `http/`) |
+| `apps/api-rs/harness` | 공용 함수 골든 기록 도구 (`record-fn.ts`) |
 | `apps/web` | 웹 앱 (React + Vite) |
 | `apps/doc-worker` | DocWorker 컨테이너 이미지 |
-| `apps/api` | TS 참조 구현 (아래 참고) |
-| `packages/shared` | TS 공통 코드 (참조 구현과 웹이 쓴다) |
+| `packages/shared` | TS 공통 코드 (웹이 쓴다) |
 | `e2e` | 브라우저 E2E |
 | `docs` | 기획 문서, 행사 자료 |
 
 ## 빌드와 테스트
 
-Rust 명령은 `apps/api-rs` 에서 실행한다.
-
 ```sh
-cd apps/api-rs
-cargo test -p gil-core                              # 코어 테스트
-cargo test -p gil-core --test fn_goldens            # 골든: 공용 함수
-cargo test -p gil-core --test http_goldens          # 골든: HTTP 요청·응답
-cargo install worker-build --version 0.9.0 --locked # 처음 한 번
-cd worker && worker-build --release                 # wasm 빌드
+bun install                                   # 처음 한 번 (웹, shared, Worker 의 wrangler)
+cd apps/web && bun run build                  # 웹 빌드
+cd apps/api-rs && cargo test -p gil-core      # 코어 테스트 (골든 포함)
 ```
 
-골든을 다시 기록하는 방법은 [apps/api-rs/harness/README.md](apps/api-rs/harness/README.md).
+골든은 고정된 회귀 데이터다. 공용 함수 골든을 다시 기록하는 방법은 [apps/api-rs/harness/README.md](apps/api-rs/harness/README.md).
 
 ## 로컬 실행
 
 ```sh
 bun install
-cd apps/api-rs/worker
-../../api/node_modules/.bin/wrangler dev -c wrangler.test.jsonc   # 시험 설정
-# 운영 설정으로 띄우려면 -c wrangler.jsonc
+cd apps/api-rs/worker && bun run dev    # wrangler dev -c wrangler.test.jsonc (시험 설정)
 ```
 
 웹은 따로 띄운다: `bun run dev:web` (http://localhost:5173).
 
-E2E 는 Rust 백엔드로 돌린다. 첫 빌드는 몇 분 걸린다. 자세한 내용은 [e2e/README.md](e2e/README.md).
+E2E 는 항상 Rust Worker 로 돌린다. 첫 빌드는 몇 분 걸린다. 자세한 내용은 [e2e/README.md](e2e/README.md).
 
 ```sh
-E2E_BACKEND=rust e2e/run.sh
+e2e/run.sh
 ```
 
 ## 배포
@@ -69,15 +71,19 @@ E2E_BACKEND=rust e2e/run.sh
 웹을 먼저 빌드하고, Worker 디렉터리에서 배포한다.
 
 ```sh
-cd apps/web && bunx vite build
-cd ../api-rs/worker && ../../api/node_modules/.bin/wrangler deploy
+cd apps/web && bun run build
+cd ../api-rs/worker && bun run deploy    # wrangler deploy
 ```
 
 배포 전 확인할 것은 `docs/todo.md` 5절.
 
-## TS 참조 구현
+관리자 비밀번호 해시는 이렇게 만든다. 비밀번호는 표준 입력으로 넣는다.
 
-`apps/api` 는 예전 TypeScript API 다. 지금은 Rust 백엔드와 동작이 같은지 비교하는 기준으로만 둔다. 골든은 이 코드의 테스트에서 기록하고, `apps/api-rs/harness/diff.ts` 가 비교한다.
+```sh
+cd apps/api-rs
+PASSWORD_PEPPER=<secret> cargo run -q -p gil-core --example hash-admin-password
+cd worker && bunx wrangler secret put ADMIN_PASSWORD_HASH
+```
 
 ## 데이터 출처
 
