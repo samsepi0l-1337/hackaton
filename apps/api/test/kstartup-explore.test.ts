@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { kstartupToResource, type KStartupItem, type Resource } from '@gil/shared';
 import { createKStartupStore } from '../src/kstartup/store';
 import { memoryKv } from '../src/store';
-import { NOW, setup } from './helpers';
+import { NOW, demo, setup } from './helpers';
 
 const item = (n: number, o: Partial<KStartupItem> = {}): KStartupItem => ({
   pbanc_sn: n, biz_pbanc_nm: `실제 공고 ${n}`, pbanc_ntrp_nm: '부산테크노파크', supt_biz_clsfc: '멘토링ㆍ컨설팅ㆍ교육', supt_regin: '부산',
@@ -11,6 +11,12 @@ const item = (n: number, o: Partial<KStartupItem> = {}): KStartupItem => ({
   support_ctnt: '멘토링 제공', detl_pg_url: `https://www.k-startup.go.kr/${n}`, ...o,
 });
 const real = (...items: KStartupItem[]): Resource[] => items.map((i) => kstartupToResource(i, NOW)!);
+
+// 창업 준비는 로그인 필요 (2026-11-27): 탐색 테스트는 데모 계정(인증 완료)으로 로그인한다.
+async function authed(list: Resource[]) {
+  const { t } = world(list);
+  return { t, c: await demo(t) };
+}
 
 function world(list: Resource[]) {
   const kstartup = createKStartupStore(memoryKv());
@@ -67,7 +73,7 @@ describe('탐색 결과와 실제 지원사업', () => {
   };
 
   test('모집 중인 실제 공고는 추천에 오르고 종료된 공고는 오르지 않는다', async () => {
-    const { c } = world(real(
+    const { c } = await authed(real(
       item(1),
       item(2, { rcrt_prgs_yn: 'N' }),
       item(3, { pbanc_rcpt_end_dt: '20261101' }),
@@ -84,7 +90,7 @@ describe('탐색 결과와 실제 지원사업', () => {
   });
 
   test('연령이 명시 조건과 다르면 추천하지 않는다', async () => {
-    const { c } = world(real(item(5, { biz_trgt_age: '만 40세 이상' })));
+    const { c } = await authed(real(item(5, { biz_trgt_age: '만 40세 이상' })));
     await c.put('/api/explore/start', { start: { ...START, conditions: { age: 25 } } });
     const ids = (await c.get('/api/explore/result')).body.resources.map((x: any) => x.resource.id);
     expect(ids).not.toContain('ks-5');
@@ -98,7 +104,7 @@ describe('탐색 결과와 실제 지원사업', () => {
   });
 
   test('수집 자료가 없어도 결과가 나온다', async () => {
-    const { c } = world([]);
+    const { c } = await authed([]);
     const body = await resultOf(c);
     expect(Array.isArray(body.resources)).toBe(true);
     expect(typeof body.coverageNote).toBe('string');

@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { createStore, DbError, memoryKv } from '../src/store';
-import { NOW, setup } from './helpers';
+import { NOW, register, setup } from './helpers';
 
 describe('DB: Zod 검사 + KV 저장', () => {
   test('같은 KV 로 앱을 다시 만들어도 가입·세션·상담·지원서가 남는다 (Durable Object 재시작)', async () => {
     const kv = memoryKv();
     const t1 = setup({ store: () => createStore(NOW, kv) });
-    const c = t1.client();
-    expect((await c.post('/api/auth/signup', { email: 'p@test.local', password: 'password1!', consent: true })).status).toBe(201);
+    const c = await register(t1, 'p@test.local', 'password1!');
     await c.put('/api/mentor/profile', { profile: { age: 22, stage: 'pre', district: '중구' } });
     const t2 = setup({ store: () => createStore(NOW, kv) });
     const c2 = t2.client(c.state.cookie);

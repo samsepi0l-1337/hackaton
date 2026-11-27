@@ -1,12 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { DEMO_PROFILE, MENTOR_PROGRAM_DEFLECT, TYPE_QUESTIONS } from '@gil/shared';
-import { setup, demo } from './helpers';
+import { setup, demo, register } from './helpers';
 
-const newUser = async (t: ReturnType<typeof setup>, email = 'n@x.com') => {
-  const c = t.client();
-  await c.post('/api/auth/signup', { email, password: 'password1', consent: true });
-  return c;
-};
+const newUser = (t: ReturnType<typeof setup>, email = 'n@x.com') => register(t, email);
 
 describe('mentor', () => {
   test('profile autosave merges, reports errors for all sections, chat blocked until complete', async () => {

@@ -2,6 +2,7 @@
 // 선택지 값은 shared constants 에서 가져와 폼·API·DB가 같은 값을 쓴다.
 import { z } from 'zod';
 import {
+  OCCUPATIONS, RESIDENCE_OPTIONS, BUSAN_DISTRICTS,
   AFFILIATIONS, APPLICATION_STATUS_LABEL, BIZ_FORMS, CUSTOMER_AGES, CUSTOMER_REGIONS, CUSTOMER_TYPES,
   INDUSTRIES, READINESS, REVENUE_MODELS, STAGES, SUPPORT_NEEDS, TEAM_SIZES,
 } from '@gil/shared';
@@ -38,9 +39,27 @@ export const UserSchema = z.object({
   isTeam: z.boolean(),
   createdAt: isoTime,
   passwordHash: z.string().min(10),
+  /** 이전 레코드에는 없다 → false. 시드 사용자는 store 가 true 로 바로잡는다. */
+  emailVerified: z.boolean().default(false),
+  mustChangePassword: z.boolean().default(false),
 });
 
-export const SessionSchema = z.object({ userId: z.string().min(1), createdAt: isoTime });
+/** mustChangePassword: 복구 비밀번호로 연 세션이면 true (비밀번호를 바꿀 때까지 다른 기능을 막는다). */
+export const SessionSchema = z.object({ userId: z.string().min(1), createdAt: isoTime, mustChangePassword: z.boolean().default(false) });
+
+/** 이메일 인증 (`verify:<userId>`). 토큰·코드는 SHA-256 해시만 저장한다. */
+export const VerifySchema = z.object({
+  tokenHash: z.string().length(64),
+  codeHash: z.string().length(64),
+  expiresAt: isoTime,
+  sentAt: isoTime,
+  attempts: z.number().int().min(0),
+});
+export type VerifyRecord = z.infer<typeof VerifySchema>;
+
+/** 복구 비밀번호 (`recovery:<userId>`). 해시만 저장한다. used 면 로그인에는 다시 못 쓴다. */
+export const RecoverySchema = z.object({ hash: z.string().min(10), expiresAt: isoTime, createdAt: isoTime, used: z.boolean() });
+export type RecoveryRecord = z.infer<typeof RecoverySchema>;
 
 const ChatMessageSchema = z.object({
   role: z.enum(['mentor', 'user']),
@@ -170,3 +189,36 @@ export type ExploreState = z.infer<typeof ExploreStateSchema>;
 
 /** 상담 시작 시각 목록 (키마다 `quota:<key>`). 7일이 지난 항목은 쓸 때 지운다. */
 export const QuotaSchema = z.array(isoTime).max(100);
+
+/** 내 정보: 기본 정보 (`profile:<userId>`). 모두 선택. */
+export const BasicProfileSchema = z.object({
+  age: z.number().int().min(0).max(120).nullable(),
+  residence: z.enum([...RESIDENCE_OPTIONS, ...BUSAN_DISTRICTS] as unknown as [string, ...string[]]).nullable(),
+  hasBusiness: z.boolean().nullable(),
+  occupation: tuple(OCCUPATIONS).nullable(),
+  updatedAt: isoTime.nullable(),
+});
+
+/** 의견 남기기 한 건 (`feedback:<id>`). 제출 시점의 값. 이메일은 가린 문자열만, 원문 대화는 없다. */
+const scoreRange = z.object({ before: z.number().min(1).max(5).optional(), after: z.number().min(1).max(5).optional() });
+export const FeedbackRecordSchema = z.object({
+  id: z.string().min(1),
+  createdAt: isoTime,
+  user: z.string(),
+  readiness: z.string().nullable(),
+  problemId: z.string().nullable(),
+  reviewRegion: z.string().nullable(),
+  helpful: z.boolean().nullable(),
+  reason: z.string().max(500).nullable(),
+  directionClear: z.boolean().nullable(),
+  wantToExplore: z.string().max(500).nullable(),
+  knowWhatToPrepare: scoreRange.nullable(),
+  regionIntent: scoreRange.nullable(),
+  foundRegionalPath: z.boolean().nullable(),
+  pathName: z.string().max(200).nullable(),
+});
+export type FeedbackRecord = z.infer<typeof FeedbackRecordSchema>;
+
+/** /bufs 로그인 실패 횟수와 잠금 (`bufslock:<IP 해시>`), 관리자 세션 (`bufs:<token>`). */
+export const BufsLockSchema = z.object({ fails: z.number().int().min(0), lockedUntil: isoTime.nullable() });
+export const BufsSessionSchema = z.object({ expiresAt: isoTime });
