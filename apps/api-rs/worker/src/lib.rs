@@ -97,6 +97,33 @@ async fn call_promise(
         })
 }
 
+async fn with_deadline<F, D, T>(work: F, delay: D) -> std::result::Result<T, String>
+where
+    F: std::future::Future<Output = std::result::Result<T, String>>,
+    D: std::future::Future,
+{
+    futures::pin_mut!(work, delay);
+    match futures::future::select(work, delay).await {
+        futures::future::Either::Left((result, _)) => result,
+        futures::future::Either::Right(_) => Err("timeout".into()),
+    }
+}
+
+#[cfg(test)]
+mod timeout_tests {
+    #[test]
+    fn response_body_stall_times_out() {
+        let fetch_and_body = async {
+            let _response = futures::future::ready(()).await;
+            futures::future::pending::<()>().await;
+            Ok::<_, String>(())
+        };
+        let deadline = futures::future::ready(());
+        let result = futures::executor::block_on(super::with_deadline(fetch_and_body, deadline));
+        assert_eq!(result, Err("timeout".to_owned()));
+    }
+}
+
 #[async_trait(?Send)]
 impl Ports for WorkerPorts {
     async fn fetch(&self, r: HttpReq) -> std::result::Result<HttpResp, String> {
@@ -130,27 +157,25 @@ impl Ports for WorkerPorts {
             init.with_body(Some(js_sys::Uint8Array::from(b.as_slice()).into()));
         }
         let req = Request::new_with_init(&r.url, &init).map_err(|e| e.to_string())?;
-        let fetch = Fetch::Request(req);
-        let fut = fetch.send();
-        let mut resp = match r.timeout_ms {
-            Some(ms) => {
-                let delay = Delay::from(std::time::Duration::from_millis(ms));
-                futures::pin_mut!(fut);
-                futures::pin_mut!(delay);
-                match futures::future::select(fut, delay).await {
-                    futures::future::Either::Left((res, _)) => res.map_err(|e| e.to_string())?,
-                    futures::future::Either::Right(_) => return Err("timeout".into()),
-                }
-            }
-            None => fut.await.map_err(|e| e.to_string())?,
+        let work = async {
+            let mut resp = Fetch::Request(req)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            let headers = resp.headers().entries().collect();
+            let body = resp.bytes().await.map_err(|e| e.to_string())?;
+            Ok(HttpResp {
+                status: resp.status_code(),
+                headers,
+                body,
+            })
         };
-        let headers = resp.headers().entries().collect();
-        let body = resp.bytes().await.map_err(|e| e.to_string())?;
-        Ok(HttpResp {
-            status: resp.status_code(),
-            headers,
-            body,
-        })
+        match r.timeout_ms {
+            Some(ms) => {
+                with_deadline(work, Delay::from(std::time::Duration::from_millis(ms))).await
+            }
+            None => work.await,
+        }
     }
     async fn doc_worker(
         &self,
@@ -332,17 +357,22 @@ impl DurableObject for GilApp {
         let env = core_env(&self.env);
         let ports = self.ports();
         let now = now_ms(&env);
+        let url = req.url()?;
+        // 내부 경로: 네트워크 수집은 KV 잠금 없이 수행한다.
+        if url.path() == "/__internal/kstartup-sync" {
+            let result = gil_core::api::kstartup::sync::fetch(&env, &ports).await;
+            let mut guard = self.kv.lock().await;
+            if guard.is_none() {
+                *guard = Some(self.load(&ports, &env, now).await?);
+            }
+            let kv = guard.as_mut().unwrap();
+            let r = gil_core::api::kstartup::sync::apply(kv, now, result);
+            self.persist(kv).await?;
+            return Response::from_json(&r);
+        }
         let mut guard = self.kv.lock().await;
         if guard.is_none() {
             *guard = Some(self.load(&ports, &env, now).await?);
-        }
-        let url = req.url()?;
-        // 내부 경로: cron 이 보내는 K-Startup 수집 (main 이 /api/* 만 넘기므로 밖에서는 닿지 않는다).
-        if url.path() == "/__internal/kstartup-sync" {
-            let kv = guard.as_mut().unwrap();
-            let r = gil_core::api::kstartup::sync::run_sync(kv, &env, &ports, now).await;
-            self.persist(kv).await?;
-            return Response::from_json(&r);
         }
         // 차등 시험용 초기화: TEST_MODE=1 에서만.
         if url.path() == "/api/__test/reset"
