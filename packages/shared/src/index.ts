@@ -13,4 +13,5 @@ export * from './api';
 export * from './cloudflare';
 export * from './explore';
 export * from './data';
+export * from './guard';
 export * from './explore-rules';

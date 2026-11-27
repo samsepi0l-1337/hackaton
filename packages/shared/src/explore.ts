@@ -190,3 +190,37 @@ export interface ResourceCard {
 
 /** 데이터 버전. 문제 카드가 바뀌면 올린다. */
 export const EXPLORE_DATA_VERSION = '2026-11-27.test-1';
+
+// ---- 상담 횟수 제한 ----
+/**
+ * 상담 1회 = 탐색 세션에서 첫 질문을 받는 순간 (POST /api/explore/chat, 대화가 비어 있을 때).
+ * 1인당 7일(연속 168시간) 3회. 사람 단위: 로그인 사용자 id, 게스트는 기기 쿠키 + 접속 IP 해시를 함께 센다
+ * (초기화·쿠키 삭제로 횟수가 돌아오지 않게). 초기화해도 이미 쓴 횟수는 돌려주지 않는다.
+ */
+export const CONSULT_LIMIT = { count: 3, windowDays: 7 } as const;
+export interface ConsultQuota {
+  used: number;
+  limit: number;
+  remaining: number;
+  resetAt: string | null; // 가장 오래된 상담이 7일이 지나 1회가 돌아오는 시각 (ISO), 남은 횟수가 있으면 null 가능
+}
+
+// ---- 브라우저 로컬 AI (Chrome 내장 Prompt API) ----
+/**
+ * 웹이 로컬 AI 로 문장을 다듬을 수 있으면 이 헤더에 작업 이름을 쉼표로 보낸다 (예: 'mentor,reason,field').
+ * 서버는 그 작업에서 Solar 를 부르지 않고 규칙 문장만 돌려준다. 웹은 shared guardText 로 같은 사실 검사를 한다.
+ * 로컬 AI 는 Chrome LanguageModel.availability({ ko }) 가 'available' 일 때만 쓴다 (다운로드를 시작하지 않는다).
+ */
+export const LOCAL_AI_HEADER = 'x-local-ai';
+export const LOCAL_AI_TASKS = ['mentor', 'reason', 'field'] as const;
+export type LocalAiTask = (typeof LOCAL_AI_TASKS)[number];
+
+// ---- F12 선택 보완: 현장에 확인할 질문 (P1, PR #7 d6eb693) ----
+export interface FieldQuestion {
+  id: string;
+  question: string; // 현재 방식·실제 경험을 먼저 묻는 일반 질문. 어려움·구매 의향을 전제하지 않는다
+  purpose: string; // 질문 의도
+  source: 'rule' | 'ai';
+}
+/** 상태는 항상 '현장 확인 전'. AI 가 응답자·답변·검증 결과를 만들지 않는다. */
+export const FIELD_STATUS_LABEL = '현장 확인 전';
