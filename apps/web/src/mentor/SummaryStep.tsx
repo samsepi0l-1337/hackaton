@@ -64,8 +64,9 @@ export function SummaryEditor({ summary, onChange, keys }: { summary: SummaryV2;
   );
 }
 
-export function SummaryStep({ summary, onChange, onBackToChat, onBackToStart, onResult }: {
+export function SummaryStep({ summary, onChange, onBackToChat, onBackToStart, onResult, onContinue }: {
   summary: SummaryV2; onChange: (s: SummaryV2) => void; onBackToChat: () => void; onBackToStart: () => void; onResult: () => void;
+  onContinue?: () => Promise<void>;
 }) {
   const p = summary.exploration.problem;
   return (
@@ -94,10 +95,29 @@ export function SummaryStep({ summary, onChange, onBackToChat, onBackToStart, on
         <SummaryEditor summary={summary} onChange={onChange} keys={MAIN} />
       </section>
 
+      {onContinue && <ContinueCard onContinue={onContinue} />}
       <button className="btn" onClick={onBackToChat}>대화로 돌아가기</button>
       <BottomBar>
         <button className="btn primary" onClick={onResult}>준비 안내 보기</button>
       </BottomBar>
     </div>
+  );
+}
+
+/** 정리한 뒤에도 같은 상담에서 질문을 더 받아 구상을 구체화한다. 답할 때마다 채팅 1번을 쓴다. */
+function ContinueCard({ onContinue }: { onContinue: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function go() {
+    setBusy(true); setErr('');
+    try { await onContinue(); } catch (e) { setErr(errMessage(e)); } finally { setBusy(false); }
+  }
+  return (
+    <section className="card stack" aria-labelledby="more-talk">
+      <h2 id="more-talk" style={{ margin: 0 }}>더 구체적으로 정리하고 싶다면</h2>
+      <p style={{ margin: 0 }}>AI가 질문을 이어서 드려요. 답한 내용은 요약과 준비 안내에 함께 반영돼요. 답을 보낼 때마다 이번 주 상담 채팅 1번을 써요.</p>
+      {err && <p className="error-text" role="alert">{err}</p>}
+      <div><button className="btn primary" disabled={busy} onClick={go}>{busy ? '질문을 준비하는 중...' : 'AI와 더 이야기하기'}</button></div>
+    </section>
   );
 }

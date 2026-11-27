@@ -1,5 +1,5 @@
 //! 탐색 상태와 경로들이 함께 쓰는 순수 도우미.
-use crate::api::{app::common::{bad, require_user}, explore::{ai::problem_context, quota::{exempt_quota, quota_config, quota_keys, quota_status}}, store::Store};
+use crate::api::{app::common::{bad, require_user}, explore::{ai::problem_context, quota::{exempt_quota, chat_quota_config, quota_keys, quota_status}}, store::Store};
 use crate::app::Cx;
 use crate::http::{HttpError, Req};
 use crate::jsstr::{iso, js_trim, take16};
@@ -37,13 +37,13 @@ pub fn bump(state: &mut Value, event: &str) {
     state["events"][event] = json!(value);
 }
 pub fn view(cx: &mut Cx<'_>, state: &Value) -> Value {
-    let cfg = quota_config(cx.opts.consult_limit);
+    let cfg = chat_quota_config(cx.opts.consult_limit);
     let quota = if cx.user.as_ref().is_some_and(|u| u["isTeam"] == true) { exempt_quota(cfg) } else {
         let keys = quota_keys(cx.user.as_ref());
         let mut q = quota_status(&Store::new(cx.kv,cx.now),&keys,cx.now,cfg);
         if let Some(o)=q.as_object_mut() { o.remove("blocked"); } q
     };
-    json!({"step":state["step"],"start":state["start"],"exploration":state["exploration"],"messages":state["messages"],"questionIndex":state["questionIndex"],"maxQuestions":3,"summary":state["summary"],"regional":state["regional"],"updatedAt":state["updatedAt"],"quota":quota,"counted":state["counted"]})
+    json!({"step":state["step"],"start":state["start"],"exploration":state["exploration"],"messages":state["messages"],"questionIndex":state["questionIndex"],"maxQuestions":state["plan"].as_array().map(|p| if p.is_empty(){3}else{p.len()}).unwrap_or(3),"summary":state["summary"],"regional":state["regional"],"updatedAt":state["updatedAt"],"quota":quota,"counted":state["counted"]})
 }
 pub fn text(v: &Value, max: usize) -> Option<String> { let s=js_trim(v.as_str()?); (!s.is_empty()).then(|| take16(s,max)) }
 pub fn sanitize_conditions(v: &Value) -> Option<Value> {

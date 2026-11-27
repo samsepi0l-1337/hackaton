@@ -79,7 +79,7 @@ export const ROUTES = {
   explore: '/api/explore/session', // GET → ExploreSession, DELETE → 초기화 (서버 기록·쿠키 삭제)
   start: '/api/explore/start', // PUT StartRequest → ExploreSession (F1 자동 저장, 최소 입력만 검사)
   exploration: '/api/explore/exploration', // PUT ExplorationRequest → ExploreSession (문제 선택·변경·보류, 방향 선택)
-  exploreChat: '/api/explore/chat', // POST ExploreChatRequest → ExploreChatResponse (최대 3문항). 첫 질문 요청이 상담 1회 → 초과 시 429 limit
+  exploreChat: '/api/explore/chat', // POST ExploreChatRequest → ExploreChatResponse (기본 3문항, 이어서 최대 12문항). 사용자 답변마다 1회 → 초과 시 429 limit
   exploreSummary: '/api/explore/summary', // POST → { summary, regional } 생성, PUT { summary } → 수정 (준비 완료 표시 초기화)
   exploreResult: '/api/explore/result', // GET → ExploreResultResponse
   conditions: '/api/explore/conditions', // PUT { conditions: UserConditions } → ExploreResultResponse ('모름' 허용)
@@ -112,12 +112,12 @@ export interface ExploreSession {
   start: StartProfile;
   exploration: Exploration | null;
   messages: ChatMessage[];
-  questionIndex: number; // 0..3
-  maxQuestions: number; // 3
+  questionIndex: number; // 다음 질문 번호
+  maxQuestions: number; // 현재 질문 계획 길이
   summary: SummaryV2 | null;
   regional: RegionalContextCard | null;
   updatedAt: string | null;
-  quota?: ConsultQuota; // 상담 횟수 (1인당 7일 3회). API 는 항상 채운다
+  quota?: ConsultQuota; // 상담 메시지 횟수 (1인당 7일 12회). API 는 항상 채운다
   counted?: boolean; // 이 세션이 이미 상담 1회로 세어졌는지
 }
 export interface StartRequest { start: Partial<StartProfile> }
@@ -135,11 +135,14 @@ export interface ExploreChatRequest {
   unknown?: boolean; // 아직 모르겠어요 → 미정으로 저장
   wantSuggestions?: boolean; // 방향 예시 요청 (사용자가 원할 때만, 최대 2개)
   finish?: boolean; // 지금까지 내용 정리 (일찍 결과로)
+  more?: boolean; // 완료한 상담 이어가기
 }
 export interface ExploreChatResponse {
   messages: ChatMessage[]; // 누적 전체
   questionIndex: number;
   done: boolean;
+  maxQuestions: number;
+  quota: ConsultQuota;
   suggestions: string[]; // AI 제안 (선택 전까지 사용자 선택 아님)
   failed: boolean; // AI 장애 → 웹은 재시도·직접 정리 양식을 보여준다
 }

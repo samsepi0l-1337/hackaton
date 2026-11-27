@@ -391,9 +391,9 @@ pub struct ConsultLimit {
     pub count: u32,
     pub window_days: u32,
 }
-/// TS: `CONSULT_LIMIT = { count: 3, windowDays: 7 }` — 7일 3회.
+/// TS: `CONSULT_LIMIT = { count: 12, windowDays: 7 }` — 사용자가 보낸 채팅 메시지 한 주(일요일 0시 KST부터) 12회.
 pub const CONSULT_LIMIT: ConsultLimit = ConsultLimit {
-    count: 3,
+    count: 12,
     window_days: 7,
 };
 /// TS: `interface ConsultQuota`.

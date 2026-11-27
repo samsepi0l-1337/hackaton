@@ -10,19 +10,19 @@ export function resetDate(iso: string | null): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}시`;
 }
 
-/** "이번 주 상담 n/3회 남음". 0회면 다시 쓸 수 있는 날짜를 함께 보인다. */
+/** "이번 주 상담 채팅 n/12회 남음". 0회면 다시 쓸 수 있는 날짜를 함께 보인다. */
 export function QuotaLine({ quota }: { quota: ConsultQuota | null | undefined }) {
   if (!quota) return null;
   const date = resetDate(quota.resetAt);
   return (
     <p className="muted" role="status" aria-live="polite">
-      이번 주 상담 {quota.remaining}/{quota.limit}회 남음
-      {quota.remaining <= 0 && (date ? ` · ${date} 이후에 다시 상담할 수 있어요` : ' · 다시 상담할 수 있는 날짜는 확인 중이에요')}
+      이번 주 상담 채팅 {quota.remaining}/{quota.limit}회 남음
+      {quota.remaining <= 0 && (date ? ` · ${date} 이후에 다시 보낼 수 있어요` : ' · 다시 보낼 수 있는 날짜는 확인 중이에요')}
     </p>
   );
 }
 
-export const QUOTA_NOTE = `상담은 1인당 ${CONSULT_LIMIT.windowDays}일에 ${CONSULT_LIMIT.count}회까지예요. 첫 질문을 받는 순간 1회로 세요. 초기화해도 이미 쓴 횟수는 돌아오지 않아요.`;
+export const QUOTA_NOTE = `AI 상담 채팅은 1인당 한 주(일요일~토요일)에 ${CONSULT_LIMIT.count}번 보낼 수 있고, 일요일 0시에 다시 채워져요. 답을 보낼 때마다 1번으로 세고, 첫 질문은 세지 않아요. 한 상담에서 길게 이야기해도 되고, 여러 번 나눠 상담해도 돼요. 초기화해도 이미 쓴 횟수는 돌아오지 않아요.`;
 
 /** 이 기기에 저장되는 항목 안내 + 로컬 AI 켜기/끄기. */
 export function DeviceNotice({ aiAvailable }: { aiAvailable: boolean }) {

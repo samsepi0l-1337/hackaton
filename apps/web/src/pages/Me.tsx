@@ -215,9 +215,9 @@ export function Me() {
 
       <div className="me-col">
       <section className="card stack">
-        <h2 style={{ margin: 0 }}>이번 주 상담</h2>
+        <h2 style={{ margin: 0 }}>이번 주 상담 채팅</h2>
         {!verified
-          ? <p className="muted">이메일 인증을 마치면 남은 횟수가 보여요. 계정 1개로 일주일에 3번 상담할 수 있어요.</p>
+          ? <p className="muted">이메일 인증을 마치면 남은 횟수가 보여요. 계정 1개로 한 주(일요일~토요일)에 AI 상담 채팅을 12번 보낼 수 있어요.</p>
           : sess.loading ? <p className="muted">확인하는 중이에요.</p>
           : sess.data?.quota ? <QuotaLine quota={sess.data.quota} /> : <p className="muted">남은 횟수를 불러오지 못했어요.</p>}
         {verified && <div><Link className="btn primary" to="/mentor">창업 준비 이어서 하기</Link></div>}
