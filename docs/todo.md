@@ -65,11 +65,12 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] 계약: `packages/shared/src/cloudflare.ts` (작업별 모델, AI 모드, Decide·Document Parse 상수, doc-worker 계약)
 - [x] `recommend()`가 AI 관련도 확률(0..1)을 받음, 후보 26개 이하로 줄이는 `relevanceCandidates()`
 - [x] 라우트 정의 `infra/ai-gateway/route.json` (`dynamic/gil`): 사용자별 시간당 40회 → 하루 비용 한도 → mentor·reason은 Solar Mini, 나머지는 Solar Pro → 실패 시 Mini → Workers AI
-- [ ] `apps/api/src/ai/`: Solar 클라이언트(upstage 직접 / route), 시간 초과, 규칙 폴백, 사실 검사
-- [ ] 작업별 연결: F2 질문 문장, F3 요약, F6 이유, F12 계획, F13 초안
-- [ ] Solar Decide 관련도 → Top3 점수 (jev와 같은 형식이라 base URL만 바꿔 비교 가능)
+- [x] `apps/api/src/ai/`: Solar 클라이언트(upstage 직접 / route), 시간 초과, 규칙 폴백, 사실 검사
+- [x] 작업별 연결: F2 질문 문장, F3 요약, F6 이유, F12 계획, F13 초안
+- [x] Solar Decide 관련도 → Top3 점수 (jev와 같은 형식이라 base URL만 바꿔 비교 가능)
+- [ ] 실제 키로 Solar·Decide 응답 확인 (문서 기준으로만 구현됨)
 - [ ] `apps/api/src/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기
-- [ ] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답·Document Parse 응답
+- [~] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답 (완료), Document Parse 응답 (남음)
 - [ ] Upstage API 키 **입력 필요** (`wrangler secret put UPSTAGE_API_KEY`, 로컬은 `.dev.vars`)
 - [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요**
 - [ ] AI Gateway 생성(인증 켜기), 커스텀 프로바이더 `upstage` (base `https://api.upstage.ai`) 등록, 라우트 업로드·배포
