@@ -6,6 +6,9 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // 서비스 주소 (해보까). workers.dev 주소도 함께 유지한다.
+  "routes": [{ "pattern": "haeboka.dreamp.org", "custom_domain": true }],
+  "workers_dev": true,
 
   // Upstage 호출은 모두 AI Gateway(gil-gateway, 커스텀 provider custom-upstage)를 지난다. 키는 게이트웨이 BYOK, Worker 는 secret CF_AIG_TOKEN(Run)만 가진다.
   "vars": {
