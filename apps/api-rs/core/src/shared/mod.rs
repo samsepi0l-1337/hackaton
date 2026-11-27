@@ -8,6 +8,7 @@ pub mod date;
 pub mod eligibility;
 pub mod explore;
 pub mod explore_rules;
+pub mod golden;
 pub mod guard;
 pub mod kstartup;
 pub mod kstartup_resource;
