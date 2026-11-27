@@ -59,7 +59,7 @@ export async function parseDocument(
   const url = `${trimSlash(env.UPSTAGE_BASE_URL || UPSTAGE_BASE_URL)}/document-digitization`;
   const form = new FormData();
   form.set('model', DOCUMENT_PARSE_MODEL);
-  form.set('mode', 'auto');
+  form.set('mode', 'standard'); // Enhanced(Premium) 과금 금지. auto 는 복잡한 쪽을 Enhanced 로 돌린다
   form.set('ocr', 'auto');
   form.set('output_formats', "['markdown','text']");
   form.set('coordinates', 'false');

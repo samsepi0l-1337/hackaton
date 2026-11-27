@@ -35,6 +35,7 @@ describe('parseDocument', () => {
     expect(seen!.headers.get('authorization')).toBeNull(); // 게이트웨이 경유: 키는 BYOK
     expect(seen!.headers.get('cf-aig-authorization')).toBe('Bearer t');
     expect(seen!.form.get('model')).toBe('document-parse');
+    expect(seen!.form.get('mode')).toBe('standard');
     expect((seen!.form.get('document') as File).name).toBe('사업계획서.hwpx');
   });
   test('기본 URL, 게이트웨이 헤더 없음', async () => {
