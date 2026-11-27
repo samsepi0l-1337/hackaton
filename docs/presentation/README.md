@@ -8,7 +8,7 @@
 cd docs/presentation && bun build.mjs
 ```
 
-`gil-pitch.pptx`가 생성됩니다. 슬라이드 발표자 노트는 `script.md`의 각 문단에서 가져옵니다. 대본과 사용자 테스트 자리표시자를 실제 확인된 결과로 갱신한 뒤 다시 빌드하세요.
+`gil-pitch.pptx`가 생성됩니다. 슬라이드 발표자 노트는 `script.md`의 각 문단에서 가져옵니다. 첫 장의 `[팀명]`을 실제 팀명으로 바꾸고 다시 빌드하세요.
 
 ## 제출
 
