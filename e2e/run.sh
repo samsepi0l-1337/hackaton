@@ -9,7 +9,8 @@ WEB_PORT=${E2E_WEB_PORT:-15173}
 # 쿠키는 포트가 아니라 호스트로 나뉜다. 러너마다 다른 *.localhost 호스트를 써서 동시에 돌려도 서로의 쿠키를 지우지 않는다.
 E2E_HOST=${E2E_HOST:-e2e-$WEB_PORT.localhost}
 BASE="http://$E2E_HOST:$WEB_PORT"
-OUT=${E2E_OUT:-$ROOT/e2e/.out}
+# 포트마다 다른 폴더: 동시에 도는 러너가 서로의 wrangler 상태·로그를 지우지 않게 한다.
+OUT=${E2E_OUT:-$ROOT/e2e/.out/$WEB_PORT}
 mkdir -p "$OUT"
 API_LOG="$OUT/api.log"
 
