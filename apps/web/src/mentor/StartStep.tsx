@@ -51,13 +51,15 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
   const origin = exploration?.origin;
   const selectedId = origin === 'card' ? exploration?.problemId : null;
 
+  const noItems = state === 'ready' && items.length === 0;
+
   return (
-    <section className="stack" aria-labelledby="pc">
-      <h2 id="pc" style={{ marginBottom: 0 }}>어떤 문제를 더 알아보고 싶나요?</h2>
-      <p className="muted">관심 있는 지역 문제를 선택해 창업 방향을 살펴보세요. 직접 생각한 문제로 시작해도 되고, 나중에 바꿀 수 있어요.</p>
+    <section className="stack" aria-labelledby={noItems ? undefined : 'pc'} aria-label={noItems ? '알아볼 문제 고르기' : undefined}>
+      {!noItems && <h2 id="pc" style={{ marginBottom: 0 }}>어떤 문제를 더 알아보고 싶나요?</h2>}
+      {!noItems && <p className="muted">관심 있는 지역 문제를 선택해 창업 방향을 살펴보세요. 직접 생각한 문제로 시작해도 되고, 나중에 바꿀 수 있어요.</p>}
       {state === 'loading' && <p className="muted" role="status">문제 자료를 불러오는 중이에요.</p>}
       {state === 'error' && <EmptyState message="문제 자료를 불러오지 못했어요. 직접 적어서 시작할 수 있어요." action={<button className="btn" onClick={() => load()}>다시 시도</button>} />}
-      {state === 'ready' && items.length === 0 && <EmptyState message={`현재 확인된 문제 자료가 없습니다${emptyReason ? ` (${emptyReason})` : ''}. 아래에서 직접 적을 수 있어요.`} />}
+      {noItems && <p className="muted" role="status">{`현재 확인된 문제 자료가 없습니다${emptyReason ? ` (${emptyReason})` : ''}. 알아보고 싶은 문제가 있으면 '직접 적기'로 적고, 아니면 '아직 탐색 중'을 골라 바로 구상 정리를 시작해도 돼요.`}</p>}
       {items.map((p) => {
         const sel = selectedId === p.id;
         return (

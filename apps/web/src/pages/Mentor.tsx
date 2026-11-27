@@ -200,7 +200,7 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
     return <Suspense fallback={<CardSkeletons />}><SummaryStep summary={summary} onChange={setSummary} onBackToChat={() => setView('chat')} onBackToStart={() => setView('start')} onResult={() => setView('result')} /></Suspense>;
   }
   if (summary) {
-    return <Suspense fallback={<CardSkeletons />}><ResultStep summary={summary} problemTitle={problem?.title} onEditSummary={() => setView('summary')} onBackToStart={() => setView('start')} onMissingSummary={() => setView('chat')} /></Suspense>;
+    return <Suspense fallback={<CardSkeletons />}><ResultStep summary={summary} problemTitle={problem?.title} conditions={session.start.conditions} onEditSummary={() => setView('summary')} onBackToStart={() => setView('start')} onMissingSummary={() => setView('chat')} /></Suspense>;
   }
   return null;
 }
