@@ -170,9 +170,10 @@ function overlay(r: ExploreResultResponse, done: Record<string, boolean>): Explo
 const doneMap = (r: ExploreResultResponse): Record<string, boolean> =>
   Object.fromEntries([r.prep.primary, ...r.prep.followUps].map((p) => [p.id, p.done]));
 
-export function ResultStep({ summary, problemTitle, readOnly = false, onEditSummary, onMissingSummary }: {
-  summary: SummaryV2; problemTitle?: string; readOnly?: boolean; onEditSummary: () => void; onMissingSummary: () => void;
+export function ResultStep({ summary, problemTitle, readOnly = false, onEditSummary, onMissingSummary, onBackToStart }: {
+  summary: SummaryV2; problemTitle?: string; readOnly?: boolean; onEditSummary: () => void; onMissingSummary: () => void; onBackToStart?: () => void;
 }) {
+  const onGo = readOnly ? undefined : (i: number) => (i === 0 ? onBackToStart?.() : onEditSummary());
   const [res, setRes] = useState<ExploreResultResponse | null>(() => { const st = readStore(); return st.result ? overlay(st.result, st.prepDone) : null; });
   const [offline, setOffline] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>(() => readStore().fieldEdits);
@@ -222,8 +223,8 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
     }
   }, [res]);
 
-  if (error) return <div className="stack"><Progress current={2} /><ErrorState error={error} onRetry={() => setTick(tick + 1)} /></div>;
-  if (!res) return <div className="stack"><Progress current={2} /><CardSkeletons count={3} /></div>;
+  if (error) return <div className="stack"><Progress current={2} onGo={onGo} /><ErrorState error={error} onRetry={() => setTick(tick + 1)} /></div>;
+  if (!res) return <div className="stack"><Progress current={2} onGo={onGo} /><CardSkeletons count={3} /></div>;
 
   const s = res.summary ?? summary;
   const prepAll = res.prep;
@@ -253,7 +254,7 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
 
   return (
     <div className="stack">
-      <Progress current={2} />
+      <Progress current={2} onGo={onGo} />
       <h1>나의 창업 준비 방향</h1>
       {offline && <p className="muted" role="status">서버에 연결하지 못해 이 기기에 저장된 결과를 보여줘요. 최신 내용과 다를 수 있어요.</p>}
 

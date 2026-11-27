@@ -64,13 +64,13 @@ export function SummaryEditor({ summary, onChange, keys }: { summary: SummaryV2;
   );
 }
 
-export function SummaryStep({ summary, onChange, onBackToChat, onResult }: {
-  summary: SummaryV2; onChange: (s: SummaryV2) => void; onBackToChat: () => void; onResult: () => void;
+export function SummaryStep({ summary, onChange, onBackToChat, onBackToStart, onResult }: {
+  summary: SummaryV2; onChange: (s: SummaryV2) => void; onBackToChat: () => void; onBackToStart: () => void; onResult: () => void;
 }) {
   const p = summary.exploration.problem;
   return (
     <div className="stack">
-      <Progress current={1} />
+      <Progress current={1} onGo={onBackToStart} />
       <h1>지금까지 정리한 구상</h1>
       <p className="muted">완성된 사업계획서가 아니에요. 지금 알고 있는 것과 앞으로 확인할 것을 나눠 둔 정리예요.</p>
 

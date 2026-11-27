@@ -6,6 +6,9 @@
 .mentor-page .progress-steps { gap: 4px; margin: 0 0 var(--space-4); }
 .mentor-page .progress-steps li { font-size: 13px; padding: 8px 4px; border-bottom: 3px solid #e1e8f0; color: #566a80; }
 .mentor-page .progress-steps li.done { border-bottom-color: var(--portal-blue); color: var(--portal-ink); }
+.mentor-page .progress-steps .step-link { all: unset; box-sizing: border-box; cursor: pointer; color: inherit; font: inherit; }
+.mentor-page .progress-steps .step-link:hover { color: #1859b8; text-decoration: underline; }
+.mentor-page .progress-steps .step-link:focus-visible { outline: 2px solid var(--portal-blue); outline-offset: 2px; border-radius: 2px; }
 .mentor-page .progress-steps li.current { border-bottom-color: var(--portal-blue); color: #1859b8; font-weight: 700; }
 
 /* 패널 */
