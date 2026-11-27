@@ -159,7 +159,8 @@ export function Verify() {
   useEffect(() => {
     if (!token || started.current) return;
     started.current = true;
-    api.verifyEmail({ token }).then((r) => { setUser(r.user); nav(next, { replace: true }); }, (e) => {
+    // 새 비밀번호를 정해야 하는 계정(인증 전 재가입)은 내 정보의 비밀번호 변경으로 보낸다.
+    api.verifyEmail({ token }).then((r) => { setUser(r.user); nav(r.user.mustChangePassword ? '/me' : next, { replace: true }); }, (e) => {
       setError(e instanceof ApiClientError && (e.code === 'bad_request' || e.code === 'validation') ? '인증 링크가 만료됐거나 이미 사용됐어요. 이메일을 입력해 인증 메일을 다시 받아 주세요.' : errMessage(e));
       setStatus('failed');
     });

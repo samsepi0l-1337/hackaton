@@ -238,9 +238,11 @@ pub async fn verify(cx: &mut Cx<'_>, req: &Req) -> HResult {
     store.delete_all_sessions(&id);
     if contested {
         let e = text(&user, "email").to_string();
-        issue_recovery(cx, &e, &id).await?;
+        issue_recovery(cx, &e, &id, true).await?;
+        // 이 세션은 메일로 받은 임시 비밀번호로 새 비밀번호를 정해야 한다 (비밀번호 찾기 뒤 로그인과 같은 상태).
+        user["mustChangePassword"] = json!(true);
     }
-    start_session(cx, req, &id, false, json!({"user":public_user(&user)}))
+    start_session(cx, req, &id, contested, json!({"user":public_user(&user)}))
 }
 /// POST /api/auth/verify/resend
 pub async fn verify_resend(cx: &mut Cx<'_>, req: &Req) -> HResult {
@@ -368,7 +370,7 @@ pub async fn me(cx: &mut Cx<'_>, _: &Req) -> HResult {
     Resp::ok(json!({"user":cx.user.as_ref().map(public_user)}))
 }
 /// 임시 비밀번호를 만들어 메일로 보낸다 (비밀번호 찾기, 다툼이 있던 가입의 인증).
-async fn issue_recovery(cx: &mut Cx<'_>, e: &str, id: &str) -> Result<(), HttpError> {
+async fn issue_recovery(cx: &mut Cx<'_>, e: &str, id: &str, contested: bool) -> Result<(), HttpError> {
     let pw = create_passwords(cx.env("PASSWORD_PEPPER"), cx.ports);
     let alphabet = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
     let password = loop {
@@ -384,7 +386,8 @@ async fn issue_recovery(cx: &mut Cx<'_>, e: &str, id: &str) -> Result<(), HttpEr
     };
     let hash = pw.hash(&password).map_err(internal)?;
     Store::new(cx.kv,cx.now).set_recovery(id,json!({"hash":hash,"used":false,"createdAt":iso(cx.now),"expiresAt":iso(cx.now+i64::from(RECOVERY_TTL_MINUTES)*60_000)})).map_err(internal)?;
-    let _ = mail::send(cx.env, cx.ports, &mail::recovery_mail(e, &password)).await;
+    let m = if contested { mail::contested_signup_mail(e, &password) } else { mail::recovery_mail(e, &password) };
+    let _ = mail::send(cx.env, cx.ports, &m).await;
     Ok(())
 }
 /// POST /api/auth/forgot
@@ -407,7 +410,7 @@ pub async fn forgot(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let Some(u) = u else {
         return reply();
     };
-    issue_recovery(cx, &e, text(&u, "id")).await?;
+    issue_recovery(cx, &e, text(&u, "id"), false).await?;
     reply()
 }
 /// POST /api/auth/password
@@ -499,8 +502,8 @@ mod tests {
     }
     fn last_recovery(app: &TestApp) -> Option<String> {
         let mails = app.ports.mails.borrow();
-        let text = &mails.iter().rev().find(|m| m.text.contains("복구 비밀번호:"))?.text;
-        let at = text.find("복구 비밀번호:")? + "복구 비밀번호:".len();
+        let text = &mails.iter().rev().find(|m| m.text.contains("비밀번호: "))?.text;
+        let at = text.find("비밀번호: ")? + "비밀번호: ".len();
         Some(text[at..].split_whitespace().next()?.to_string())
     }
 
@@ -525,8 +528,12 @@ mod tests {
         assert_eq!(login(&mut app, &mut fresh, "Attacker123!"), 401, "attacker password not applied");
         assert_eq!(login(&mut app, &mut fresh, "Victim123!x"), 401, "no signup password applied");
         let recovery = last_recovery(&app).expect("recovery mail sent to the owner");
-        assert_eq!(login(&mut app, &mut fresh, &recovery), 200);
-        assert_eq!(me(&mut app, &mut fresh)["mustChangePassword"], true);
+        // 인증한 세션은 새 비밀번호를 정해야 하고, 메일로 받은 값으로 바꿀 수 있다.
+        assert_eq!(me(&mut app, &mut victim)["mustChangePassword"], true);
+        let b = json!({"currentPassword":recovery,"newPassword":"Owner-New-123!","newPasswordConfirm":"Owner-New-123!"});
+        assert_eq!(app.call(&mut victim, "POST", "/api/auth/password", Some(b)).0, 200);
+        assert_eq!(me(&mut app, &mut victim)["mustChangePassword"], false);
+        assert_eq!(login(&mut app, &mut fresh, "Owner-New-123!"), 200);
     }
     #[test]
     fn contested_signup_attacker_first() { contested(false, 0); }

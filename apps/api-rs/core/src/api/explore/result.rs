@@ -79,10 +79,10 @@ pub async fn get_result(cx: &mut Cx<'_>, req: &Req) -> HResult {
     if saved && s["fieldQ"]["sig"]!=field_sig(&s) && !local_tasks(req).contains("field") {
         let resources=crate::api::explore::state::resources_now(cx); let ctx=ai_context_for(cx,&id,&s,&resources);
         let raw=create_text_ai(cx.env,cx.ports);let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)};
-        let (items,changed,attempted)=ai.field(&rule_field_questions(&s,&out["summary"]),&ctx).await;
-        // AI 를 불렀는데 쓸 만한 문장이 없었으면 규칙 질문을 그대로 저장한다. 저장하지 않으면 결과를 열 때마다 AI 를 다시 부른다.
-        // 한도·꺼짐으로 부르지 못했으면 저장하지 않고 다음에 다시 시도한다.
-        if changed||attempted{s["fieldQ"]=json!({"sig":field_sig(&s),"items":items});out["fieldQuestions"]=json!(items);}
+        let (items,changed,answered)=ai.field(&rule_field_questions(&s,&out["summary"]),&ctx).await;
+        // AI 가 답했지만 쓸 만한 문장이 없었으면 규칙 질문을 그대로 저장한다. 저장하지 않으면 결과를 열 때마다 AI 를 다시 부른다.
+        // 한도·꺼짐·AI 실패로 답을 받지 못했으면 저장하지 않고 다음에 다시 시도한다.
+        if changed||answered{s["fieldQ"]=json!({"sig":field_sig(&s),"items":items});out["fieldQuestions"]=json!(items);}
     }
     limiter.save(&mut cx.kv.scratch);
     if saved{save(cx,&id,&s)?;}Resp::ok(out)

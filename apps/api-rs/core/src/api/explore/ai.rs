@@ -92,17 +92,17 @@ impl ExploreAi<'_> {
         if let Some(t) = g("hypotheses") { out.insert("hypotheses".into(), json!(t)); }
         (Value::Object(out), g("regional"), r.failed)
     }
-    /// (질문들, AI 가 바꾼 것이 있는지, AI 를 실제로 불렀는지)
+    /// (질문들, AI 가 바꾼 것이 있는지, AI 가 답을 하나라도 돌려줬는지)
     pub async fn field(&mut self, rules: &[Value], context: &str) -> (Vec<Value>, bool, bool) {
         let system = format!("{RULES}\n현장 사람에게 물어볼 질문 한 문장을 같은 뜻으로 자연스럽게 바꿔 써요. 어려움·불편·구매 의향·비용 지불을 전제하지 말고, 현재 방식과 실제 경험을 묻는 열린 질문으로 써요. 응답자나 답변을 지어내지 않아요. 문장만 출력해요.");
         let allowed: Vec<bool> = rules.iter().map(|_| self.ai.mode != "off" && !self.local.contains("field") && self.limiter.allow(self.actor_id,self.now)).collect();
-        let attempted = allowed.iter().any(|a| *a);
         let ai = self.ai; let actor = self.actor_id;
         let outputs = join_all(rules.iter().zip(allowed).map(|(q,allow)| {
             let user = format!("질문: {}\n상황: {context}", q["question"].as_str().unwrap_or(""));
             let system = &system;
             async move { if allow { ai.generate("mentor", &[json!({"role":"system","content":system}),json!({"role":"user","content":user})], Some(actor)).await } else { None } }
         }).collect()).await;
+        let answered = outputs.iter().any(Option::is_some);
         let mut changed = false; let mut items = Vec::new();
         for (q,output) in rules.iter().zip(outputs) {
             let question = q["question"].as_str().unwrap_or(""); let purpose = q["purpose"].as_str().unwrap_or("");
@@ -115,7 +115,7 @@ impl ExploreAi<'_> {
             });
             let mut item = q.clone(); if valid { if let (Some(o), Some(t)) = (item.as_object_mut(), t) { o.insert("question".into(), json!(t)); o.insert("source".into(), json!("ai")); changed = true; } } items.push(item);
         }
-        (items, changed, attempted)
+        (items, changed, answered)
     }
     pub async fn reasons(&mut self, inputs: &[(Value, String)], context: &str) -> Vec<Option<String>> {
         let allowed: Vec<bool> = inputs.iter().map(|_| self.ai.mode != "off" && !self.local.contains("reason") && self.limiter.allow(self.actor_id,self.now)).collect();
@@ -148,10 +148,11 @@ mod tests {
     use crate::ports::{Env, HttpResp};
     use crate::testkit::{block_on, FakePorts};
 
-    fn run(max: usize) -> (bool, bool, usize) {
+    fn run(max: usize) -> (bool, bool, usize) { run_with(max, 200) }
+    fn run_with(max: usize, status: u16) -> (bool, bool, usize) {
         let ports = FakePorts::default();
-        // 물음표가 없어 검증을 통과하지 못하는 답.
-        *ports.fetch.borrow_mut() = Some(Box::new(|_| Ok(HttpResp { status: 200, headers: vec![], body: json!({"choices":[{"message":{"content":"지금은 어떻게 하고 계세요"}}]}).to_string().into_bytes() })));
+        // 물음표가 없어 검증을 통과하지 못하는 답 (status 가 200 이 아니면 AI 실패).
+        *ports.fetch.borrow_mut() = Some(Box::new(move |_| Ok(HttpResp { status, headers: vec![], body: json!({"choices":[{"message":{"content":"지금은 어떻게 하고 계세요"}}]}).to_string().into_bytes() })));
         let mut env = Env::new();
         env.insert("AI_MODE".into(), "upstage".into());
         env.insert("UPSTAGE_API_KEY".into(), "k".into());
@@ -166,6 +167,12 @@ mod tests {
     #[test]
     fn field_reports_an_attempt_even_when_nothing_changed() {
         assert_eq!(run(40), (false, true, 1));
+    }
+    #[test]
+    fn field_reports_no_answer_when_the_ai_fails() {
+        let (changed, answered, calls) = run_with(40, 503);
+        assert_eq!((changed, answered), (false, false));
+        assert!(calls >= 1);
     }
     #[test]
     fn field_reports_no_attempt_when_the_limit_is_used_up() {
