@@ -10,6 +10,7 @@ TS `apps/api` 와 같은 동작을 내는 Rust 백엔드. 동일성 검증을 �
 
 ## JS 와 다른 점 (꼭 지킨다)
 - 길이·자르기는 UTF-16 (`jsstr::len16`, `take16`). 한글은 UTF-8 3바이트라 `str::len` 은 틀린다.
+- 공백·숫자: `str::trim`, 정규식 `\s` `\d` `\b` `\w` 는 유니코드라 JS 와 다르다. `jsstr::js_trim`, `jsstr::JS_WS`(정규식 `[...]` 안), `[0-9]`, ASCII lookaround 를 쓴다.
 - lookaround 정규식은 `fancy_regex`. 정렬은 안정 정렬. `localeCompare` 는 쓰는 곳마다 확인.
 - 출력 JSON 은 `serde_json::Map`(입력 순서 유지). undefined(키 없음)와 null 구분. zod 처럼 기본값 채우기·모르는 키 제거·깨진 레코드 건너뛰기.
 - 시각은 ms 정수, ISO 문자열은 밀리초 포함 (`jsstr::iso`). KST 날짜 계산 유지.
