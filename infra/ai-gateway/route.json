@@ -1,0 +1,37 @@
+{
+  "name": "gil",
+  "elements": [
+    { "id": "start", "type": "start", "outputs": { "next": { "elementId": "per_user" } } },
+    {
+      "id": "per_user",
+      "type": "rate",
+      "properties": { "limitType": "count", "key": "metadata.user_id", "limit": 40, "window": 3600 },
+      "outputs": { "success": { "elementId": "daily_budget" } }
+    },
+    {
+      "id": "daily_budget",
+      "type": "rate",
+      "properties": { "limitType": "cost", "key": "metadata.app", "limit": 0.1, "window": 86400 },
+      "outputs": { "success": { "elementId": "is_heavy" } }
+    },
+    {
+      "id": "is_heavy",
+      "type": "conditional",
+      "properties": { "conditions": { "metadata.task": { "$in": ["summary", "extract"] } } },
+      "outputs": { "true": { "elementId": "large" }, "false": { "elementId": "small" } }
+    },
+    {
+      "id": "large",
+      "type": "model",
+      "properties": { "provider": "workers-ai", "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "timeout": 15000, "retries": 1 },
+      "outputs": { "success": { "elementId": "end" }, "fallback": { "elementId": "small" } }
+    },
+    {
+      "id": "small",
+      "type": "model",
+      "properties": { "provider": "workers-ai", "model": "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "timeout": 8000, "retries": 1 },
+      "outputs": { "success": { "elementId": "end" } }
+    },
+    { "id": "end", "type": "end", "outputs": {} }
+  ]
+}
