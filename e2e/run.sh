@@ -15,7 +15,9 @@ for p in "$API_PORT" "$WEB_PORT"; do
   if lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then echo "포트 $p 를 이미 쓰고 있어요. E2E_API_PORT/E2E_WEB_PORT 를 바꾸세요." >&2; exit 2; fi
 done
 
-(cd "$ROOT/apps/api" && exec env -i PATH="$PATH" HOME="$HOME" PORT="$API_PORT" AI_MODE=off DECIDE_ENABLED=0 PASSWORD_PEPPER=e2e-pepper-not-a-secret bun src/server.ts >"$API_LOG" 2>&1) &
+# /bufs 관리자 비밀번호 (E2E 전용, 실제 값 아님). prelude 의 ADMIN_PASSWORD 와 같다.
+ADMIN_HASH=$(cd "$ROOT/apps/api" && bun -e "import { hashLegacyPassword } from './src/password'; console.log(await hashLegacyPassword('e2e-admin-pass-1234'))")
+(cd "$ROOT/apps/api" && exec env -i PATH="$PATH" HOME="$HOME" PORT="$API_PORT" AI_MODE=off DECIDE_ENABLED=0 PASSWORD_PEPPER=e2e-pepper-not-a-secret ADMIN_PASSWORD_HASH="$ADMIN_HASH" bun src/server.ts >"$API_LOG" 2>&1) &
 API_PID=$!
 (cd "$ROOT/apps/web" && WEB_PORT="$WEB_PORT" API_URL="http://127.0.0.1:$API_PORT" exec bunx vite --host 127.0.0.1 --strictPort >"$OUT/web.log" 2>&1) &
 WEB_PID=$!
@@ -33,6 +35,7 @@ SPECS=("$@")
 pass=0; fail=0; failed=()
 for f in "${SPECS[@]}"; do
   name=$(basename "$f" .mjs)
+  if [ ! -f "$f" ]; then fail=$((fail + 1)); failed+=("$name"); echo "FAIL $name: spec 파일이 없어요 ($f)"; continue; fi
   run="$OUT/$name.run.mjs"
   {
     sed -e "s|__BASE__|$BASE|" -e "s|__SPEC__|$name|" -e "s|__API_LOG__|$API_LOG|" -e "s|__OUT__|$OUT|" "$ROOT/e2e/lib/prelude.mjs"

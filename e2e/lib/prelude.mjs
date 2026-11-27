@@ -4,6 +4,8 @@ const BASE = '__BASE__';
 const SPEC = '__SPEC__';
 const API_LOG = '__API_LOG__';
 const OUT = '__OUT__';
+/** run.sh 가 API 에 넣은 /bufs 관리자 비밀번호 (E2E 전용). 시드 계정: demo@test.local / demo1234!, team@test.local / team1234! (팀 계정). */
+const ADMIN_PASSWORD = 'e2e-admin-pass-1234';
 const fs = await import('node:fs/promises');
 const task = await taskSpace(`e2e ${SPEC} ${Date.now()}`);
 const page = task.page('p1');
