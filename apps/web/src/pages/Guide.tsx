@@ -65,6 +65,12 @@ export function Guide() {
           </li>
           <li>
             <div>
+              <b>지원서 연습</b>
+              <span>마감 전 공고에서 '지원서 작성'을 누르면 AI가 초안을 써 줘요. 고쳐서 모의 제출까지 연습할 수 있고, 실제 신청은 공식 사이트에서 해야 해요.</span>
+            </div>
+          </li>
+          <li>
+            <div>
               <b><Link to="/test">창업 유형 테스트</Link></b>
               <span>12문항, 약 1분이에요. 결과는 재미와 참고용이에요.</span>
             </div>

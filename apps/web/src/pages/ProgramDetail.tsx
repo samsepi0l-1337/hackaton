@@ -1,4 +1,6 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { errMessage } from '../lib/format';
 import { CONDITION_NOTE } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
@@ -7,6 +9,41 @@ import { HeartButton } from '../components/HeartButton';
 import { useAuth } from '../components/AuthContext';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import '../styles/pages-programs.css';
+
+function ApplyCard({ resourceId }: { resourceId: string }) {
+  const { user } = useAuth();
+  const nav = useNavigate();
+  const mine = useAsync(() => (user ? api.applications() : Promise.resolve(null)), [user?.id]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const existing = mine.data?.items.find((a) => a.programId === resourceId);
+
+  async function create() {
+    setBusy(true); setErr('');
+    try {
+      const a = await api.createApplication(resourceId);
+      nav(`/applications/${a.id}`);
+    } catch (x) {
+      setErr(x instanceof ApiClientError && x.code === 'closed' ? '모집이 끝나 지원서를 만들 수 없어요.' : errMessage(x));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card stack">
+      <h2 style={{ margin: 0 }}>지원서 작성</h2>
+      <p className="muted" style={{ margin: 0 }}>공고 양식에 맞춰 AI가 초안을 써 줘요. 연습용 모의 제출이라, 실제 신청은 공식 사이트에서 해야 해요.</p>
+      {!user
+        ? <div><Link className="btn" to={`/login?next=${encodeURIComponent(`/programs/${resourceId}`)}`}>로그인하고 지원서 쓰기</Link></div>
+        : mine.loading ? <p className="muted">확인하는 중이에요.</p>
+        : existing
+          ? <div><Link className="btn" to={`/applications/${existing.id}`}>내 지원서 이어 쓰기</Link></div>
+          : <div><button className="btn" type="button" disabled={busy} onClick={create}>{busy ? '초안을 쓰는 중...' : '지원서 작성'}</button></div>}
+      {busy && <p className="muted" role="status">공고 양식을 읽고 초안을 쓰는 중이에요. 30초쯤 걸릴 수 있어요.</p>}
+      {err && <p className="error-text" role="alert">{err}</p>}
+    </section>
+  );
+}
 
 export function ProgramDetail() {
   const { id = '' } = useParams();
@@ -53,6 +90,7 @@ export function ProgramDetail() {
         {r.sourceExcerpt && <blockquote className="quote">{r.sourceExcerpt}</blockquote>}
         {r.url && <a className="btn primary" href={r.url} target="_blank" rel="noreferrer">공식 안내 확인</a>}
       </section>
+      {r.recruitStatus !== 'closed' && <ApplyCard resourceId={r.id} />}
       <Link className="btn" to="/mentor">내 구상에 맞는 준비 안내 받기</Link>
     </div>
   );

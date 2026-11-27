@@ -11,6 +11,9 @@
 .container.me-page > .me-col { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 .container.me-page > h1 { margin-bottom: 0; }
 
+.account-page .app-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.account-page .app-row > a { flex: 1 1 auto; min-width: 0; font-weight: 650; }
+
 /* 유형 테스트 */
 .account-page .hero { background: #e6f3fe; border: 1px solid var(--panel-line); border-radius: 12px; padding: 28px 24px; }
 .account-page .hero h1 { margin-bottom: 4px; }
