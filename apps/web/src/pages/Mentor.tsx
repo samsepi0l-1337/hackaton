@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ConsultQuota, ExploreOptionsResponse, ExploreSession, ExploreStep, ProblemCard, StartProfile, SummaryV2 } from '@gil/shared';
 import { api } from '../api/client';
 import { CardSkeletons, ErrorState } from '../components/States';
 import { errMessage } from '../lib/format';
-import { ChatStep } from '../mentor/ChatStep';
 import { ITEM_LABEL, ProvBadge, getItem } from '../mentor/Common';
-import { ResultStep } from '../mentor/ResultStep';
-import { StartStep } from '../mentor/StartStep';
-import { SummaryStep } from '../mentor/SummaryStep';
 import { adoptServer, hasLocalProgress, patchStore, readStore } from '../mentor/storage';
 import type { Store } from '../mentor/storage';
+
+const loadChat = () => import('../mentor/ChatStep');
+const loadResult = () => import('../mentor/ResultStep');
+const loadStart = () => import('../mentor/StartStep');
+const loadSummary = () => import('../mentor/SummaryStep');
+const ChatStep = lazy(() => loadChat().then((m) => ({ default: m.ChatStep })));
+const ResultStep = lazy(() => loadResult().then((m) => ({ default: m.ResultStep })));
+const StartStep = lazy(() => loadStart().then((m) => ({ default: m.StartStep })));
+const SummaryStep = lazy(() => loadSummary().then((m) => ({ default: m.SummaryStep })));
 
 const EMPTY: ExploreSession = { step: 'start', start: {}, exploration: null, messages: [], questionIndex: 0, maxQuestions: 3, summary: null, regional: null, updatedAt: null };
 
@@ -135,7 +140,7 @@ function LocalView({ boot, onResumed }: { boot: Boot; onResumed: () => void }) {
         <div className="row"><button className="btn primary" onClick={resume} disabled={busy}>{busy ? '보내는 중...' : '이어서 하기'}</button></div>
       </section>
       {st.result && st.summary
-        ? <ResultStep readOnly summary={st.summary} problemTitle={boot.problem?.title} onEditSummary={() => {}} onMissingSummary={() => {}} />
+        ? <Suspense fallback={<CardSkeletons />}><ResultStep readOnly summary={st.summary} problemTitle={boot.problem?.title} onEditSummary={() => {}} onMissingSummary={() => {}} /></Suspense>
         : st.summary && <LocalSummary summary={st.summary} />}
     </div>
   );
@@ -150,6 +155,11 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
   const summary = session.summary;
 
   useEffect(() => { if (quotaHint) setQuota(quotaHint); }, [quotaHint]);
+  useEffect(() => {
+    if (boot.readOnly) return;
+    const next = view === 'start' ? loadChat : view === 'chat' ? loadSummary : view === 'summary' ? loadResult : null;
+    if (next) void next().catch(() => {});
+  }, [boot.readOnly, view]);
   useEffect(() => {
     if (boot.readOnly) return;
     patchStore({ view, start, problem, exploration: session.exploration, summary, regional: session.regional, quota });
@@ -168,9 +178,9 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
   if (view === 'start') {
     return (
       <>{notice}
-        <StartStep opts={boot.opts} session={session} initial={start} problem={problem} quota={quota} onProblem={setProblem}
+        <Suspense fallback={<CardSkeletons />}><StartStep opts={boot.opts} session={session} initial={start} problem={problem} quota={quota} onProblem={setProblem}
           onSession={(s) => { setSession((cur) => ({ ...cur, exploration: s.exploration })); patchStore({ serverUpdatedAt: s.updatedAt }); }}
-          onStarted={(s, st) => { setSession(s); setStart(st); if (s.quota) setQuota(s.quota); patchStore({ serverUpdatedAt: s.updatedAt }); setView(s.summary && s.step !== 'chat' ? 'summary' : 'chat'); }} />
+          onStarted={(s, st) => { setSession(s); setStart(st); if (s.quota) setQuota(s.quota); patchStore({ serverUpdatedAt: s.updatedAt }); setView(s.summary && s.step !== 'chat' ? 'summary' : 'chat'); }} /></Suspense>
       </>
     );
   }
@@ -178,18 +188,18 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
     const st = readStore();
     const chatSession: ExploreSession = { ...session, messages: st.messages, questionIndex: st.questionIndex };
     return (
-      <ChatStep key={chatSession.messages.length === 0 ? 'new' : 'resume'} session={chatSession} problem={problem} quota={quota}
+      <Suspense fallback={<CardSkeletons />}><ChatStep key={chatSession.messages.length === 0 ? 'new' : 'resume'} session={chatSession} problem={problem} quota={quota}
         onSession={(s) => setSession((cur) => ({ ...cur, exploration: s.exploration }))}
         onQuota={setQuota} onRefreshQuota={refreshSession}
         onBackToStart={() => setView('start')}
-        onSummary={(s) => { setSummary(s); setView('summary'); }} />
+        onSummary={(s) => { setSummary(s); setView('summary'); }} /></Suspense>
     );
   }
   if (view === 'summary' && summary) {
-    return <SummaryStep summary={summary} onChange={setSummary} onBackToChat={() => setView('chat')} onResult={() => setView('result')} />;
+    return <Suspense fallback={<CardSkeletons />}><SummaryStep summary={summary} onChange={setSummary} onBackToChat={() => setView('chat')} onResult={() => setView('result')} /></Suspense>;
   }
   if (summary) {
-    return <ResultStep summary={summary} problemTitle={problem?.title} onEditSummary={() => setView('summary')} onMissingSummary={() => setView('chat')} />;
+    return <Suspense fallback={<CardSkeletons />}><ResultStep summary={summary} problemTitle={problem?.title} onEditSummary={() => setView('summary')} onMissingSummary={() => setView('chat')} /></Suspense>;
   }
   return null;
 }

@@ -5,14 +5,9 @@ import { RequireAuth } from './components/RequireAuth';
 import { Home } from './pages/Home';
 import { Programs } from './pages/Programs';
 import { ProgramDetail } from './pages/ProgramDetail';
-import { Mentor } from './pages/Mentor';
 import { Forgot, Login, Signup, Verify } from './pages/Auth';
-import { Bufs } from './pages/Bufs';
-import { TypeTest } from './pages/TypeTest';
 import { MentorGate } from './components/MentorGate';
-import { Me } from './pages/Me';
-import { Admin } from './pages/Admin';
-import { Licenses, NotFound } from './pages/Misc';
+import { Admin, Bufs, Licenses, Me, Mentor, NotFound, TypeTest } from './lazyPages';
 
 function ScrollTop() {
   const { pathname } = useLocation();

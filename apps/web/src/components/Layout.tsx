@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { CardSkeletons } from './States';
+import { RouteErrorBoundary } from './RouteErrorBoundary';
+import { loadMentor } from '../lazyPages';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
@@ -7,6 +10,8 @@ const MENU = [
   { to: '/programs', label: '지역 지원 살펴보기' },
   { to: '/test', label: '창업 유형 테스트' },
 ];
+
+function preloadMentor() { void loadMentor().catch(() => {}); }
 
 export function Layout() {
   const { user, loading } = useAuth();
@@ -23,7 +28,7 @@ export function Layout() {
         <div className="header-inner">
           <Link to="/" className="logo" onClick={close}>부산 창업 길잡이</Link>
           <nav className="nav">
-            {MENU.map((m) => <NavLink key={m.to} to={m.to} className={({ isActive }) => (isActive ? 'active' : '')}>{m.label}</NavLink>)}
+            {MENU.map((m) => <NavLink key={m.to} to={m.to} onPointerEnter={m.to === '/mentor' ? preloadMentor : undefined} onFocus={m.to === '/mentor' ? preloadMentor : undefined} className={({ isActive }) => (isActive ? 'active' : '')}>{m.label}</NavLink>)}
           </nav>
           <span className="grow" />
           {account}
@@ -33,11 +38,11 @@ export function Layout() {
         </div>
         {open && (
           <nav className="nav-mobile">
-            {MENU.map((m) => <NavLink key={m.to} to={m.to} onClick={close}>{m.label}</NavLink>)}
+            {MENU.map((m) => <NavLink key={m.to} to={m.to} onClick={close} onPointerEnter={m.to === '/mentor' ? preloadMentor : undefined} onFocus={m.to === '/mentor' ? preloadMentor : undefined}>{m.label}</NavLink>)}
           </nav>
         )}
       </header>
-      <main className="main"><Outlet /></main>
+      <main className="main"><Suspense fallback={<div className="container"><CardSkeletons /></div>}><RouteErrorBoundary key={loc.pathname}><Outlet /></RouteErrorBoundary></Suspense></main>
       <footer className="footer">
         <div className="container stack">
           <p>입력한 정보는 창업 구상 정리와 준비 안내에만 사용해요. 로그인 없이 쓸 수 있고, 초기화하면 지울 수 있어요.</p>
