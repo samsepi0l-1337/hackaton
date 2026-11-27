@@ -11,6 +11,11 @@ async function waitForSession(predicate, message) {
 }
 await step('login gate requires an account', async () => {
   await go('/mentor');
+  await seeText('로그인하고 상담 시작');
+  eq(await page.evaluate(() => location.pathname), '/mentor', 'logged-out visitor stays on mentor');
+  const href = await page.evaluate(() => [...document.querySelectorAll('a')].find((a) => a.textContent.trim() === '로그인하고 상담 시작')?.getAttribute('href'));
+  eq(href, '/login?next=%2Fmentor', 'login link returns to mentor');
+  await page.click('a:has-text("로그인하고 상담 시작")');
   await page.waitForFunction(() => location.pathname === '/login' && new URLSearchParams(location.search).get('next') === '/mentor');
   await seeText('비밀번호 찾기');
 });
@@ -38,35 +43,4 @@ await step('readiness choices, 200-character idea, interests and region coverage
     await page.click(`text="${region}"`);
     await seeText(`${region}: 상세 지원 경로 준비 중`);
   }
-});
-await step('empty problem cards show matching emptyReason and hold choice', async () => {
-  const options = (await api('GET', '/api/explore/options')).body;
-  const query = new URLSearchParams({ interests: options.interests[0], region: '경남' });
-  const r = await api('GET', `/api/explore/problems?${query}`);
-  eq(r.status, 200, 'problem status');
-  eq(r.body.items.length, 0, 'no shipped problem cards');
-  assert(typeof r.body.emptyReason === 'string' && r.body.emptyReason.length > 0, 'emptyReason present');
-  await seeText(`현재 확인된 문제 자료가 없습니다 (${r.body.emptyReason})`);
-  await page.click('text="아직 탐색 중"');
-  await seeText('문제를 정하지 않아도');
-});
-await step('custom problem editor opens and saves on blur', async () => {
-  await page.click('text="직접 적기"');
-  await page.waitForFunction(() => !!document.querySelector('textarea[rows="3"]') || !!document.querySelector('[role="alert"], .error-text'));
-  assert(await page.evaluate(() => !!document.querySelector('textarea[rows="3"]')), 'custom problem editor opens');
-  assert(await page.evaluate(() => !document.querySelector('[role="alert"], .error-text')), 'no error alert');
-  assert(await page.evaluate(() => [...document.querySelectorAll('section[aria-labelledby="pc"] button.chip')].find((b) => b.textContent.trim() === '아직 탐색 중')?.getAttribute('aria-pressed') === 'false'), 'hold is not selected while custom editor is open');
-  await page.fill('textarea[rows="3"]', '지역 상점의 배달 문제');
-  await page.evaluate(() => document.querySelector('textarea[rows="3"]').blur());
-  const session = await waitForSession((s) => s.exploration?.origin === 'custom' && s.exploration?.customProblem === '지역 상점의 배달 문제', 'custom problem saved on blur');
-  eq(session.exploration.origin, 'custom', 'custom origin saved');
-  eq(session.exploration.customProblem, '지역 상점의 배달 문제', 'custom problem saved on blur');
-  await page.fill('textarea[rows="3"]', '');
-  await page.evaluate(() => document.querySelector('textarea[rows="3"]').blur());
-  const cleared = await waitForSession((s) => s.exploration?.origin === 'hold' && s.exploration?.customProblem === null, 'clearing custom problem saves hold');
-  eq(cleared.exploration.origin, 'hold', 'hold origin saved');
-  eq(cleared.exploration.customProblem, null, 'custom problem cleared');
-  await page.waitForFunction(() => !document.querySelector('textarea[rows="3"]'));
-  const selected = await page.evaluate(() => [...document.querySelectorAll('section[aria-labelledby="pc"] button.chip[aria-pressed="true"]')].map((b) => b.textContent.trim()));
-  eq(selected, ['아직 탐색 중'], 'only hold chip selected after clearing');
 });

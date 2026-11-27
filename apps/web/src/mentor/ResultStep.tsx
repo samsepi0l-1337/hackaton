@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AFFILIATIONS, BUSAN_DISTRICTS, OUTSIDE_BUSAN, REGIONAL_STATUS_LABEL } from '@gil/shared';
-import type { ExploreFeedbackRequest, ExploreResultResponse, PrepItem, SummaryV2, UserConditions } from '@gil/shared';
+import type { ExploreFeedbackRequest, ExploreResultResponse, PrepItem, ResourceType, SummaryV2, UserConditions } from '@gil/shared';
+import { Chip } from '../components/Chips';
 import { api } from '../api/client';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ResourceResultCard } from '../components/ResourceView';
@@ -33,7 +34,7 @@ function PrepBlock({ prep, onToggle, primary }: { prep: PrepItem; onToggle: (p: 
   );
 }
 
-function ConditionForm({ initial, onSave, onClose }: { initial?: UserConditions; onSave: (c: UserConditions) => Promise<void>; onClose: () => void }) {
+function ConditionForm({ initial, fromSaved, onSave, onClose }: { initial?: UserConditions; fromSaved?: boolean; onSave: (c: UserConditions) => Promise<void>; onClose: () => void }) {
   const [ageUnknown, setAgeUnknown] = useState(initial?.age === 'unknown');
   const [age, setAge] = useState(typeof initial?.age === 'number' ? String(initial.age) : '');
   const [residence, setResidence] = useState(initial?.residence ?? '');
@@ -55,7 +56,7 @@ function ConditionForm({ initial, onSave, onClose }: { initial?: UserConditions;
     <div className="overlay" role="dialog" aria-modal="true" aria-label="내 조건 확인">
       <div className="sheet stack">
         <h2 style={{ margin: 0 }}>내 조건 확인</h2>
-        <p className="muted">지원 경로의 조건과 비교할 때만 써요.{initial ? ' 내 정보에 저장한 기본 정보를 먼저 채웠어요. 바꿔도 돼요.' : ''} 모르면 '모름'을 골라도 되고, 건너뛰어도 요약과 준비 안내는 그대로예요.</p>
+        <p className="muted">지원 경로의 조건과 비교할 때만 써요.{initial ? (fromSaved ? ' 지금 결과에 쓴 조건을 채웠어요. 바꿔도 돼요.' : ' 내 정보에 저장한 기본 정보를 먼저 채웠어요. 바꿔도 돼요.') : ''} 모르면 '모름'을 골라도 되고, 건너뛰어도 요약과 준비 안내는 그대로예요.</p>
         <Field label="만 나이">
           <input className="input" type="number" min={0} max={120} inputMode="numeric" value={age} disabled={ageUnknown} onChange={(e) => setAge(e.target.value)} />
           <label className="check"><input type="checkbox" checked={ageUnknown} onChange={(e) => setAgeUnknown(e.target.checked)} />모름</label>
@@ -170,8 +171,18 @@ function overlay(r: ExploreResultResponse, done: Record<string, boolean>): Explo
 const doneMap = (r: ExploreResultResponse): Record<string, boolean> =>
   Object.fromEntries([r.prep.primary, ...r.prep.followUps].map((p) => [p.id, p.done]));
 
-export function ResultStep({ summary, problemTitle, readOnly = false, onEditSummary, onMissingSummary, onBackToStart }: {
-  summary: SummaryV2; problemTitle?: string; readOnly?: boolean; onEditSummary: () => void; onMissingSummary: () => void; onBackToStart?: () => void;
+function conditionLine(c?: UserConditions): string {
+  if (!c) return '';
+  const parts: string[] = [];
+  if (c.age !== undefined) parts.push(c.age === 'unknown' ? '나이 모름' : `만 ${c.age}세`);
+  if (c.residence) parts.push(c.residence === 'unknown' ? '거주지 모름' : c.residence);
+  if (c.affiliation) parts.push(c.affiliation === 'unknown' ? '소속 모름' : c.affiliation);
+  if (c.hasBusiness !== undefined) parts.push(c.hasBusiness === 'unknown' ? '사업자등록 모름' : c.hasBusiness ? '사업자등록 있음' : '사업자등록 없음');
+  return parts.join(' · ');
+}
+
+export function ResultStep({ summary, problemTitle, conditions, readOnly = false, onEditSummary, onMissingSummary, onBackToStart }: {
+  summary: SummaryV2; problemTitle?: string; conditions?: UserConditions; readOnly?: boolean; onEditSummary: () => void; onMissingSummary: () => void; onBackToStart?: () => void;
 }) {
   const onGo = readOnly ? undefined : (i: number) => (i === 0 ? onBackToStart?.() : onEditSummary());
   const [res, setRes] = useState<ExploreResultResponse | null>(() => { const st = readStore(); return st.result ? overlay(st.result, st.prepDone) : null; });
@@ -183,7 +194,16 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
   const [tick, setTick] = useState(0);
   const [cond, setCond] = useState(false);
   const [profileCond, setProfileCond] = useState<UserConditions | undefined>(undefined);
+  const [savedCond, setSavedCond] = useState<UserConditions | undefined>(conditions);
+  const [condSaved, setCondSaved] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<ResourceType | 'all'>('all');
   useEffect(() => { api.myProfile().then((r) => setProfileCond(profileToConditions(r.profile)), () => {}); }, []);
+  useEffect(() => {
+    if (readOnly) return;
+    api.exploreSession().then((s) => { if (s.start.conditions) setSavedCond(s.start.conditions); }, () => {});
+  }, [readOnly]);
+  // 팝업은 지금 결과가 쓰는 조건(저장한 값)으로 열고, 저장한 적이 없을 때만 내 정보 기본값을 쓴다.
+  const popupCond = savedCond ?? profileCond;
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -243,6 +263,12 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
   const hasOtherRegion = res.resources.some((c) => c.resource.regions.some((r) => r === '울산' || r === '경남'));
   const reg = res.regional;
   const regResources = reg ? res.resources.filter((c) => reg.resourceIds.includes(c.resource.id)) : [];
+  const firstResource = res.resources[0]?.resource;
+  const typeCounts = new Map<ResourceType, number>();
+  for (const c of res.resources) typeCounts.set(c.resource.type, (typeCounts.get(c.resource.type) ?? 0) + 1);
+  const activeType = typeFilter !== 'all' && typeCounts.has(typeFilter) ? typeFilter : 'all';
+  const shown = res.resources.filter((c) => activeType === 'all' || c.resource.type === activeType);
+  const condText = conditionLine(savedCond);
 
   async function copy() {
     try { await navigator.clipboard.writeText(toText(s, prepAll)); setNote('요약과 준비사항을 복사했어요.'); } catch { setNote('복사하지 못했어요. 브라우저 권한을 확인해 주세요.'); }
@@ -258,13 +284,24 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
       <h1>나의 창업 준비 방향</h1>
       {offline && <p className="muted" role="status">서버에 연결하지 못해 이 기기에 저장된 결과를 보여줘요. 최신 내용과 다를 수 있어요.</p>}
 
-      <section className="card stack" aria-labelledby="sum">
-        <div className="row between"><h2 id="sum" style={{ margin: 0 }}>구상 요약</h2>{!readOnly && <button className="btn small" onClick={onEditSummary}>내용 수정</button>}</div>
-        <p className="muted">지금 준비 상태를 점수나 등급으로 평가하지 않아요.</p>
-        <div><strong>탐색 방향</strong> <ProvBadge p={s.exploration.direction.provenance} /> <span className="badge">{s.exploration.direction.status === 'hold' ? '아직 탐색 중' : ''}</span>
-          <p style={{ margin: 0 }}>{s.exploration.direction.text || '아직 탐색 중'}</p></div>
-        {SUMMARY_KEYS.map((k) => { const it = getItem(s, k); return <div key={k}><strong>{ITEM_LABEL[k]}</strong> <ProvBadge p={it.provenance} /><p style={{ margin: 0 }}>{it.text || '미정'}</p></div>; })}
+      <section className="card highlight stack next-box" aria-labelledby="nx">
+        <h2 id="nx" style={{ margin: 0 }}>다음에 할 일</h2>
+        <ol className="next-list">
+          {firstResource && <li><Link to={`/programs/${encodeURIComponent(firstResource.id)}`} onClick={onLink(firstResource.id)}>{firstResource.title}</Link> 안내를 열어 신청 방법과 대상을 확인해 보세요.</li>}
+          <li><a href="#pr">{prepAll.primary.title}</a>을(를) 준비해 보세요. 정리할 결과: {prepAll.primary.output}</li>
+          <li><Link to="/programs?sort=fit">맞춤형 공고</Link>에서 내 조건에 맞는 공고를 더 찾아보세요.</li>
+        </ol>
       </section>
+
+      <details className="summary-quiet">
+        <summary id="sum">내가 입력한 구상 요약 보기</summary>
+        <div className="stack" style={{ marginTop: 8 }}>
+          <div className="row between"><span className="muted">지금 준비 상태를 점수나 등급으로 평가하지 않아요.</span>{!readOnly && <button className="btn small" onClick={onEditSummary}>내용 수정</button>}</div>
+          <div><strong>탐색 방향</strong> <ProvBadge p={s.exploration.direction.provenance} /> <span className="badge">{s.exploration.direction.status === 'hold' ? '아직 탐색 중' : ''}</span>
+            <p style={{ margin: 0 }}>{s.exploration.direction.text || '아직 탐색 중'}</p></div>
+          {SUMMARY_KEYS.map((k) => { const it = getItem(s, k); return <div key={k}><strong>{ITEM_LABEL[k]}</strong> <ProvBadge p={it.provenance} /><p style={{ margin: 0 }}>{it.text || '미정'}</p></div>; })}
+        </div>
+      </details>
 
       {reg && (
         <section className="card stack" aria-labelledby="rg">
@@ -325,6 +362,15 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
           {!readOnly && <button className="btn small" onClick={() => setCond(true)}>내 조건 확인</button>}
         </div>
         <p className="muted">{res.coverageNote}</p>
+        {(condText || condSaved) && (
+          <p className="muted" role="status">{condSaved && <strong>저장했어요. </strong>}{condText ? `확인에 쓴 내 조건: ${condText}` : ''}</p>
+        )}
+        {typeCounts.size > 1 && (
+          <div className="chips" role="group" aria-label="지원 유형으로 거르기">
+            <Chip selected={activeType === 'all'} onClick={() => setTypeFilter('all')}>전체 {res.resources.length}</Chip>
+            {[...typeCounts].map(([t, n]) => <Chip key={t} selected={activeType === t} onClick={() => setTypeFilter(t)}>{t} {n}</Chip>)}
+          </div>
+        )}
         {res.resources.length > 0 && (
           <p className="muted">
             {res.ranking === 'ai'
@@ -334,7 +380,7 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
         )}
         {res.resources.length === 0
           ? <EmptyState message="현재 확인된 자료에서 맞는 경로를 찾지 못했어요." action={res.noMatchReason ? <p className="muted">{res.noMatchReason}</p> : undefined} />
-          : res.resources.slice(0, 3).map((c) => <ResourceResultCard key={c.resource.id} card={c} localReason={localReasons[c.resource.id]} onLink={onLink(c.resource.id)} />)}
+          : shown.slice(0, 3).map((c) => <ResourceResultCard key={c.resource.id} card={c} localReason={localReasons[c.resource.id]} onLink={onLink(c.resource.id)} />)}
         <p className="muted">{res.conditionNote}</p>
         <p><Link to="/programs">지역 지원 전체 살펴보기</Link></p>
       </section>
@@ -351,7 +397,7 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
         {note && <p className="muted" role="status">{note}</p>}
       </section>
 
-      {cond && <ConditionForm initial={profileCond} onClose={() => setCond(false)} onSave={async (c) => { const r = await api.saveConditions(c); setRes(r); keep(r); setCond(false); }} />}
+      {cond && <ConditionForm initial={popupCond} fromSaved={savedCond !== undefined} onClose={() => setCond(false)} onSave={async (c) => { const r = await api.saveConditions(c); setRes(r); keep(r); setSavedCond(c); setCondSaved(true); setCond(false); }} />}
       {confirm && (
         <ConfirmDialog title="처음부터 다시 할까요?" confirmLabel="초기화" danger busy={busy} onConfirm={reset} onCancel={() => setConfirm(false)}>
           <p>아래 내용이 지워지고 되돌릴 수 없어요.</p>

@@ -17,6 +17,12 @@
 .mentor-page .summary-item { border-top: 1px solid #e7edf3; }
 .mentor-page .plain-list li + li { margin-top: 8px; }
 
+/* 결과: 다음에 할 일은 눈에 띄게, 내 구상 요약은 조용하게 */
+.mentor-page .next-box { background: #f4f8ff; }
+.mentor-page .next-list { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.mentor-page details.summary-quiet { padding: 8px 12px; border: 1px solid #e7edf3; border-radius: var(--radius-md, 8px); background: #f8fafc; color: #566a80; font-size: 14px; }
+.mentor-page details.summary-quiet > summary { cursor: pointer; font-weight: 600; }
+
 /* 배지: 출처 */
 .mentor-page .badge.prov-user { background: var(--color-ok-soft); color: var(--color-ok); }
 .mentor-page .badge.prov-ai, .mentor-page .badge.prov-unknown { background: var(--color-warn-soft); color: var(--color-warn); }
