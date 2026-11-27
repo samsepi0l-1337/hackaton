@@ -7,10 +7,11 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { PortalIcon } from './PortalIcons';
 import { useAuth } from './AuthContext';
 
-const NAV_GROUPS: { label: string; links: [string, string][] }[] = [
+// to 가 있으면 드롭다운 없이 바로 이동하는 항목이다.
+const NAV_GROUPS: { label: string; to?: string; links: [string, string][] }[] = [
   { label: '지원사업', links: [['전체 공고', '/programs'], ['최근 공모', '/programs?sort=recent']] },
-  { label: 'AI 창업 상담', links: [['멘토 상담', '/mentor'], ['이번 주 상담 횟수', '/me']] },
-  { label: '창업 가이드', links: [['창업 유형 테스트', '/test'], ['서비스 이용 방법', '/#how-to']] },
+  { label: 'AI 창업 상담', to: '/mentor', links: [] },
+  { label: '창업 가이드', links: [['창업 유형 테스트', '/test'], ['서비스 이용 방법', '/guide']] },
   { label: '내 활동', links: [['내 정보', '/me'], ['내 정보 조건', '/me#profile']] },
 ];
 
@@ -107,7 +108,7 @@ export function Layout() {
           </Link>
           <div className="mast-actions">
             <div className="utility">
-              <Link to="/#how-to">이용 방법</Link>
+              <Link to="/guide" {...cur('/guide')}>이용 방법</Link>
               <span></span>
               <a href="https://www.k-startup.go.kr/" target="_blank" rel="noreferrer">K-Startup <PortalIcon name="external" size={13} /></a>
             </div>
@@ -127,6 +128,14 @@ export function Layout() {
         <nav id="portal-nav" aria-label="주 메뉴" className={'portal-nav' + (navOpen ? ' is-open' : '')}>
           <div className="portal-width nav-items">
             {NAV_GROUPS.map((g, i) => {
+              if (g.to) {
+                const to = g.to;
+                return (
+                  <div className="nav-group" key={g.label}>
+                    <Link className="nav-direct" to={to} {...mentorHints(to)} {...cur(to)} onClick={closeAll}>{g.label}</Link>
+                  </div>
+                );
+              }
               const open = dismissed !== i && (pinned === i || hover === i || focusIn === i);
               return (
                 <div

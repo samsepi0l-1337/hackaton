@@ -37,7 +37,7 @@ Shadow: `--shadow` 0 1px 3px rgba(16,24,40,.1) for cards. Pane 0 3px 9px #183e65
 - Skip link `.skip` ("본문 바로가기"), shown on focus.
 - Strip `.civic-strip`: grey bar, 2px top border #647180, 32px high, `.sea-mark` icon (≈) then one line. Text: "부산 청년 창업 지원 정보를 공식 출처와 함께 안내합니다."
 - Masthead `.masthead` (93px): left `.brand` (logo `/brand.svg` 49px, name in `<b>` with colour #124c85, weight 800, size 22 to 31px). Right `.mast-actions`: `.utility` (이용 방법, divider, K-Startup external) above `.account-actions` (AI 멘토, 공고 검색, 내 정보, 팀 통계; 20px icon + 16px bold text).
-- Nav `.portal-nav`: border top and bottom #cdd4df, `.nav-group` x4 (지원사업, AI 창업 상담, 창업 가이드, 내 활동). Button 17px bold, min height 53. First button has a grey tint #eef3f8.
+- Nav `.portal-nav`: border top and bottom #cdd4df, `.nav-group` x4 (지원사업, AI 창업 상담, 창업 가이드, 내 활동). Button 17px bold, min height 53. First button has a grey tint #eef3f8. 'AI 창업 상담' is not a dropdown: a plain button without chevron that goes straight to `/mentor` (preloads the page on hover and focus, `aria-current` on `/mentor`). The other three open a menu.
 - Menu `.menu-panel`: under the button, min width 190, white, radius 0 0 12 12. Opens on click and on hover. Closes on Escape, outside click, link click and route change.
 - Footer `.footer-inner`: brand line (strong 16px), data-use sentence (input is stored on the server, may go to Upstage (외부 AI), and can be deleted with 처음부터 다시 or 계정 삭제), source line with licence link.
 - Mobile only: `.mobile-menu` button and `.mobile-account` links (hidden on desktop).
@@ -75,6 +75,12 @@ Shadow: `--shadow` 0 1px 3px rgba(16,24,40,.1) for cards. Pane 0 3px 9px #183e65
 - Menu: hover previews, click pins, focus inside the panel keeps it open. Escape restores focus to the group button only when focus was inside that group.
 - Hover and active states change colour only. No motion; `prefers-reduced-motion` turns off any transition.
 - Main page links: each destination appears at most twice (shell links not counted). Labels name what the destination shows. `/programs` takes type, stage, sort (fit, recent, popular, deadline; deadline is the default) and q. Stage tabs are idea stages, not business age.
+
+## Guide page (/guide)
+
+- "이용 방법" page, linked from the masthead utility link and the 창업 가이드 menu. Lazy-loaded, CSS in `pages-guide.css`, scoped under `.guide-page`.
+- `.portal-width` (max 960px), h1, a lead line, then `.pane` blocks. Numbered `.guide-steps` only for the AI consult sequence. Other content uses `.guide-rows` (grey rows, radius 10, bold title, 14px text) with links to each page.
+- Copy states only what the app does (labels and limits come from `@gil/shared`). No new colours, radii or shadows.
 
 ## Icons
 

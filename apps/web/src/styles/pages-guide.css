@@ -1,0 +1,16 @@
+.guide-page { margin-top: 24px; margin-bottom: 40px; display: grid; gap: 15px; max-width: 960px; word-break: keep-all; }
+.guide-page h1 { margin: 0; letter-spacing: -.035em; }
+.guide-page .guide-lead { margin: 0; color: var(--portal-ink); font-size: 17px; line-height: 1.6; }
+.guide-page .pane p { margin: 0 0 12px; color: var(--portal-ink); line-height: 1.6; }
+.guide-page .pane p:last-child { margin-bottom: 0; }
+.guide-page .pane p.muted { color: var(--color-muted); }
+.guide-page .guide-steps, .guide-page .guide-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.guide-page .guide-steps { counter-reset: guide-step; }
+.guide-page .guide-steps li { counter-increment: guide-step; display: grid; grid-template-columns: 36px 1fr; column-gap: 14px; padding: 13px 16px; background: #eff3f8; border-radius: 10px; }
+.guide-page .guide-steps li::before { content: counter(guide-step); grid-row: 1 / span 2; align-self: start; width: 30px; height: 30px; border-radius: 999px; background: #fff; color: #175ac7; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.guide-page .guide-steps b, .guide-page .guide-rows b { display: block; font-size: 15px; color: var(--portal-ink); }
+.guide-page .guide-steps span, .guide-page .guide-rows span { display: block; margin-top: 3px; font-size: 14px; line-height: 1.6; color: var(--portal-ink); }
+.guide-page .guide-rows li { padding: 13px 16px; background: #eff3f8; border-radius: 10px; }
+.guide-page .guide-rows a { color: var(--portal-ink); }
+.guide-page .guide-rows a:hover, .guide-page .text-action:hover { color: #155bc1; text-decoration: underline; }
+.guide-page .text-action { font-weight: 700; font-size: 14px; color: #175ac7; }

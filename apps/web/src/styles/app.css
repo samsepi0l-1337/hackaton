@@ -144,9 +144,9 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .portal-nav { border-block: 1px solid #cdd4df; }
 .nav-items { display: flex; }
 .nav-group { position: relative; }
-.nav-group > button { border: 0; padding: 14px 23px; display: flex; align-items: center; gap: 13px; min-height: 53px; background: transparent; cursor: pointer; font-weight: 700; font-size: 17px; }
+.nav-group > button, .nav-group > .nav-direct { border: 0; color: inherit; padding: 14px 23px; display: flex; align-items: center; gap: 13px; min-height: 53px; background: transparent; cursor: pointer; font-weight: 700; font-size: 17px; }
 .nav-group:first-child > button { background: #eef3f8; }
-.nav-group > button:hover, .nav-group > button[aria-expanded=true] { background: #e6efff; color: #175ac7; }
+.nav-group > button:hover, .nav-group > button[aria-expanded=true], .nav-group > .nav-direct:hover, .nav-group > .nav-direct[aria-current=page] { background: #e6efff; color: #175ac7; }
 .menu-panel { position: absolute; top: 100%; left: 0; min-width: 190px; padding: 8px; border: 1px solid var(--panel-line); border-radius: 0 0 12px 12px; background: #fff; box-shadow: 0 10px 25px #203d631a; }
 .menu-panel a { display: block; padding: 9px 12px; border-radius: 6px; }
 .menu-panel a:hover { background: #edf4ff; }
@@ -242,7 +242,7 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .chip:hover { border-color: var(--color-primary); }
 .stage-tabs button:hover { color: #1859b8; }
 .start-link:hover, .type-banner:hover strong { text-decoration: underline; }
-.nav-group > button:focus-visible, .menu-panel a:focus-visible { outline-offset: -3px; }
+.nav-group > button:focus-visible, .nav-group > .nav-direct:focus-visible, .menu-panel a:focus-visible { outline-offset: -3px; }
 .portal-header a[aria-current=page]:not(.brand),.menu-panel a[aria-current=page] { color: #175ac7; font-weight: 800; }
 .live-stats span { white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
