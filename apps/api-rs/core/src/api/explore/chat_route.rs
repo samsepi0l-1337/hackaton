@@ -8,7 +8,11 @@ use serde_json::{json,Value};
 
 async fn ask(s: &mut Value, ai: &mut ExploreAi<'_>, key: &str, last: &str, at: &str, resources: &[Value]) -> bool {
     let focused = (key == "focus").then(|| resources.iter().find(|r| r["id"] == s["start"]["focusResourceId"])).flatten();
-    let text = focused.map(|r| format!("‘{}’에 관심을 보이셨어요. 이 지원을 받으면 가장 먼저 해 보고 싶은 일은 무엇인가요?", r["title"].as_str().unwrap_or(""))).unwrap_or_else(|| chat::question(key).unwrap_or("").to_owned());
+    let text = match (key, focused) {
+        ("focus", Some(r)) => format!("‘{}’ 공고를 보고 오셨네요. 이 지원을 받는다면 무엇부터 해 보고 싶으세요?", r["title"].as_str().unwrap_or("")),
+        ("region", _) => chat::region_question(&s["start"]),
+        _ => chat::question(key).unwrap_or("").to_owned(),
+    };
     let (question,failed)=ai.question(&text,last).await;
     let message=json!({"role":"mentor","text":question,"at":at,"questionIndex":s["questionIndex"]});
     if let Some(a)=s["messages"].as_array_mut(){a.push(message);} failed

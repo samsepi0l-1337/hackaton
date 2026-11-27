@@ -4,6 +4,17 @@ use serde_json::Value;
 pub const MAX_QUESTIONS: usize = 3;
 pub const OPENING: &str = "몇 가지만 가볍게 여쭤볼게요. 모르면 \"아직 모르겠어요\", 넘기고 싶으면 \"건너뛰기\"를 눌러도 돼요. 정답은 없어요.";
 pub const CLOSING: &str = "질문은 여기까지예요. 정리된 내용을 같이 볼까요?";
+/// 검토 지역 질문. 고른 지역 산업이 있으면 그 분야와 잇고, 없으면 어디서 누구와 시작할지 묻는다.
+pub fn region_question(start: &Value) -> String {
+    let region = start["reviewRegion"].as_str().filter(|r| *r != "미정").unwrap_or("부산·울산·경남");
+    let place = match start["district"].as_str().filter(|d| !d.is_empty() && *d != "미정") { Some(d) => format!("{region} {d}"), None => region.to_owned() };
+    let picked: Vec<&str> = start["interests"].as_array().into_iter().flatten().filter_map(Value::as_str).filter(|t| crate::shared::explore::INDUSTRY_TAGS.contains(t)).collect();
+    if picked.is_empty() {
+        format!("{place}에서 먼저 시작한다면 어디에서, 누구와 해 보고 싶으세요? 예를 들어 대학가나 동네 시장처럼요. 정하지 않았다면 그렇게 답해도 괜찮아요.")
+    } else {
+        format!("고른 {} 분야와 이어 본다면, {place}에서 어떤 일을 해 볼 수 있을까요? 아직 모르겠다면 그렇게 답해도 괜찮아요.", picked.join("·"))
+    }
+}
 pub fn question(key: &str) -> Option<&'static str> {
     match key {
         "trigger" => Some("이 일을 해보고 싶어진 경험이 있나요? (예: 가족 일을 도우면서 불편한 점을 본 적이 있어요)"),
@@ -12,7 +23,7 @@ pub fn question(key: &str) -> Option<&'static str> {
         "direction" => Some("이 문제에서 더 알아보고 싶은 부분이나 도움이 될 수 있다고 생각하는 점이 있나요?"),
         "target" => Some("어떤 사람이 이용하면 좋을까요? 아직 정하지 않아도 괜찮아요."),
         "prepared" => Some("지금까지 알아보거나 준비한 것이 있나요?"),
-        "region" => Some("부울경의 조선·해양, 자동차, 항공, 방산, 수소·에너지, 데이터센터, AI, 2차전지 분야 중 이 구상과 연결해보고 싶은 분야가 있나요? 잘 모르겠으면 그렇다고 해도 돼요."),
+        "region" => Some("부산·울산·경남에서 먼저 시작한다면 어디에서, 누구와 해 보고 싶으세요? 정하지 않았다면 그렇게 답해도 괜찮아요."),
         "interestOnly" => Some("선택한 산업에서 제품을 만드는 일과 관련 업무를 돕는 서비스 중 살펴보고 싶은 방향이 있나요?"),
         // 관심 공고가 목록에서 빠졌을 때 쓰는 질문 (공고 이름 없이).
         "focus" => Some("관심 있는 지원 사업을 받는다면 가장 먼저 해 보고 싶은 일은 무엇인가요?"),
