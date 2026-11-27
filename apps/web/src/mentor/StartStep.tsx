@@ -17,7 +17,7 @@ type Save = 'idle' | 'saving' | 'saved' | 'error';
 
 function ProblemCards({ start, exploration, problem, onExploration }: {
   start: StartProfile; exploration: Exploration | null; problem: ProblemCard | null;
-  onExploration: (b: ExplorationRequest, info: ProblemCard | null) => void;
+  onExploration: (b: ExplorationRequest, info: ProblemCard | null) => Promise<boolean>;
 }) {
   const [items, setItems] = useState<ProblemCard[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -73,7 +73,7 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
               <blockquote className="quote">{p.sourceExcerpt ?? '공개 가능한 원문 발췌가 없어요. 출처에서 확인이 필요해요.'}{p.checkedAt && <div>검수일 {p.checkedAt}</div>}</blockquote>
             )}
             <div className="row">
-              <button className="btn primary" aria-pressed={sel} onClick={() => { setCustomOpen(false); onExploration({ problemId: p.id, origin: 'card', customProblem: null }, p); }}>{sel ? '선택한 문제' : '이 문제 탐색하기'}</button>
+              <button className="btn primary" aria-pressed={sel} onClick={async () => { if (await onExploration({ problemId: p.id, origin: 'card', customProblem: null }, p)) setCustomOpen(false); }}>{sel ? '선택한 문제' : '이 문제 탐색하기'}</button>
               <button className="btn" aria-expanded={open === p.id} onClick={() => setOpen(open === p.id ? null : p.id)}>{open === p.id ? '근거 닫기' : '근거 보기'}</button>
             </div>
           </article>
@@ -83,16 +83,16 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
       <div className="chips">
         <Chip selected={customOpen} onClick={() => { setCustomOpen(true); if (custom.trim()) onExploration({ problemId: null, origin: 'custom', customProblem: custom }, null); }}>직접 적기</Chip>
         <Chip onClick={() => load(true)}>다른 문제 보기</Chip>
-        <Chip selected={origin === 'hold'} onClick={() => { setCustomOpen(false); onExploration({ problemId: null, origin: 'hold', customProblem: null }, null); }}>아직 탐색 중</Chip>
+        <Chip selected={origin === 'hold' && !customOpen} onClick={async () => { if (await onExploration({ problemId: null, origin: 'hold', customProblem: null }, null)) setCustomOpen(false); }}>아직 탐색 중</Chip>
       </div>
       {customOpen && (
         <Field label="직접 생각한 문제" hint="사용자가 적은 내용으로 저장되고, 외부 자료로 검증되기 전이에요.">
           <textarea className="input" rows={3} maxLength={IDEA_MAX_V2} value={custom} onChange={(e) => setCustom(e.target.value)}
-            onBlur={() => { const text = custom.trim(); if (text) onExploration({ problemId: null, origin: 'custom', customProblem: text }, null); }} />
+            onBlur={() => { const text = custom.trim(); if (text) onExploration({ problemId: null, origin: 'custom', customProblem: text }, null); else { if (origin === 'custom') onExploration({ problemId: null, origin: 'hold', customProblem: null }, null); setCustomOpen(false); } }} />
           <Counter n={custom.length} max={IDEA_MAX_V2} />
         </Field>
       )}
-      {origin === 'hold' && <p className="muted">문제를 정하지 않아도 구상 정리를 시작할 수 있어요.</p>}
+      {origin === 'hold' && !customOpen && <p className="muted">문제를 정하지 않아도 구상 정리를 시작할 수 있어요.</p>}
       {origin === 'card' && (
         <Field label="이 문제에 관심이 생긴 이유 (선택)" hint="비워 두면 미정으로 남고, AI가 대신 적지 않아요.">
           <textarea className="input" rows={2} maxLength={IDEA_MAX_V2} value={reason} onChange={(e) => setReason(e.target.value)}
@@ -140,7 +140,7 @@ export function StartStep({ opts, session, initial, problem, quota, onProblem, o
 
   async function exploration(b: ExplorationRequest, info: ProblemCard | null) {
     if ('problemId' in b) onProblem(info);
-    try { onSession(await api.saveExploration(b)); } catch (e) { setErr(errMessage(e)); }
+    try { onSession(await api.saveExploration(b)); return true; } catch (e) { setErr(errMessage(e)); return false; }
   }
 
   async function begin() {
