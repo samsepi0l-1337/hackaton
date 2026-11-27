@@ -1,4 +1,4 @@
-# 부산 청년 창업 길잡이 (가칭)
+# 해보까 (가칭)
 
 ICT INNOHACK 2026 해커톤 프로젝트. 기획 문서는 [docs/](docs/README.md).
 

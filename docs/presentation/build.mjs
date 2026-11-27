@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 const pptx = new pptxgen();
 pptx.layout = 'LAYOUT_WIDE';
-pptx.author = '부산 창업 길잡이';
+pptx.author = '해보까';
 pptx.subject = 'ICT INNOHACK 2026';
-pptx.title = '부산 창업 길잡이';
+pptx.title = '해보까';
 pptx.lang = 'ko-KR';
 pptx.theme = { headFontFace: 'Apple SD Gothic Neo', bodyFontFace: 'Apple SD Gothic Neo', lang: 'ko-KR' };
 const blue = '1765C1', ink = '15273C', muted = '536579', pale = 'EDF4FC';
@@ -23,7 +23,7 @@ function base(title, index) {
   slide.addShape(pptx.ShapeType.rect, { x: 0.65, y: 0.52, w: 0.13, h: 0.55, line: { color: blue }, fill: { color: blue } });
   text(slide, title, 0.95, 0.45, 11.65, 0.75, 34, { bold: true });
   slide.addShape(pptx.ShapeType.line, { x: 0.7, y: 6.94, w: 11.9, h: 0, line: { color: 'DBE5F0', width: 1 } });
-  if (index !== 1) text(slide, '부산 청년 창업 길잡이', 0.72, 7.02, 5, 0.27, 18, { color: muted });
+  if (index !== 1) text(slide, '해보까', 0.72, 7.02, 5, 0.27, 18, { color: muted });
   text(slide, String(index), 12.05, 7.02, 0.45, 0.27, 18, { color: muted, align: 'right' });
   slide.addNotes(notes[index - 1]);
   return slide;
@@ -34,7 +34,7 @@ function card(slide, x, y, w, h, heading, detail) {
   text(slide, detail, x + 0.24, y + 1.05, w - 0.48, h - 1.25, 20, { align: 'center', valign: 'top', breakLine: false });
 }
 
-let s = base('부산 청년 창업 길잡이', 1);
+let s = base('해보까', 1);
 text(s, '[팀명]', 0.98, 1.25, 4, 0.4, 18, { color: muted });
 text(s, '막연한 창업 생각을\n다음 준비로', 0.95, 1.95, 11.4, 1.55, 38, { bold: true });
 text(s, '창업 경험이 없는 부산 청년을 위해', 0.98, 3.95, 11.2, 0.52, 25, { color: muted });

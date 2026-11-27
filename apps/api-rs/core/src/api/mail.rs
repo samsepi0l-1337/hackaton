@@ -22,22 +22,22 @@ fn wrap(body: &str) -> String {
 }
 /// TS: `export function verificationMail(to: string, link: string, code: string): MailMessage`.
 pub fn verification_mail(to: &str, link: &str, code: &str) -> Mail {
-    let text = format!("길 이메일 인증\n\n아래 링크를 눌러 이메일 인증을 마쳐 주세요.\n{link}\n\n링크를 쓸 수 없으면 인증 코드 {code} 를 입력해 주세요.\n링크와 코드는 {VERIFY_TTL_HOURS}시간 동안 쓸 수 있어요.\n\n가입하지 않았다면 이 메일을 무시해 주세요.");
+    let text = format!("해보까 이메일 인증\n\n아래 링크를 눌러 이메일 인증을 마쳐 주세요.\n{link}\n\n링크를 쓸 수 없으면 인증 코드 {code} 를 입력해 주세요.\n링크와 코드는 {VERIFY_TTL_HOURS}시간 동안 쓸 수 있어요.\n\n가입하지 않았다면 이 메일을 무시해 주세요.");
     let html = wrap(&format!("<h2>이메일 인증</h2><p>아래 버튼을 눌러 이메일 인증을 마쳐 주세요.</p>\n<p><a href=\"{}\" style=\"display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;border-radius:8px;text-decoration:none\">이메일 인증하기</a></p>\n<p>링크를 쓸 수 없으면 인증 코드를 입력해 주세요.</p><p style=\"font-size:24px;letter-spacing:4px\"><b>{}</b></p>\n<p>링크와 코드는 {VERIFY_TTL_HOURS}시간 동안 쓸 수 있어요.</p><p style=\"color:#666\">가입하지 않았다면 이 메일을 무시해 주세요.</p>", escape_html(link), escape_html(code)));
     Mail {
         to: to.into(),
-        subject: "[길] 이메일 인증을 마쳐 주세요".into(),
+        subject: "[해보까] 이메일 인증을 마쳐 주세요".into(),
         text,
         html,
     }
 }
 /// TS: `export function recoveryMail(to: string, password: string): MailMessage`.
 pub fn recovery_mail(to: &str, password: &str) -> Mail {
-    let text = format!("길 복구 비밀번호\n\n복구 비밀번호: {password}\n{RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있고, 한 번 로그인하면 다시 쓸 수 없어요.\n로그인 후 바로 새 비밀번호를 정해 주세요.\n\n요청하지 않았다면 무시하세요, 기존 비밀번호는 그대로예요.");
+    let text = format!("해보까 복구 비밀번호\n\n복구 비밀번호: {password}\n{RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있고, 한 번 로그인하면 다시 쓸 수 없어요.\n로그인 후 바로 새 비밀번호를 정해 주세요.\n\n요청하지 않았다면 무시하세요, 기존 비밀번호는 그대로예요.");
     let html = wrap(&format!("<h2>복구 비밀번호</h2><p style=\"font-size:22px;letter-spacing:2px\"><b>{}</b></p>\n<p>{RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있고, 한 번 로그인하면 다시 쓸 수 없어요.</p><p>로그인 후 바로 새 비밀번호를 정해 주세요.</p>\n<p style=\"color:#666\">요청하지 않았다면 무시하세요, 기존 비밀번호는 그대로예요.</p>", escape_html(password)));
     Mail {
         to: to.into(),
-        subject: "[길] 복구 비밀번호를 보내드려요".into(),
+        subject: "[해보까] 복구 비밀번호를 보내드려요".into(),
         text,
         html,
     }

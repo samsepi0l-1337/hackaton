@@ -60,7 +60,7 @@ const wrap = (body: string) => `<div style="font-family:system-ui,sans-serif;lin
 
 export function verificationMail(to: string, link: string, code: string): MailMessage {
   const text = [
-    '길 이메일 인증',
+    '해보까 이메일 인증',
     '',
     '아래 링크를 눌러 이메일 인증을 마쳐 주세요.',
     link,
@@ -74,12 +74,12 @@ export function verificationMail(to: string, link: string, code: string): MailMe
 <p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;border-radius:8px;text-decoration:none">이메일 인증하기</a></p>
 <p>링크를 쓸 수 없으면 인증 코드를 입력해 주세요.</p><p style="font-size:24px;letter-spacing:4px"><b>${escapeHtml(code)}</b></p>
 <p>링크와 코드는 ${VERIFY_TTL_HOURS}시간 동안 쓸 수 있어요.</p><p style="color:#666">가입하지 않았다면 이 메일을 무시해 주세요.</p>`);
-  return { to, subject: '[길] 이메일 인증을 마쳐 주세요', text, html };
+  return { to, subject: '[해보까] 이메일 인증을 마쳐 주세요', text, html };
 }
 
 export function recoveryMail(to: string, password: string): MailMessage {
   const text = [
-    '길 복구 비밀번호',
+    '해보까 복구 비밀번호',
     '',
     `복구 비밀번호: ${password}`,
     `${RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있고, 한 번 로그인하면 다시 쓸 수 없어요.`,
@@ -90,5 +90,5 @@ export function recoveryMail(to: string, password: string): MailMessage {
   const html = wrap(`<h2>복구 비밀번호</h2><p style="font-size:22px;letter-spacing:2px"><b>${escapeHtml(password)}</b></p>
 <p>${RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있고, 한 번 로그인하면 다시 쓸 수 없어요.</p><p>로그인 후 바로 새 비밀번호를 정해 주세요.</p>
 <p style="color:#666">요청하지 않았다면 무시하세요, 기존 비밀번호는 그대로예요.</p>`);
-  return { to, subject: '[길] 복구 비밀번호를 보내드려요', text, html };
+  return { to, subject: '[해보까] 복구 비밀번호를 보내드려요', text, html };
 }
