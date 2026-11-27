@@ -3,10 +3,10 @@
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
-  CONDITION_NOTE, CONTEXTS, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
+  CONDITION_NOTE, CONTEXTS, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, LOCAL_AI_HEADER, LOCAL_AI_TASKS, buildFieldQuestions, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
   REVIEW_REGIONS, SESSION_COOKIE, applySummaryEdit, buildPrep, buildRegional, buildSummary, checkConditions, coverageByRegion, coverageNote,
   problemOf, problemsFor, reasonFor, recommendResources, validateStart,
-  type Exploration, type ExploreResultResponse, type ExploreSession, type PrepItem, type ReadinessStage,
+  type Exploration, type ExploreResultResponse, type FieldQuestion, type LocalAiTask, type ExploreSession, type PrepItem, type ReadinessStage,
   type RegionalContextCard, type Resource, type ResourceCard, type StartProfile, type SummaryEdit, type SummaryV2, type UserConditions,
 } from '@gil/shared';
 import { createLimiter, exploreAi, problemContext } from './ai';
@@ -14,6 +14,7 @@ import { CLOSING, MAX_QUESTIONS, OPENING, QUESTIONS, planQuestions, ruleSuggesti
 import type { ExploreState } from '../db/schema';
 import { HttpError, type AppEnv } from '../http';
 import type { Store } from '../store';
+import { exemptQuota, limitMessage, quotaConfig, quotaKeys, quotaStatus, recordConsult, type QuotaConfig } from './quota';
 
 type Ctx = Context<AppEnv>;
 const bad = (m: string, fields?: { field: string; message: string }[]) =>
@@ -37,15 +38,32 @@ const optStr = (v: unknown, max: number): string | undefined => str(v, max) ?? u
 const emptyState = (now: Date, kind: 'guest' | 'user'): ExploreState => ({
   kind, createdAt: now.toISOString(), updatedAt: null, step: 'start', start: {}, exploration: null, messages: [], questionIndex: 0,
   plan: [], answers: [], finished: false, summary: null, regional: null, prepDone: {}, ai: null, rejected: [], lastBody: null,
-  feedback: null, events: { start: 1 },
+  feedback: null, events: { start: 1 }, counted: false, fieldQ: null,
 });
 
 const asSummary = (s: ExploreState['summary']) => s as SummaryV2 | null;
-const sessionView = (s: ExploreState): ExploreSession => ({
+const sessionBase = (s: ExploreState): ExploreSession => ({
   step: s.step, start: s.start as StartProfile, exploration: s.exploration as Exploration | null, messages: s.messages,
   questionIndex: s.questionIndex, maxQuestions: MAX_QUESTIONS, summary: asSummary(s.summary), regional: s.regional as RegionalContextCard | null,
   updatedAt: s.updatedAt,
 });
+
+/** 웹이 로컬 AI 로 다듬을 수 있다고 알린 작업 (x-local-ai: mentor,reason,field). */
+const localTasks = (c: Ctx): Set<LocalAiTask> => {
+  const out = new Set<LocalAiTask>();
+  for (const t of (c.req.header(LOCAL_AI_HEADER) ?? '').split(',')) {
+    const v = t.trim().toLowerCase();
+    if ((LOCAL_AI_TASKS as readonly string[]).includes(v)) out.add(v as LocalAiTask);
+  }
+  return out;
+};
+
+const fieldSig = (s: ExploreState) => [s.exploration?.problemId ?? '', s.exploration?.origin ?? '', s.exploration?.customProblem ?? '', s.exploration?.direction ?? ''].join('|');
+const ruleFieldQuestions = (s: ExploreState, summary: SummaryV2 | null): FieldQuestion[] => {
+  const ex = s.exploration as Exploration | null;
+  const p = problemOf(ex?.problemId);
+  return buildFieldQuestions(p, ex, summary, p?.unknowns ?? []);
+};
 
 const newExploration = (): Exploration => ({ problemId: null, origin: 'hold', customProblem: null, selectionReason: null, direction: null, directionStatus: 'hold', dataVersion: EXPLORE_DATA_VERSION, suggestions: [] });
 
@@ -95,6 +113,8 @@ function computeResult(s: ExploreState, now: Date): ExploreResultResponse {
     resources, noMatchReason: rec.noMatchReason,
     coverageNote: coverageNote(s.start.reviewRegion),
     conditionNote: CONDITION_NOTE,
+    // 저장된 AI 문장은 문제·방향 서명이 같을 때만 쓴다. 문제가 바뀌면 규칙 질문으로 다시 만든다.
+    fieldQuestions: s.fieldQ?.sig === fieldSig(s) ? s.fieldQ.items as FieldQuestion[] : ruleFieldQuestions(s, summary),
   };
 }
 
@@ -123,11 +143,12 @@ export function exploreStats(store: Store) {
       resourceLinks: rows.reduce((n, s) => n + (s.events.resource_link ?? 0), 0),
     };
   };
-  return { unit: '비회원은 기기(쿠키) 세션 1개, 회원은 계정 1개. 실제 사람 수가 아니에요.', guests: tally('guest'), accounts: tally('user') };
+  return { unit: '비회원은 기기(쿠키) 세션 1개, 회원은 계정 1개. 실제 사람 수가 아니에요.', guests: tally('guest'), accounts: tally('user'), limitHits: store.limitHits() };
 }
 
-export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLimit?: number }) {
+export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLimit?: number; consultLimit?: { count?: number; windowDays?: number }; env?: { IP_HASH_SALT?: string } }) {
   const allow = createLimiter(opts.aiLimit ?? 40);
+  const cfg: QuotaConfig = quotaConfig(opts.consultLimit);
 
   // ---- 행위자 ----
   const readActor = (c: Ctx): { id: string; kind: 'guest' | 'user' } | null => {
@@ -157,6 +178,15 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     s.updatedAt = c.get('now').toISOString();
     return { actor: a, s };
   };
+  // ---- 상담 횟수 ----
+  const saltOf = (c: Ctx) => ({ IP_HASH_SALT: (c.env as { IP_HASH_SALT?: string } | undefined)?.IP_HASH_SALT ?? opts.env?.IP_HASH_SALT });
+  const keysOf = (c: Ctx, a: { id: string; kind: 'guest' | 'user' } | null) => quotaKeys(c, a, saltOf(c));
+  const isExempt = (c: Ctx) => c.get('user')?.isTeam === true;
+  const quotaOf = async (c: Ctx, a: { id: string; kind: 'guest' | 'user' } | null) =>
+    isExempt(c) ? exemptQuota(cfg) : (({ blocked: _b, ...q }) => q)(quotaStatus(c.get('store'), await keysOf(c, a), c.get('now'), cfg));
+  /** 세션 응답: 상담 횟수(quota)와 이 세션의 집계 여부(counted)를 항상 붙인다. */
+  const view = async (c: Ctx, s: ExploreState, a: { id: string; kind: 'guest' | 'user' } | null = readActor(c)): Promise<ExploreSession> =>
+    ({ ...sessionBase(s), quota: await quotaOf(c, a), counted: s.counted });
   const touch = (s: ExploreState, c: Ctx) => { s.updatedAt = c.get('now').toISOString(); };
   const bump = (s: ExploreState, type: string) => { s.events[type] = ONCE_EVENTS.has(type) ? 1 : (s.events[type] ?? 0) + 1; };
   const requireStart = (s: ExploreState) => {
@@ -181,14 +211,15 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
   });
 
   // ---- 세션 ----
-  app.get('/api/explore/session', (c) => c.json(sessionView(peek(c))));
+  app.get('/api/explore/session', async (c) => c.json(await view(c, peek(c))));
 
-  app.delete('/api/explore/session', (c) => {
+  app.delete('/api/explore/session', async (c) => {
     const a = readActor(c);
     if (a) c.get('store').deleteExplore(a.id);
     // 회원의 로그인 쿠키는 지우지 않는다 (탐색 기록만 삭제).
     if (a?.kind !== 'user' && getCookie(c, SESSION_COOKIE)) deleteCookie(c, SESSION_COOKIE, { path: '/' });
-    return c.json({ ok: true, session: sessionView(emptyState(c.get('now'), a?.kind ?? 'guest')) });
+    // 이미 쓴 상담 횟수는 돌려주지 않는다 (횟수는 쿠키·IP 키에 따로 있다).
+    return c.json({ ok: true, session: await view(c, emptyState(c.get('now'), a?.kind ?? 'guest'), a) });
   });
 
   // ---- F1 시작 정보 ----
@@ -197,7 +228,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     const patch = b.start;
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw bad('start가 필요해요');
     const p = patch as Record<string, unknown>;
-    const { s } = open(c);
+    const { actor, s } = open(c);
     const prev = JSON.stringify([s.start.readiness, s.start.idea, s.start.interests, s.start.interestNote]);
     const prevRegion = JSON.stringify([s.start.reviewRegion, s.start.district, s.start.conditions]);
     const errors: { field: string; message: string }[] = [];
@@ -234,13 +265,13 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     if (JSON.stringify([s.start.reviewRegion, s.start.district, s.start.conditions]) !== prevRegion || s.summary === null) s.regional = null;
     if (s.step === 'start' && validateStart(s.start as StartProfile).length === 0) s.step = 'chat';
     touch(s, c);
-    return c.json({ ...sessionView(s), errors: [...errors, ...validateStart(s.start as StartProfile).filter((e) => !errors.some((x) => x.field === e.field))] });
+    return c.json({ ...(await view(c, s, actor)), errors: [...errors, ...validateStart(s.start as StartProfile).filter((e) => !errors.some((x) => x.field === e.field))] });
   });
 
   // ---- 문제 선택·방향 ----
   app.put('/api/explore/exploration', async (c) => {
     const b = await body(c);
-    const { s } = open(c);
+    const { actor, s } = open(c);
     const cur = s.exploration as Exploration | null;
     const next: Exploration = cur ? { ...cur } : newExploration();
 
@@ -279,7 +310,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     if (problemChanged) {
       // 사용자 입력(대화·이유·방향)은 보존하고, 이전 문제에서 만든 결과는 모두 버린다.
       next.dataVersion = EXPLORE_DATA_VERSION;
-      s.summary = null; s.regional = null; s.prepDone = {}; s.ai = null; s.lastBody = null;
+      s.summary = null; s.regional = null; s.prepDone = {}; s.ai = null; s.lastBody = null; s.fieldQ = null;
       if (s.step === 'result' || s.step === 'summary') s.step = 'summary';
     } else if (s.summary) {
       // 같은 문제에서 이유·방향만 바뀌면 요약의 해당 칸만 맞춘다.
@@ -288,12 +319,23 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
         direction: next.direction ? { text: next.direction, provenance: 'user', status: next.directionStatus } : { text: '아직 탐색 중', provenance: 'unknown', status: 'hold' } } };
     }
     touch(s, c);
-    return c.json({ ...sessionView(s), problemChanged });
+    return c.json({ ...(await view(c, s, actor)), problemChanged });
   });
 
   // ---- F2 대화 ----
   app.post('/api/explore/chat', async (c) => {
     const b = await body(c, false);
+    // 상담 횟수: 아직 세지 않은 빈 대화의 첫 질문 요청이면 열기 전에 한도를 본다 (초과면 세션을 바꾸지 않는다).
+    const prior = readActor(c);
+    const prev = prior ? c.get('store').explore(prior.id) : undefined;
+    if (prev && !prev.counted && prev.messages.length === 0 && validateStart(prev.start as StartProfile).length === 0 && !isExempt(c)) {
+      const q = quotaStatus(c.get('store'), await keysOf(c, prior), c.get('now'), cfg);
+      if (q.blocked) {
+        c.get('store').addLimitHit();
+        const { blocked: _b, ...quota } = q;
+        throw new HttpError(429, 'limit', limitMessage(quota, cfg), undefined, quota);
+      }
+    }
     const { actor, s } = open(c);
     requireStart(s);
     const message = typeof b.message === 'string' ? b.message.trim() : '';
@@ -302,7 +344,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     const claimed = typeof b.questionIndex === 'number' ? b.questionIndex : undefined; // 선택: 화면이 보고 있던 질문 번호 (재전송 판별)
     const now = c.get('now');
     const at = now.toISOString();
-    const ai = exploreAi(c.get('ai').raw, allow, actor.id, now.getTime());
+    const ai = exploreAi(c.get('ai').raw, allow, actor.id, now.getTime(), localTasks(c));
     let failed = false;
     const hasAnswer = !!message || skip || unknown;
     const sig = JSON.stringify([message, skip, unknown]);
@@ -323,7 +365,13 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     };
 
     if (!done0 && !duplicate) {
-      if (s.messages.length === 0) await opening();
+      if (s.messages.length === 0) {
+        if (!s.counted) {
+          if (!isExempt(c)) recordConsult(c.get('store'), await keysOf(c, actor), now, cfg);
+          s.counted = true;
+        }
+        await opening();
+      }
       if (hasAnswer) {
         const key = s.plan[s.questionIndex]!;
         const how = unknown ? 'unknown' : skip && !message ? 'skipped' : 'answered';
@@ -361,7 +409,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     const { actor, s } = open(c);
     requireStart(s);
     const now = c.get('now');
-    const ai = exploreAi(c.get('ai').raw, allow, actor.id, now.getTime());
+    const ai = exploreAi(c.get('ai').raw, allow, actor.id, now.getTime(), localTasks(c));
     const ex = s.exploration as Exploration | null;
     const base = buildSummary({ start: s.start as StartProfile, exploration: ex, answers: s.answers });
     const ctx = aiContext(s);
@@ -417,11 +465,21 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
   });
 
   // ---- 결과 ----
-  app.get('/api/explore/result', (c) => {
+  app.get('/api/explore/result', async (c) => {
     const a = readActor(c);
     const s = (a && c.get('store').explore(a.id)) || emptyState(c.get('now'), a?.kind ?? 'guest');
-    if (a && c.get('store').explore(a.id)) { bump(s, 'result'); s.step = 'result'; touch(s, c); }
-    return c.json(computeResult(s, c.get('now')));
+    const saved = !!a && !!c.get('store').explore(a.id);
+    if (saved) { bump(s, 'result'); s.step = 'result'; touch(s, c); }
+    const result = computeResult(s, c.get('now'));
+    // 현장 질문 문장 다듬기 (선택). 로컬 AI 가 'field' 를 맡으면 Solar 를 부르지 않는다. 저장된 문장이 서명과 맞으면 다시 부르지 않는다.
+    if (saved && a && s.fieldQ?.sig !== fieldSig(s) && !localTasks(c).has('field')) {
+      const now = c.get('now');
+      const ai = exploreAi(c.get('ai').raw, allow, a.id, now.getTime(), localTasks(c));
+      const rules = ruleFieldQuestions(s, result.summary);
+      const r = await ai.field(rules, aiContext(s));
+      if (r.changed) { s.fieldQ = { sig: fieldSig(s), items: r.items }; result.fieldQuestions = r.items; }
+    }
+    return c.json(result);
   });
 
   app.put('/api/explore/conditions', async (c) => {

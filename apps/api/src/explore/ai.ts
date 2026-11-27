@@ -1,6 +1,6 @@
 // 탐색(F2·F3·F5)용 AI 보조. 모든 문장은 사실 검사(guard)를 거치고, 실패하면 null 을 돌려줘 규칙 문장을 쓰게 한다.
 // 출처 표시(provenance)는 여기서 정하지 않는다. 호출한 쪽(코드)이 붙인다.
-import { RESOURCES, type AiFill, type ProblemCard, type Resource } from '@gil/shared';
+import { FIELD_PRESUPPOSE, RESOURCES, type AiFill, type FieldQuestion, type LocalAiTask, type ProblemCard, type Resource } from '@gil/shared';
 import { guardText, parseJson } from '../ai/guard';
 import { SYSTEM_PROMPTS } from '../ai/prompts';
 import type { TextAi } from '../ai/solar';
@@ -22,9 +22,10 @@ export function createLimiter(max: number, windowMs = 3_600_000) {
   };
 }
 
-export function exploreAi(ai: TextAi, allow: (id: string, now: number) => boolean, actorId: string, now: number) {
-  const call = async (task: 'mentor' | 'reason' | 'summary', system: string, user: string): Promise<AiCall> => {
-    if (ai.mode === 'off') return { text: null, limited: false, failed: false };
+/** 로컬 AI 가 다듬는 작업(mentor·reason·field)은 서버가 Solar 를 부르지 않고 규칙 문장을 돌려준다. */
+export function exploreAi(ai: TextAi, allow: (id: string, now: number) => boolean, actorId: string, now: number, local: ReadonlySet<LocalAiTask> = new Set()) {
+  const call = async (task: 'mentor' | 'reason' | 'summary', system: string, user: string, rewrite?: LocalAiTask): Promise<AiCall> => {
+    if (ai.mode === 'off' || (rewrite && local.has(rewrite))) return { text: null, limited: false, failed: false };
     if (!allow(actorId, now)) return { text: null, limited: true, failed: false };
     const text = await ai.generate(task, [{ role: 'system', content: system }, { role: 'user', content: user }], { userId: actorId });
     return { text, limited: false, failed: text === null };
@@ -34,7 +35,7 @@ export function exploreAi(ai: TextAi, allow: (id: string, now: number) => boolea
   return {
     /** 질문 말투. 질문 뜻은 규칙이 정하고 AI 는 직전 답에 가볍게 반응하며 바꿔 말한다. */
     async question(base: string, lastAnswer: string): Promise<{ text: string; failed: boolean }> {
-      const r = await call('mentor', SYSTEM_PROMPTS.mentor, `질문: ${base}\n사용자의 직전 답: ${lastAnswer || '(없음)'}`);
+      const r = await call('mentor', SYSTEM_PROMPTS.mentor, `질문: ${base}\n사용자의 직전 답: ${lastAnswer || '(없음)'}`, 'mentor');
       return { text: guardText(r.text, { allowedText: [base, lastAnswer], knownTitles: otherTitles(), maxLength: 220 }) ?? base, failed: r.failed };
     },
 
@@ -64,10 +65,27 @@ export function exploreAi(ai: TextAi, allow: (id: string, now: number) => boolea
       return { fill, regionalHypothesis: g('regional'), failed: r.failed };
     },
 
+    /**
+     * 현장 확인 질문 문장 다듬기 (task 'field', mentor 모델). 질문 뜻은 규칙이 정하고, 사실 검사·전제 검사에 걸리면 규칙 문장을 둔다.
+     * 응답자·답변·검증 결과는 만들지 않는다. 하나라도 AI 문장이 쓰이면 changed = true.
+     */
+    async field(rules: FieldQuestion[], context: string): Promise<{ items: FieldQuestion[]; changed: boolean }> {
+      let changed = false;
+      const items = await Promise.all(rules.map(async (q) => {
+        const out = await call('mentor', `${RULES}\n현장 사람에게 물어볼 질문 한 문장을 같은 뜻으로 자연스럽게 바꿔 써요. 어려움·불편·구매 의향·비용 지불을 전제하지 말고, 현재 방식과 실제 경험을 묻는 열린 질문으로 써요. 응답자나 답변을 지어내지 않아요. 문장만 출력해요.`,
+          `질문: ${q.question}\n상황: ${context}`, 'field');
+        const t = guardText(out.text, { allowedText: [q.question, q.purpose, context], knownTitles: otherTitles(), maxLength: 140 });
+        if (!t || !/[?？]\s*$/.test(t) || FIELD_PRESUPPOSE.test(t)) return q;
+        changed = true;
+        return { ...q, question: t, source: 'ai' as const };
+      }));
+      return { items, changed };
+    },
+
     /** 추천 이유 개선. 해당 경로의 자료만 쓰고, 통과 못 하면 규칙 이유를 둔다. */
     async reason(r: Resource, ruleReason: string, context: string): Promise<string | null> {
       const facts = `경로 종류: ${r.type}\n제공 내용: ${r.content}\n대상: ${r.target ?? '확인 필요'}\n규칙 이유: ${ruleReason}\n사용자 상황: ${context}`;
-      const out = await call('reason', `${RULES}\n이 경로가 사용자의 어떤 준비를 돕는지 한두 문장으로 써 주세요. 기관 이름과 '이 지역이라서'라는 이유는 쓰지 않아요. 주어진 제공 내용 밖의 도움은 쓰지 않아요. 문장만 출력해요.`, facts);
+      const out = await call('reason', `${RULES}\n이 경로가 사용자의 어떤 준비를 돕는지 한두 문장으로 써 주세요. 기관 이름과 '이 지역이라서'라는 이유는 쓰지 않아요. 주어진 제공 내용 밖의 도움은 쓰지 않아요. 문장만 출력해요.`, facts, 'reason');
       return guardText(out.text, { allowedText: [ruleReason, r.content, r.target ?? '', context], knownTitles: otherTitles([r.title]), maxLength: 160 });
     },
   };
