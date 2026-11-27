@@ -24,4 +24,14 @@ export interface Bindings {
   IP_HASH_SALT?: string;
   /** 배포 버전 정보 (wrangler version_metadata). */
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
+  /** Cloudflare Email Service 바인딩 (send_email). 없으면 개발용 메일러(메모리·로그)를 쓴다. */
+  EMAIL?: { send(m: { to: string; from: string; subject: string; text: string; html: string }): Promise<{ messageId: string }> };
+  /** 보내는 주소 (예: noreply@도메인). EMAIL 바인딩과 함께 필요하다. */
+  MAIL_FROM?: string;
+  /** 메일 링크의 주소 (예: https://gil.example.com). 없으면 요청의 origin. */
+  APP_ORIGIN?: string;
+  /** 비밀번호 pepper (secret). 없으면 개발용 상수(경고 로그). */
+  PASSWORD_PEPPER?: string;
+  /** /bufs 관리자 비밀번호의 bcrypt+pepper 해시 (secret). scripts/hash-admin-password.ts 로 만든다. */
+  ADMIN_PASSWORD_HASH?: string;
 }

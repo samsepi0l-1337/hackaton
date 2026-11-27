@@ -4,12 +4,12 @@
 // 핸들러가 객체를 직접 고치므로, 읽은 레코드는 메모리에 두고 요청이 끝날 때 flush() 로 바뀐 것만 저장한다.
 import type { z } from 'zod';
 import {
-  SEED_AGENCIES, SEED_USERS, seedPrograms,
+  EMPTY_BASIC_PROFILE, SEED_AGENCIES, SEED_USERS, seedPrograms,
   type Agency, type Application, type ChatMessage, type ConsultProfile, type IdeaSummary, type MentorStep,
-  type PlanItem, type Program, type User,
+  type BasicProfile, type PlanItem, type Program, type User,
 } from '@gil/shared';
-import { hashPassword } from './password';
-import { ApplicationSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, SessionSchema, UserSchema, type ExploreState } from './db/schema';
+import { hashLegacyPassword } from './password';
+import { ApplicationSchema, BasicProfileSchema, BufsLockSchema, BufsSessionSchema, FeedbackRecordSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, RecoverySchema, SessionSchema, UserSchema, VerifySchema, type ExploreState, type FeedbackRecord, type RecoveryRecord, type VerifyRecord } from './db/schema';
 
 export interface UserRecord extends User { passwordHash: string }
 
@@ -37,9 +37,25 @@ export interface Store {
   allUsers(): UserRecord[];
   addUser(u: UserRecord): void;
   deleteUser(id: string): void; // 세션·상담·지원서까지 모두 삭제
-  createSession(token: string, userId: string): void;
+  createSession(token: string, userId: string, mustChangePassword?: boolean): void;
   userIdOfSession(token: string): string | undefined;
+  /** 이 세션이 복구 비밀번호로 열렸고 아직 비밀번호를 바꾸지 않았는가. */
+  sessionMustChange(token: string): boolean;
+  clearSessionMustChange(token: string): void;
   deleteSession(token: string): void;
+  /** 한 사용자의 세션 중 keepToken 만 남기고 모두 지운다. */
+  deleteOtherSessions(userId: string, keepToken: string): void;
+  /** 이메일 인증 레코드. 토큰으로도 찾을 수 있다 (토큰 해시 → userId 색인). */
+  verification(userId: string): VerifyRecord | undefined;
+  userIdOfVerifyToken(tokenHash: string): string | undefined;
+  setVerification(userId: string, v: VerifyRecord): void;
+  deleteVerification(userId: string): void;
+  recovery(userId: string): RecoveryRecord | undefined;
+  setRecovery(userId: string, r: RecoveryRecord): void;
+  deleteRecovery(userId: string): void;
+  /** 이메일(해시)별 마지막 요청 시각. 인증 메일 다시 보내기·비밀번호 찾기 제한에 쓴다. */
+  lastRequest(kind: 'verify' | 'forgot', emailHash: string): string | undefined;
+  setLastRequest(kind: 'verify' | 'forgot', emailHash: string, at: string): void;
   mentor(userId: string): MentorState;
   allMentors(): MentorState[];
   setMentor(userId: string, m: MentorState): void;
@@ -56,6 +72,19 @@ export interface Store {
   /** 상담 횟수 초과로 막은 횟수 (관리자 통계). */
   limitHits(): number;
   addLimitHit(): void;
+  /** 내 정보: 기본 정보. 없으면 빈 값. */
+  basicProfile(userId: string): BasicProfile;
+  setBasicProfile(userId: string, p: BasicProfile): void;
+  /** 의견 남기기 기록 (한 건씩). 계정을 지워도 남는다 (이메일은 가린 문자열). */
+  addFeedback(r: FeedbackRecord): void;
+  allFeedback(): FeedbackRecord[];
+  /** /bufs 관리자: 로그인 실패 잠금(IP 해시별)과 세션. */
+  bufsLock(ipHash: string): { fails: number; lockedUntil: string | null };
+  setBufsLock(ipHash: string, v: { fails: number; lockedUntil: string | null }): void;
+  clearBufsLock(ipHash: string): void;
+  createBufsSession(token: string, expiresAt: string): void;
+  bufsSessionValid(token: string, now: Date): boolean;
+  deleteBufsSession(token: string): void;
   getApplication(id: string): Application | undefined;
   saveApplication(a: Application): void;
   /** 이번 요청에서 읽거나 바꾼 레코드를 검사해 저장한다. */
@@ -93,6 +122,14 @@ const K = {
   app: (id: string) => `app:${id}`,
   explore: (id: string) => `explore:${id}`,
   quota: (k: string) => `quota:${k}`,
+  verify: (uid: string) => `verify:${uid}`,
+  vtoken: (h: string) => `vtoken:${h}`,
+  recovery: (uid: string) => `recovery:${uid}`,
+  rate: (kind: string, h: string) => `rate:${kind}:${h}`,
+  profile: (uid: string) => `profile:${uid}`,
+  feedback: (id: string) => `feedback:${id}`,
+  bufsLock: (h: string) => `bufslock:${h}`,
+  bufs: (t: string) => `bufs:${t}`,
   limitHits: 'meta:limitHits',
   seeded: 'meta:seeded',
   schema: 'meta:schema',
@@ -112,7 +149,7 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
   if (!kv.get(K.seeded)) {
     for (const s of SEED_USERS) {
       if (kv.get(K.user(s.id))) continue;
-      const u: UserRecord = { id: s.id, email: s.email, isTeam: s.isTeam, createdAt: now.toISOString(), passwordHash: await hashPassword(s.password) };
+      const u: UserRecord = { id: s.id, email: s.email, isTeam: s.isTeam, createdAt: now.toISOString(), passwordHash: await hashLegacyPassword(s.password), emailVerified: true, mustChangePassword: false };
       kv.put(K.user(u.id), check(UserSchema, u, K.user(u.id)));
       kv.put(K.email(u.email), u.id);
       if (s.profile) kv.put(K.mentor(u.id), check(MentorStateSchema, emptyMentor({ ...s.profile }), K.mentor(u.id)));
@@ -139,7 +176,7 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
     }
   };
   const loadAll = () => {
-    load('user:', UserSchema, users);
+    load('user:', UserSchema, users as Map<string, any>);
     load('mentor:', MentorStateSchema, mentors as Map<string, any>);
     load('app:', ApplicationSchema, apps as Map<string, any>);
     load('explore:', ExploreStateSchema, explores);
@@ -148,6 +185,11 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
     if (prev !== SCHEMA_VERSION) kv.put(K.schema, SCHEMA_VERSION);
   };
   loadAll();
+  // 인증 기능 이전에 만든 시드 사용자는 인증된 것으로 본다.
+  for (const s of SEED_USERS) {
+    const u = users.get(s.id);
+    if (u && !u.emailVerified) { u.emailVerified = true; kv.put(K.user(u.id), check(UserSchema, u, K.user(u.id))); }
+  }
 
   return {
     programs: seedPrograms(now),
@@ -169,15 +211,56 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
       kv.delete(K.user(id));
       kv.delete(K.mentor(id));
       kv.delete(K.explore(id));
+      const v = VerifySchema.safeParse(kv.get(K.verify(id)));
+      if (v.success) kv.delete(K.vtoken(v.data.tokenHash));
+      kv.delete(K.verify(id));
+      kv.delete(K.recovery(id));
+      kv.delete(K.quota(`u:${id}`));
+      kv.delete(K.profile(id));
       explores.delete(id);
       users.delete(id);
       mentors.delete(id);
       for (const [k, v] of kv.list<{ userId: string }>({ prefix: 'session:' })) if (v?.userId === id) kv.delete(k);
       for (const [aid, a] of apps) if (a.userId === id) { kv.delete(K.app(aid)); apps.delete(aid); }
     },
-    createSession(t, uid) {
-      kv.put(K.session(t), check(SessionSchema, { userId: uid, createdAt: new Date().toISOString() }, 'session'));
+    createSession(t, uid, mustChangePassword = false) {
+      kv.put(K.session(t), check(SessionSchema, { userId: uid, createdAt: new Date().toISOString(), mustChangePassword }, 'session'));
     },
+    sessionMustChange(t) {
+      const s = kv.get(K.session(t));
+      return s === undefined ? false : SessionSchema.safeParse(s).data?.mustChangePassword ?? false;
+    },
+    clearSessionMustChange(t) {
+      const s = SessionSchema.safeParse(kv.get(K.session(t)));
+      if (s.success) kv.put(K.session(t), { ...s.data, mustChangePassword: false });
+    },
+    deleteOtherSessions(userId, keep) {
+      for (const [k, v] of kv.list<{ userId: string }>({ prefix: 'session:' })) if (v?.userId === userId && k !== K.session(keep)) kv.delete(k);
+    },
+    verification(uid) {
+      const r = VerifySchema.safeParse(kv.get(K.verify(uid)));
+      return r.success ? r.data : undefined;
+    },
+    userIdOfVerifyToken: (h) => kv.get<string>(K.vtoken(h)),
+    setVerification(uid, v) {
+      const old = VerifySchema.safeParse(kv.get(K.verify(uid)));
+      if (old.success) kv.delete(K.vtoken(old.data.tokenHash));
+      kv.put(K.verify(uid), check(VerifySchema, v, K.verify(uid)));
+      kv.put(K.vtoken(v.tokenHash), uid);
+    },
+    deleteVerification(uid) {
+      const old = VerifySchema.safeParse(kv.get(K.verify(uid)));
+      if (old.success) kv.delete(K.vtoken(old.data.tokenHash));
+      kv.delete(K.verify(uid));
+    },
+    recovery(uid) {
+      const r = RecoverySchema.safeParse(kv.get(K.recovery(uid)));
+      return r.success ? r.data : undefined;
+    },
+    setRecovery(uid, r) { kv.put(K.recovery(uid), check(RecoverySchema, r, K.recovery(uid))); },
+    deleteRecovery(uid) { kv.delete(K.recovery(uid)); },
+    lastRequest: (kind, h) => kv.get<string>(K.rate(kind, h)),
+    setLastRequest(kind, h, at) { kv.put(K.rate(kind, h), at); },
     userIdOfSession(t) {
       const s = kv.get(K.session(t));
       return s === undefined ? undefined : SessionSchema.safeParse(s).data?.userId;
@@ -197,6 +280,29 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
       return list;
     },
     allApplications: () => [...apps.values()],
+    basicProfile(uid) {
+      const r = BasicProfileSchema.safeParse(kv.get(K.profile(uid)));
+      return r.success ? r.data : { ...EMPTY_BASIC_PROFILE };
+    },
+    setBasicProfile(uid, p) { kv.put(K.profile(uid), check(BasicProfileSchema, p, K.profile(uid))); },
+    addFeedback(r) { kv.put(K.feedback(r.id), check(FeedbackRecordSchema, r, K.feedback(r.id))); },
+    allFeedback() {
+      const out: FeedbackRecord[] = [];
+      for (const [, v] of kv.list({ prefix: 'feedback:' })) { const r = FeedbackRecordSchema.safeParse(v); if (r.success) out.push(r.data); }
+      return out;
+    },
+    bufsLock(h) {
+      const r = BufsLockSchema.safeParse(kv.get(K.bufsLock(h)));
+      return r.success ? r.data : { fails: 0, lockedUntil: null };
+    },
+    setBufsLock(h, v) { kv.put(K.bufsLock(h), check(BufsLockSchema, v, K.bufsLock(h))); },
+    clearBufsLock(h) { kv.delete(K.bufsLock(h)); },
+    createBufsSession(t, expiresAt) { kv.put(K.bufs(t), check(BufsSessionSchema, { expiresAt }, K.bufs(t))); },
+    bufsSessionValid(t, now) {
+      const r = BufsSessionSchema.safeParse(kv.get(K.bufs(t)));
+      return r.success && Date.parse(r.data.expiresAt) > now.getTime();
+    },
+    deleteBufsSession(t) { kv.delete(K.bufs(t)); },
     getApplication(id) {
       const a = apps.get(id);
       if (a) touchedApps.add(id);

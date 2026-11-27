@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { setup, demo, team } from './helpers';
+import { setup, demo, team, register } from './helpers';
 
 const FILL = { name: '홍길동', phone: '010-0000-0000', email: 'demo@test.local' };
 
@@ -112,8 +112,7 @@ describe('applications', () => {
     const a = await draft(c);
     expect((await c.get('/api/applications')).body.items.length).toBe(1);
     expect((await c.get(`/api/applications/${a.id}`)).body.program.id).toBe('T-0001');
-    const o = t.client();
-    await o.post('/api/auth/signup', { email: 'o@x.com', password: 'password1', consent: true });
+    const o = await register(t, 'o@x.com');
     expect((await o.get('/api/applications')).body.items).toEqual([]);
     expect((await o.get(`/api/applications/${a.id}`)).status).toBe(404);
     expect((await o.put(`/api/applications/${a.id}`, { values: {} })).status).toBe(404);

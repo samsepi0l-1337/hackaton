@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@gil/shared": "workspace:*",
+    "bcryptjs": "^3.0.3",
     "hono": "^4.6.12",
     "zod": "^4.6.7"
   },
