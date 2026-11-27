@@ -1,113 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { ACTIVITY_UNDECIDED, BUSAN_DISTRICTS, IDEA_MAX_V2 } from '@gil/shared';
-import type { ConsultQuota, Exploration, ExploreOptionsResponse, ExploreSession, ExplorationRequest, ProblemCard, ReadinessStage, ReviewRegion, StartProfile } from '@gil/shared';
+import type { ConsultQuota, ExploreOptionsResponse, ExploreSession, ReadinessStage, ReviewRegion, StartProfile } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { BottomBar } from '../components/BottomBar';
-import { Chip, ChipGroup, MultiChipGroup } from '../components/Chips';
-import { EmptyState } from '../components/States';
+import { ChipGroup, MultiChipGroup } from '../components/Chips';
 import { Counter, Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
 import { hasNoData } from '../lib/coverage';
-import { EvidenceBadge, Progress } from './Common';
+import { Progress } from './Common';
 import { patchStore } from './storage';
 import { DeviceNotice, QUOTA_NOTE, QuotaLine } from './Quota';
 import { localAiAvailable } from '../lib/localAi';
 
 type Save = 'idle' | 'saving' | 'saved' | 'error';
 
-function ProblemCards({ start, exploration, problem, onExploration }: {
-  start: StartProfile; exploration: Exploration | null; problem: ProblemCard | null;
-  onExploration: (b: ExplorationRequest, info: ProblemCard | null) => Promise<boolean>;
-}) {
-  const [items, setItems] = useState<ProblemCard[]>([]);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [emptyReason, setEmptyReason] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  const [note, setNote] = useState('');
-  const [custom, setCustom] = useState(exploration?.customProblem ?? '');
-  const [customOpen, setCustomOpen] = useState(exploration?.origin === 'custom');
-  const [reason, setReason] = useState(exploration?.selectionReason ?? '');
-  const interestsKey = (start.interests ?? []).join(',');
-  const region = start.reviewRegion && start.reviewRegion !== '미정' ? start.reviewRegion : undefined;
-  const seen = useRef<string>('');
-
-  function load(manual = false) {
-    setState('loading');
-    api.problems(start.interests ?? [], region).then((r) => {
-      const ids = r.items.map((i) => i.id).join(',');
-      setNote(manual && ids === seen.current ? '지금 확인된 다른 문제 자료는 없어요.' : '');
-      seen.current = ids;
-      setItems(r.items.slice(0, 3));
-      setEmptyReason(r.emptyReason);
-      setState('ready');
-    }, () => setState('error'));
-  }
-  useEffect(() => {
-    const t = window.setTimeout(load, 400);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interestsKey, region]);
-
-  const origin = exploration?.origin;
-  const selectedId = origin === 'card' ? exploration?.problemId : null;
-
-  const noItems = state === 'ready' && items.length === 0;
-
-  return (
-    <section className="stack" aria-labelledby={noItems ? undefined : 'pc'} aria-label={noItems ? '알아볼 문제 고르기' : undefined}>
-      {!noItems && <h2 id="pc" style={{ marginBottom: 0 }}>어떤 문제를 더 알아보고 싶나요?</h2>}
-      {!noItems && <p className="muted">관심 있는 지역 문제를 선택해 창업 방향을 살펴보세요. 직접 생각한 문제로 시작해도 되고, 나중에 바꿀 수 있어요.</p>}
-      {state === 'loading' && <p className="muted" role="status">문제 자료를 불러오는 중이에요.</p>}
-      {state === 'error' && <EmptyState message="문제 자료를 불러오지 못했어요. 직접 적어서 시작할 수 있어요." action={<button className="btn" onClick={() => load()}>다시 시도</button>} />}
-      {noItems && <p className="muted" role="status">{`현재 확인된 문제 자료가 없습니다${emptyReason ? ` (${emptyReason})` : ''}. 알아보고 싶은 문제가 있으면 '직접 적기'로 적고, 아니면 '아직 탐색 중'을 골라 바로 구상 정리를 시작해도 돼요.`}</p>}
-      {items.map((p) => {
-        const sel = selectedId === p.id;
-        return (
-          <article key={p.id} className={`card stack problem-card${sel ? ' selected' : ''}`}>
-            <div className="row"><EvidenceBadge level={p.evidenceLevel} />{p.test && <span className="badge">팀 검수 전 테스트 자료</span>}{sel && <span className="badge prov-user">선택함</span>}</div>
-            <h3 style={{ margin: 0 }}>{p.title}</h3>
-            <p className="muted">{p.industryTags.join('·')} · {p.region}</p>
-            <p><strong>대상·상황</strong> {p.affectedUser} · {p.situation}</p>
-            <p><strong>기존 방식</strong> {p.currentWorkaround ?? '미확인'}</p>
-            <p className="muted">출처: {p.sourceType}{p.sourceRef ? <> · <a href={p.sourceRef} target="_blank" rel="noreferrer">원문 (새 창)</a></> : ' · 원문 확인 필요'} · 자료 시점 {p.sourceDate ?? '확인 필요'}</p>
-            {p.unknowns.length > 0 && <div><strong>미확인 사항</strong><ul style={{ margin: 0 }}>{p.unknowns.map((u) => <li key={u}>{u}</li>)}</ul></div>}
-            {open === p.id && (
-              <blockquote className="quote">{p.sourceExcerpt ?? '공개 가능한 원문 발췌가 없어요. 출처에서 확인이 필요해요.'}{p.checkedAt && <div>검수일 {p.checkedAt}</div>}</blockquote>
-            )}
-            <div className="row">
-              <button className="btn primary" aria-pressed={sel} onClick={async () => { if (await onExploration({ problemId: p.id, origin: 'card', customProblem: null }, p)) setCustomOpen(false); }}>{sel ? '선택한 문제' : '이 문제 탐색하기'}</button>
-              <button className="btn" aria-expanded={open === p.id} onClick={() => setOpen(open === p.id ? null : p.id)}>{open === p.id ? '근거 닫기' : '근거 보기'}</button>
-            </div>
-          </article>
-        );
-      })}
-      {note && <p className="muted" role="status">{note}</p>}
-      <div className="chips">
-        <Chip selected={customOpen} onClick={() => { setCustomOpen(true); if (custom.trim()) onExploration({ problemId: null, origin: 'custom', customProblem: custom }, null); }}>직접 적기</Chip>
-        <Chip onClick={() => load(true)}>다른 문제 보기</Chip>
-        <Chip selected={origin === 'hold' && !customOpen} onClick={async () => { if (await onExploration({ problemId: null, origin: 'hold', customProblem: null }, null)) setCustomOpen(false); }}>아직 탐색 중</Chip>
-      </div>
-      {customOpen && (
-        <Field label="직접 생각한 문제" hint="사용자가 적은 내용으로 저장되고, 외부 자료로 검증되기 전이에요.">
-          <textarea className="input" rows={3} maxLength={IDEA_MAX_V2} value={custom} onChange={(e) => setCustom(e.target.value)}
-            onBlur={() => { const text = custom.trim(); if (text) onExploration({ problemId: null, origin: 'custom', customProblem: text }, null); else { if (origin === 'custom') onExploration({ problemId: null, origin: 'hold', customProblem: null }, null); setCustomOpen(false); } }} />
-          <Counter n={custom.length} max={IDEA_MAX_V2} />
-        </Field>
-      )}
-      {origin === 'hold' && !customOpen && <p className="muted">문제를 정하지 않아도 구상 정리를 시작할 수 있어요.</p>}
-      {origin === 'card' && (
-        <Field label="이 문제에 관심이 생긴 이유 (선택)" hint="비워 두면 미정으로 남고, AI가 대신 적지 않아요.">
-          <textarea className="input" rows={2} maxLength={IDEA_MAX_V2} value={reason} onChange={(e) => setReason(e.target.value)}
-            onBlur={() => onExploration({ selectionReason: reason.trim() || null }, problem)} />
-        </Field>
-      )}
-    </section>
-  );
-}
-
-export function StartStep({ opts, session, initial, problem, quota, onProblem, onStarted, onSession }: {
-  opts: ExploreOptionsResponse; session: ExploreSession; initial: StartProfile; problem: ProblemCard | null; quota: ConsultQuota | null;
-  onProblem: (p: ProblemCard | null) => void; onStarted: (s: ExploreSession, start: StartProfile) => void; onSession: (s: ExploreSession) => void;
+export function StartStep({ opts, initial, quota, onStarted }: {
+  opts: ExploreOptionsResponse; initial: StartProfile; quota: ConsultQuota | null;
+  onStarted: (s: ExploreSession, start: StartProfile) => void;
 }) {
   const [start, setStart] = useState<StartProfile>(initial);
   const [save, setSave] = useState<Save>('idle');
@@ -139,11 +48,6 @@ export function StartStep({ opts, session, initial, problem, quota, onProblem, o
   const set = <K extends keyof StartProfile>(k: K, v: StartProfile[K]) => { setStart((s) => ({ ...s, [k]: v })); setFieldErr({}); };
   const hasIdeaStage = start.readiness === 'has_idea' || start.readiness === 'preparing';
   const rr = start.reviewRegion;
-
-  async function exploration(b: ExplorationRequest, info: ProblemCard | null) {
-    if ('problemId' in b) onProblem(info);
-    try { onSession(await api.saveExploration(b)); return true; } catch (e) { setErr(errMessage(e)); return false; }
-  }
 
   async function begin() {
     const e: Record<string, string> = {};
@@ -208,8 +112,6 @@ export function StartStep({ opts, session, initial, problem, quota, onProblem, o
             <ChipGroup options={opts.regions as readonly ReviewRegion[]} allowClear value={rr} onChange={(v) => set('reviewRegion', v)} />
             {rr && rr !== '미정' && hasNoData(opts.coverage, rr) && <p className="muted" role="status">{rr}: 상세 지원 경로 준비 중이에요. 구상 정리는 그대로 할 수 있어요.</p>}
           </Field>
-
-          <ProblemCards start={start} exploration={session.exploration} problem={problem} onExploration={exploration} />
         </>
       )}
 

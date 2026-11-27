@@ -151,7 +151,7 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
   const [session, setSession] = useState(boot.session);
   const [start, setStart] = useState(boot.start);
   const [view, setViewState] = useState<ExploreStep>(boot.view);
-  const [problem, setProblem] = useState(boot.problem);
+  const [problem] = useState(boot.problem);
   const [quota, setQuota] = useState<ConsultQuota | null>(quotaHint ?? boot.quota);
   const summary = session.summary;
 
@@ -179,8 +179,7 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
   if (view === 'start') {
     return (
       <>{notice}
-        <Suspense fallback={<CardSkeletons />}><StartStep opts={boot.opts} session={session} initial={start} problem={problem} quota={quota} onProblem={setProblem}
-          onSession={(s) => { setSession((cur) => ({ ...cur, exploration: s.exploration })); patchStore({ serverUpdatedAt: s.updatedAt }); }}
+        <Suspense fallback={<CardSkeletons />}><StartStep opts={boot.opts} initial={start} quota={quota}
           onStarted={(s, st) => { setSession(s); setStart(st); if (s.quota) setQuota(s.quota); patchStore({ serverUpdatedAt: s.updatedAt }); setView(s.summary && s.step !== 'chat' ? 'summary' : 'chat'); }} /></Suspense>
       </>
     );
