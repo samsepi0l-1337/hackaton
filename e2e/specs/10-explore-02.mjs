@@ -7,7 +7,9 @@ await step('chat turns and AI-off fallback', async () => {
   const choice = options.readiness.find((x) => x.value === 'has_idea');
   await page.click(`text="${choice.label}"`);
   await page.fill('textarea[aria-label="하고 싶은 일"]', '지역 직장인을 위한 도시락');
-  await page.click('text="부산"');
+  await page.click('#review-region');
+  await page.click('.region-panel button.region-top:has-text("부산")');
+  await page.click('.region-chips button:has-text("부산 전체")');
   await page.click('text="구상 정리 시작"');
   await seeText('질문 1/3');
   await page.waitForSelector('.bubble.mentor:not([role="status"])');

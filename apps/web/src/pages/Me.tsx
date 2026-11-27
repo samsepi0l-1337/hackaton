@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { APPLICATION_STATUS_LABEL, BUSAN_DISTRICTS, OCCUPATIONS, RESIDENCE_OPTIONS, checkPassword, scoreTypeTest } from '@gil/shared';
+import { APPLICATION_STATUS_LABEL, BUSAN_DISTRICTS, OCCUPATIONS, checkPassword, scoreTypeTest } from '@gil/shared';
 import type { BasicProfile } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { useAuth } from '../components/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PasswordChecklist } from '../components/PasswordChecklist';
+import { RegionPicker } from '../components/RegionPicker';
+import { joinRegionText, splitRegionText } from '../lib/profile';
 import { Field, TextField } from '../components/TextField';
 import { VerifyPanel } from '../components/VerifyPanel';
 import { useAsync } from '../hooks/useAsync';
@@ -85,6 +87,7 @@ function ApplicationsSection() {
 }
 
 const UNKNOWN = 'unknown';
+const RESIDENCE_EXTRAS = [{ value: '그 밖의 지역', label: '그 밖의 지역' }, { value: UNKNOWN, label: '모름' }];
 
 function ProfileSection() {
   const [loaded, setLoaded] = useState(false);
@@ -119,6 +122,9 @@ function ProfileSection() {
     try { const r = await api.saveMyProfile(profile); fill(r.profile); setSaved(true); } catch (x) { setErr(errMessage(x)); } finally { setBusy(false); }
   }
 
+  // 저장값 → 선택기: 부산 구·군은 '해운대구'처럼 지역 없이 저장돼 있다.
+  const picked = (BUSAN_DISTRICTS as readonly string[]).includes(residence) ? { region: '부산', district: residence } : splitRegionText(residence);
+
   return (
     <section id="profile" className="card stack">
       <h2 style={{ margin: 0 }}>기본 정보 (선택)</h2>
@@ -129,12 +135,8 @@ function ProfileSection() {
           <label className="check"><input type="checkbox" checked={ageUnknown} onChange={(e) => setAgeUnknown(e.target.checked)} />모름</label>
         </Field>
         <Field label="거주지">
-          <select className="input" value={residence} disabled={!loaded} onChange={(e) => setResidence(e.target.value)}>
-            <option value="">선택 안 함</option>
-            <optgroup label="부산 구·군">{BUSAN_DISTRICTS.map((d) => <option key={d} value={d}>부산 {d}</option>)}</optgroup>
-            {RESIDENCE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            <option value={UNKNOWN}>모름</option>
-          </select>
+          <RegionPicker id="residence" region={picked.region} district={picked.district} allLabel="선택 안 함" extras={RESIDENCE_EXTRAS}
+            onChange={(r, d) => { if (loaded) setResidence(r ? (r === '부산' && d ? d : joinRegionText(r, d)) : ''); }} />
         </Field>
         <Field label="사업자등록">
           <select className="input" value={biz} disabled={!loaded} onChange={(e) => setBiz(e.target.value)}>

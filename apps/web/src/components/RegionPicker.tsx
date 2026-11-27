@@ -8,11 +8,17 @@ export const AREAS: Record<string, { label: string; districts: string[] }> = {
 };
 
 /** 당근식 지역 선택: 지역을 누르면 바로 아래에 구·군이 펼쳐진다. */
-export function RegionPicker({ id, region, district, onChange }: {
+export function RegionPicker({ id, region, district, onChange, allLabel = '전체', extras = [], allowAreaOnly = true }: {
   id: string;
   region: string | undefined;
   district: string | undefined;
   onChange: (region: string | undefined, district: string | undefined) => void;
+  /** 맨 위 항목(선택을 지운다). */
+  allLabel?: string;
+  /** 지역 목록 뒤에 붙는 항목. 고르면 onChange(value, undefined). */
+  extras?: { value: string; label: string }[];
+  /** false 면 '{지역} 전체' 칩을 숨긴다. */
+  allowAreaOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [area, setArea] = useState<string | undefined>(region);
@@ -36,7 +42,8 @@ export function RegionPicker({ id, region, district, onChange }: {
     trigger.current?.focus();
   }
 
-  const current = region ? (district ? `${region} ${district}` : region) : '전체';
+  const extra = extras.find((x) => x.value === region);
+  const current = region ? (extra ? extra.label : district ? `${region} ${district}` : region) : allLabel;
   return (
     <div className="region-picker" ref={root}>
       <button ref={trigger} id={id} type="button" className="input region-trigger" aria-haspopup="true" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}>
@@ -44,7 +51,7 @@ export function RegionPicker({ id, region, district, onChange }: {
       </button>
       {open && (
         <div className="region-panel" id={panelId}>
-          <button type="button" className="region-top" aria-pressed={!region} onClick={() => pick(undefined, undefined)}>전체</button>
+          <button type="button" className="region-top" aria-pressed={!region} onClick={() => pick(undefined, undefined)}>{allLabel}</button>
           {Object.entries(AREAS).map(([name, a]) => {
             const expanded = area === name;
             return (
@@ -54,7 +61,7 @@ export function RegionPicker({ id, region, district, onChange }: {
                 </button>
                 {expanded && (
                   <div className="region-chips" role="group" aria-label={`${name} ${a.label}`}>
-                    <button type="button" className="chip" aria-pressed={region === name && !district} onClick={() => pick(name, undefined)}>{name} 전체</button>
+                    {allowAreaOnly && <button type="button" className="chip" aria-pressed={region === name && !district} onClick={() => pick(name, undefined)}>{name} 전체</button>}
                     {a.districts.map((d) => (
                       <button key={d} type="button" className="chip" aria-pressed={region === name && district === d} onClick={() => pick(name, d)}>{d}</button>
                     ))}
@@ -63,6 +70,9 @@ export function RegionPicker({ id, region, district, onChange }: {
               </div>
             );
           })}
+          {extras.map((x) => (
+            <button key={x.value} type="button" className="region-top" aria-pressed={region === x.value} onClick={() => pick(x.value, undefined)}>{x.label}</button>
+          ))}
         </div>
       )}
     </div>

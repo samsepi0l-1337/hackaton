@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AFFILIATIONS, BUSAN_DISTRICTS, OUTSIDE_BUSAN, REGIONAL_STATUS_LABEL } from '@gil/shared';
+import { AFFILIATIONS, OUTSIDE_BUSAN, REGIONAL_STATUS_LABEL } from '@gil/shared';
 import type { ExploreFeedbackRequest, ExploreResultResponse, PrepItem, ResourceType, SummaryV2, UserConditions } from '@gil/shared';
 import { Chip } from '../components/Chips';
 import { api } from '../api/client';
@@ -9,7 +9,8 @@ import { ResourceResultCard } from '../components/ResourceView';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import { Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
-import { profileToConditions } from '../lib/profile';
+import { RegionPicker } from '../components/RegionPicker';
+import { joinRegionText, profileToConditions, splitRegionText } from '../lib/profile';
 import { ITEM_LABEL, Progress, ProvBadge, getItem } from './Common';
 import type { ItemKey } from './Common';
 import { clearSnapshot, patchStore, readStore } from './storage';
@@ -43,6 +44,9 @@ function ConditionForm({ initial, fromSaved, onSave, onClose }: { initial?: User
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
+  // '부산 외'는 부산 구·군이 아니라 따로 고르는 항목이다.
+  const picked = residence === OUTSIDE_BUSAN ? { region: OUTSIDE_BUSAN, district: undefined } : splitRegionText(residence);
+
   async function submit() {
     const c: UserConditions = {};
     if (ageUnknown) c.age = 'unknown'; else if (age.trim() && Number.isFinite(Number(age))) c.age = Number(age);
@@ -62,12 +66,9 @@ function ConditionForm({ initial, fromSaved, onSave, onClose }: { initial?: User
           <label className="check"><input type="checkbox" checked={ageUnknown} onChange={(e) => setAgeUnknown(e.target.checked)} />모름</label>
         </Field>
         <Field label="거주지">
-          <select className="input" value={residence} onChange={(e) => setResidence(e.target.value)}>
-            <option value="">선택 안 함</option>
-            {BUSAN_DISTRICTS.map((d) => <option key={d} value={`부산 ${d}`}>부산 {d}</option>)}
-            <option value={OUTSIDE_BUSAN}>{OUTSIDE_BUSAN}</option>
-            <option value="unknown">모름</option>
-          </select>
+          <RegionPicker id="cond-residence" region={picked.region} district={picked.district} allLabel="선택 안 함"
+            extras={[{ value: OUTSIDE_BUSAN, label: OUTSIDE_BUSAN }, { value: 'unknown', label: '모름' }]}
+            onChange={(r, d) => setResidence(joinRegionText(r, d))} />
         </Field>
         <Field label="소속">
           <select className="input" value={affiliation} onChange={(e) => setAffiliation(e.target.value)}>

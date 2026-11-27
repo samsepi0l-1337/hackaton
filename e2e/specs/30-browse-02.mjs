@@ -43,7 +43,7 @@ await step('fit sort with my conditions', async () => {
   await go('/me');
   await page.waitForSelector('#profile input[type=number]:not(:disabled)');
   await page.fill('#profile input[type=number]', '29');
-  await page.selectOption('#profile select >> nth=1', 'false');
+  await page.selectOption('#profile select >> nth=0', 'false');
   await page.click('#profile button.btn.primary');
   await seeText('저장했어요');
   await go('/programs?sort=fit');
