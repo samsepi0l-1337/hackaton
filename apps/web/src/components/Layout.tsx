@@ -5,6 +5,7 @@ import { RouteErrorBoundary } from './RouteErrorBoundary';
 import { loadMentor } from '../lazyPages';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { PortalIcon } from './PortalIcons';
+import { useAuth } from './AuthContext';
 
 const NAV_GROUPS: { label: string; links: [string, string][] }[] = [
   { label: '지원사업', links: [['전체 공고', '/programs'], ['최근 공모', '/programs?sort=recent']] },
@@ -18,6 +19,9 @@ const mentorHints = (to: string) => (to === '/mentor' ? { onPointerEnter: preloa
 
 export function Layout() {
   const loc = useLocation();
+  const { user, loading } = useAuth();
+  // 로그인 전에는 로그인, 로그인 뒤에는 내 정보. 확인 중에는 자리만 지킨다.
+  const loginTo = `/login?next=${encodeURIComponent(loc.pathname + loc.search)}`;
   const [navOpen, setNavOpen] = useState(false);
   // 메뉴는 셋 중 하나라도 해당하면 열린다. 호버는 미리보기, 클릭은 고정, 포커스는 메뉴 안에 있는 동안 유지.
   const [pinned, setPinned] = useState<number | null>(null);
@@ -110,7 +114,9 @@ export function Layout() {
             <div className="account-actions">
               <Link to="/mentor" {...mentorHints('/mentor')} {...cur('/mentor')}><PortalIcon name="chat" /> AI 멘토</Link>
               <Link to="/programs" {...cur('/programs')}><PortalIcon name="search" /> 공고 검색</Link>
-              <Link to="/me" {...cur('/me')}><PortalIcon name="user" /> 내 정보</Link>
+              {user || loading
+                ? <Link to="/me" {...cur('/me')} style={loading ? { visibility: 'hidden' } : undefined}><PortalIcon name="user" /> 내 정보</Link>
+                : <Link to={loginTo} {...cur('/login')}><PortalIcon name="login" /> 로그인</Link>}
               <Link to="/admin" {...cur('/admin')}><PortalIcon name="bars" /> 팀 통계</Link>
             </div>
           </div>
@@ -145,7 +151,7 @@ export function Layout() {
                 </div>
               );
             })}
-            <Link className="mobile-account" to="/me" {...cur('/me')}>내 정보</Link>
+            {user ? <Link className="mobile-account" to="/me" {...cur('/me')}>내 정보</Link> : <Link className="mobile-account" to={loginTo}>로그인</Link>}
             <Link className="mobile-account" to="/admin" {...cur('/admin')}>팀 통계</Link>
           </div>
         </nav>

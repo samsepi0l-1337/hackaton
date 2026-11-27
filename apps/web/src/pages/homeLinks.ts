@@ -13,7 +13,7 @@ export type TileColor = 'blue' | 'teal' | 'coral' | 'violet';
 /** 자주 찾는 서비스. 처음엔 앞 4개, 펼쳐보기 뒤엔 8개 모두. 색은 종류별: 목록·정렬 blue, 내 조건 violet, 유형 teal. */
 export const SHORTCUTS: { label: string; to: string; icon: PortalIconName; color: TileColor }[] = [
   { label: '전체 지원공고', to: '/programs', icon: 'doc', color: 'blue' },
-  { label: '나에게 맞는 순', to: '/programs?sort=fit', icon: 'spark', color: 'violet' },
+  { label: '맞춤형 공고', to: '/programs?sort=fit', icon: 'spark', color: 'violet' },
   { label: '최근 공모', to: '/programs?sort=recent', icon: 'calendar', color: 'blue' },
   { label: '많이 본 공모', to: '/programs?sort=popular', icon: 'flag', color: 'blue' },
   { label: '지원사업 관련 공고', to: '/programs?type=지원사업', icon: 'bag', color: 'teal' },
