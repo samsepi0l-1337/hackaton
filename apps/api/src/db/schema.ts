@@ -92,3 +92,74 @@ export const ApplicationSchema = z.object({
   createdAt: isoTime,
   updatedAt: isoTime,
 });
+
+// ---- 개정 기획(PR #7) 탐색 상태 ----
+// 새 칸은 default 를 둬서, 나중에 칸이 늘어도 예전 레코드가 깨지지 않게 한다.
+const provenance = z.enum(['user', 'ai', 'unknown']);
+const SummaryItemSchema = z.object({ text: z.string().max(2000), provenance });
+const directionStatus = z.enum(['user', 'ai_suggested', 'user_selected', 'hold']);
+const conditionsSchema = z.object({
+  age: z.union([z.number().int().min(0).max(120), z.literal('unknown')]).optional(),
+  residence: z.string().max(40).optional(),
+  affiliation: z.string().max(40).optional(),
+  hasBusiness: z.union([z.boolean(), z.literal('unknown')]).optional(),
+});
+
+export const ExploreStateSchema = z.object({
+  kind: z.enum(['guest', 'user']),
+  createdAt: isoTime,
+  updatedAt: isoTime.nullable().default(null),
+  step: z.enum(['start', 'chat', 'summary', 'result']).default('start'),
+  start: z.object({
+    readiness: z.enum(['no_idea', 'has_idea', 'preparing']).optional(),
+    idea: z.string().max(200).optional(),
+    interests: z.array(z.string().max(40)).max(20).optional(),
+    interestNote: z.string().max(200).optional(),
+    district: z.string().max(20).optional(),
+    reviewRegion: z.enum(['부산', '울산', '경남', '미정']).optional(),
+    conditions: conditionsSchema.optional(),
+  }).default({}),
+  exploration: z.object({
+    problemId: z.string().nullable(),
+    origin: z.enum(['card', 'custom', 'hold']),
+    customProblem: z.string().max(300).nullable(),
+    selectionReason: z.string().max(300).nullable(),
+    direction: z.string().max(300).nullable(),
+    directionStatus: directionStatus,
+    dataVersion: z.string(),
+    suggestions: z.array(z.string().max(300)).max(2),
+  }).nullable().default(null),
+  messages: z.array(ChatMessageSchema).max(200).default([]),
+  questionIndex: z.number().int().min(0).max(3).default(0),
+  plan: z.array(z.string()).max(3).default([]),
+  answers: z.array(z.object({ key: z.string(), text: z.string().max(1000).nullable(), how: z.enum(['answered', 'unknown', 'skipped']) })).max(10).default([]),
+  finished: z.boolean().default(false),
+  summary: z.object({
+    interest: SummaryItemSchema, target: SummaryItemSchema, value: SummaryItemSchema, unknowns: SummaryItemSchema,
+    exploration: z.object({
+      problem: z.object({ title: z.string(), source: z.string().nullable(), evidenceLevel: z.string().nullable() }).nullable(),
+      reason: SummaryItemSchema,
+      direction: z.object({ text: z.string(), provenance, status: directionStatus }),
+      hypotheses: SummaryItemSchema,
+    }),
+  }).nullable().default(null),
+  regional: z.object({
+    region: z.enum(['부산', '울산', '경남', '미정']), basis: z.string(), sourceIds: z.array(z.string()), customerHypothesis: SummaryItemSchema,
+    resourceIds: z.array(z.string()), status: z.enum(['has_basis', 'needs_check', 'weak']),
+  }).nullable().default(null),
+  prepDone: z.record(z.string(), z.boolean()).default({}),
+  /** AI 가 만든 이유 문장 (자료·입력 서명이 같을 때만 쓴다). */
+  ai: z.object({ sig: z.string(), reasons: z.record(z.string(), z.string()) }).nullable().default(null),
+  rejected: z.array(z.string().max(300)).max(20).default([]),
+  lastBody: z.object({ sig: z.string(), at: z.string() }).nullable().default(null),
+  feedback: z.object({
+    helpful: z.boolean().optional(), reason: z.string().max(500).optional(), directionClear: z.boolean().optional(),
+    wantToExplore: z.string().max(500).optional(), foundRegionalPath: z.boolean().optional(), pathName: z.string().max(200).optional(),
+    knowWhatToPrepare: z.object({ before: z.number().min(1).max(5).optional(), after: z.number().min(1).max(5).optional() }).optional(),
+    regionIntent: z.object({ before: z.number().min(1).max(5).optional(), after: z.number().min(1).max(5).optional() }).optional(),
+    at: isoTime,
+  }).nullable().default(null),
+  /** 이벤트 횟수. 원문 대화는 넣지 않는다. */
+  events: z.record(z.string(), z.number().int().min(0)).default({}),
+});
+export type ExploreState = z.infer<typeof ExploreStateSchema>;
