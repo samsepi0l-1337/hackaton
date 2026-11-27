@@ -18,4 +18,6 @@ export interface Bindings {
   DECIDE_ENABLED?: string;
   /** doc-worker 컨테이너를 띄우는 Durable Object. 없으면 모의 양식을 쓴다. */
   DOC_WORKER?: DurableObjectNamespace;
+  /** '0' 이면 컨테이너 인터넷을 끈다 (로컬 dev 확인용). 기본 켬. */
+  DOC_WORKER_INTERNET?: string;
 }
