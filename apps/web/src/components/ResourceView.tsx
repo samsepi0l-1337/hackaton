@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { CONDITION_NOTE, CONDITION_STATUS_LABEL, RECRUIT_STATUS_LABEL } from '@gil/shared';
+import { LOCAL_AI_NOTE } from '../lib/localAi';
 import type { ConditionStatus, RecruitStatus, Resource, ResourceCard } from '@gil/shared';
 
 const RECRUIT_MARK: Record<RecruitStatus, string> = { open: '●', closed: '■', always: '◆', unknown: '?' };
@@ -38,14 +39,14 @@ export function ResourceFacts({ r }: { r: Resource }) {
 }
 
 /** 결과 화면 카드: 이유·조건 상태와 안내 문구를 함께 보인다. */
-export function ResourceResultCard({ card, onLink }: { card: ResourceCard; onLink: () => void }) {
+export function ResourceResultCard({ card, onLink, localReason }: { card: ResourceCard; onLink: () => void; localReason?: string }) {
   const r = card.resource;
   return (
     <article className="card stack">
       <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /></div>
       <h3 style={{ margin: 0 }}><Link to={`/programs/${encodeURIComponent(r.id)}`}>{r.title}</Link></h3>
       <p className="muted">{r.agency}</p>
-      <p><strong>관련 이유</strong> {card.reason}{card.reasonProvenance === 'ai' && <> <span className="badge">AI 제안·미검증</span></>}</p>
+      <p><strong>관련 이유</strong> {localReason ?? card.reason}{(card.reasonProvenance === 'ai' || localReason) && <> <span className="badge">AI 제안·미검증</span></>}{localReason && <span className="muted"> {LOCAL_AI_NOTE}</span>}</p>
       <ResourceFacts r={r} />
       <div className="stack">
         <div className="row"><ConditionBadge status={card.condition.status} /></div>

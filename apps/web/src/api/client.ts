@@ -1,5 +1,7 @@
 import { ROUTES } from '@gil/shared';
-import type { ApiError, ErrorCode, FieldError } from '@gil/shared';
+import { LOCAL_AI_HEADER } from '@gil/shared';
+import type { ApiError, ConsultQuota, ErrorCode, FieldError } from '@gil/shared';
+import { localAiHeaderValue } from '../lib/localAi';
 import type {
   AuthResponse, ExploreChatRequest, ExploreChatResponse, ExploreEventType, ExploreFeedbackRequest, ExploreOptionsResponse,
   ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, StartRequest,
@@ -10,21 +12,29 @@ export class ApiClientError extends Error {
   code: ErrorCode | 'network';
   fields: FieldError[];
   status: number;
-  constructor(status: number, code: ErrorCode | 'network', message: string, fields: FieldError[] = []) {
+  quota?: ConsultQuota;
+  constructor(status: number, code: ErrorCode | 'network', message: string, fields: FieldError[] = [], quota?: ConsultQuota) {
     super(message);
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.quota = quota;
   }
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (path.startsWith('/api/explore')) {
+    const tasks = await localAiHeaderValue();
+    if (tasks) headers[LOCAL_AI_HEADER] = tasks;
+  }
   try {
     res = await fetch(path, {
       method,
       credentials: 'include',
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
@@ -35,7 +45,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   try { data = text ? JSON.parse(text) : null; } catch { /* 본문이 JSON이 아님 */ }
   if (!res.ok) {
     const err = (data as ApiError | null)?.error;
-    throw new ApiClientError(res.status, err?.code ?? 'bad_request', err?.message ?? `요청에 실패했어요 (${res.status})`, err?.fields);
+    throw new ApiClientError(res.status, err?.code ?? 'bad_request', err?.message ?? `요청에 실패했어요 (${res.status})`, err?.fields, err?.quota);
   }
   return data as T;
 }
