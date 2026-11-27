@@ -6,7 +6,9 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 API_PORT=${E2E_API_PORT:-18787}
 WEB_PORT=${E2E_WEB_PORT:-15173}
-BASE="http://127.0.0.1:$WEB_PORT"
+# 쿠키는 포트가 아니라 호스트로 나뉜다. 러너마다 다른 *.localhost 호스트를 써서 동시에 돌려도 서로의 쿠키를 지우지 않는다.
+E2E_HOST=${E2E_HOST:-e2e-$WEB_PORT.localhost}
+BASE="http://$E2E_HOST:$WEB_PORT"
 OUT=${E2E_OUT:-$ROOT/e2e/.out}
 mkdir -p "$OUT"
 API_LOG="$OUT/api.log"
