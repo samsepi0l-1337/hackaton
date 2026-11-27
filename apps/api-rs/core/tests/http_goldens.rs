@@ -19,7 +19,10 @@ fn volatile(s: &str) -> bool {
             }
         })
         .1;
-    hexrun >= 24 || s.starts_with("MOCK-") || is_uuid(s)
+    hexrun >= 24
+        || s.starts_with("MOCK-")
+        || is_uuid(s)
+        || (s.len() > 36 && s.is_char_boundary(s.len() - 36) && is_uuid(&s[s.len() - 36..]))
 }
 
 /// crypto.randomUUID() 꼴 (8-4-4-4-12 소문자 hex). 매번 다른 값이다.
