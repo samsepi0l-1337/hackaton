@@ -102,6 +102,7 @@ impl TestApp {
     pub fn with(mut env: Env, opts: AppOpts) -> Self {
         env.entry("PASSWORD_PEPPER".into())
             .or_insert_with(|| TEST_PEPPER.into());
+        crate::shared::data::use_test_fixtures();
         let ports = FakePorts::default();
         let mut kv = MemKv::default();
         init_store(&mut kv, NOW, &opts, &ports);

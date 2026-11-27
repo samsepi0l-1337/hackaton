@@ -263,6 +263,9 @@ impl GilApp {
                 entries.push((k, v));
             }
         }
+        if env.get("TEST_MODE").map(|s| s == "1").unwrap_or(false) {
+            gil_core::shared::data::use_test_fixtures();
+        }
         let mut kv = MemKv::from_entries(entries);
         init_store(&mut kv, now, &self.opts(env), ports);
         Ok(kv)
