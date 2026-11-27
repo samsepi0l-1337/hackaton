@@ -1,5 +1,6 @@
 // 로컬 시험용 (차등 하네스·E2E). 컨테이너·AI 바인딩 없음, TEST_MODE=1 (시드 사용자, /api/__test/reset, TEST_NOW).
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "gil-api",
   "main": "js/entry.ts",
   "build": { "command": "worker-build --release" },

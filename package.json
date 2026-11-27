@@ -4,11 +4,12 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "apps/api-rs/worker"
   ],
   "scripts": {
-    "test": "bun test packages apps/api",
-    "dev:api": "bun run --cwd apps/api dev",
+    "test": "bun test packages",
+    "dev:api": "bun run --cwd apps/api-rs/worker dev",
     "dev:web": "bun run --cwd apps/web dev",
     "typecheck": "bun x tsc -p packages/shared --noEmit"
   },

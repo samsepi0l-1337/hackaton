@@ -1,4 +1,4 @@
-//! 해보까 API 의 플랫폼 독립 로직. TS `apps/api` + `packages/shared` 와 같은 동작을 낸다.
+//! 해보까 API 의 플랫폼 독립 로직. 플랫폼 독립 로직을 제공한다.
 //! 플랫폼(Workers)은 `gil-worker` 가 맡는다. 여기에는 `worker` 의존이 없어 `cargo test` 로 바로 시험한다.
 //!
 //! JS 와 다른 점 (반드시 지킨다):

@@ -1,8 +1,8 @@
-// Rust(workers-rs) 백엔드 운영 설정. apps/api/wrangler.jsonc 와 같은 이름·바인딩·DO(GilApp, DocWorker)를 쓴다.
+// Rust(workers-rs) 백엔드 운영 설정.
 // 전환할 때 이 설정으로 배포한다 (DO 저장소를 그대로 이어 쓴다).
 {
   // Cloudflare Workers 설정. 배포 전 docs/todo.md 5절(배포 선행 조건)을 확인한다.
-  "$schema": "../../api/node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "gil-api",
   "main": "js/entry.ts",
   "build": { "command": "worker-build --release" },
