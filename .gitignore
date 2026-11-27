@@ -1,0 +1,22 @@
+# AI tool and agent folders (local only)
+.claude/
+.delta/
+.codex/
+.cursor/
+.agents/
+
+# OS and editor
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.next/
