@@ -2,8 +2,9 @@
 use super::{
     constants::{DUE_SOON_DAYS, PAGE_SIZE},
     date::{d_day, is_closed},
-    eligibility::{judge, parse_age_ranges, parse_year_buckets},
+    eligibility::{judge, parse_age_ranges, parse_year_buckets, AgeRanges},
 };
+use crate::jsstr::js_trim;
 use serde_json::{json, Value};
 
 fn text<'a>(v: &'a Value, k: &str) -> &'a str {
@@ -31,23 +32,19 @@ fn matches_stage(p: &Value, stage: &str) -> bool {
     } else if stage == "pre" {
         b["pre"] == true
     } else {
-        b["maxYears"].as_i64().unwrap_or(0)
+        b["maxYears"].as_f64().unwrap_or(0.0)
             >= match stage {
-                "lt1" => 1,
-                "1to3" => 3,
-                _ => 7,
+                "lt1" => 1.0,
+                "1to3" => 3.0,
+                _ => 7.0,
             }
     }
 }
 fn matches_age(p: &Value, age: f64) -> bool {
-    let r = parse_age_ranges(p["targetAge"].as_str());
-    r.is_null()
-        || r == "open"
-        || r.as_array().is_some_and(|a| {
-            a.iter().any(|x| {
-                age >= x[0].as_f64().unwrap_or(0.0) && age <= x[1].as_f64().unwrap_or(f64::INFINITY)
-            })
-        })
+    match parse_age_ranges(p["targetAge"].as_str()) {
+        None | Some(AgeRanges::Open) => true,
+        Some(AgeRanges::Ranges(ranges)) => ranges.iter().any(|(lo, hi)| age >= *lo && age <= *hi),
+    }
 }
 /// TS: function toCard(p: Program, now: Date, profile: ConsultProfile | null): ProgramCard
 pub fn to_card(p: &Value, now: i64, profile: &Value) -> Value {
@@ -55,7 +52,7 @@ pub fn to_card(p: &Value, now: i64, profile: &Value) -> Value {
 }
 /// TS: function listPrograms(programs: Program[], q: ProgramListQuery, now: Date, profile: ConsultProfile | null): ProgramListResponse
 pub fn list_programs(programs: &[Value], q: &Value, now: i64, profile: &Value) -> Value {
-    let kw = text(q, "q").trim().to_lowercase();
+    let kw = js_trim(text(q, "q")).to_lowercase();
     let mut cards: Vec<Value> = programs
         .iter()
         .filter(|p| {
@@ -78,7 +75,7 @@ pub fn list_programs(programs: &[Value], q: &Value, now: i64, profile: &Value) -
             if !text(q, "region").is_empty()
                 && !text(p, "region")
                     .split(',')
-                    .any(|r| r.trim() == text(q, "region"))
+                    .any(|r| js_trim(r) == text(q, "region"))
             {
                 return false;
             }
