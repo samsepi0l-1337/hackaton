@@ -47,6 +47,15 @@ fn user_id(cx: &Cx<'_>) -> Result<String, HttpError> {
     let user = require_user(cx)?;
     Ok(user["id"].as_str().unwrap_or("").to_owned())
 }
+/// 지원서 작성은 AI 초안·문서 파싱 비용이 든다. 창업 준비와 같이 이메일 인증을 마친 계정만 쓴다
+/// (인증 없이 계정을 많이 만들어 비용을 쓰지 못하게).
+fn verified_user_id(cx: &Cx<'_>) -> Result<String, HttpError> {
+    let user = require_user(cx)?;
+    if user["emailVerified"] != true {
+        return Err(HttpError::new(403, "email_unverified", "이메일 인증을 마치면 지원서를 쓸 수 있어요"));
+    }
+    Ok(user["id"].as_str().unwrap_or("").to_owned())
+}
 fn own(cx: &mut Cx<'_>, id: &str) -> Result<Value, HttpError> {
     let uid = user_id(cx)?;
     Store::new(cx.kv, cx.now)
@@ -187,7 +196,7 @@ pub async fn quota(cx: &mut Cx<'_>, _req: &Req) -> HResult {
 }
 /// POST /api/applications
 pub async fn create(cx: &mut Cx<'_>, req: &Req) -> HResult {
-    let uid = user_id(cx)?;
+    let uid = verified_user_id(cx)?;
     let q = application_quota(cx, &uid);
     if q["blocked"] == true {
         let date = q["resetAt"].as_str().and_then(crate::jsstr::parse_ms).and_then(|ms| DateTime::<Utc>::from_timestamp_millis(ms + 9 * 3_600_000)).map(|d| format!("{}월 {}일", d.month(), d.day())).unwrap_or_else(|| "며칠 뒤".into());
@@ -485,5 +494,18 @@ mod tests {
         assert_eq!(saved["fields"][0]["value"], "Alice");
         assert_eq!(saved["status"], "drafting");
         assert_eq!(saved["updatedAt"], at);
+    }
+
+    #[test]
+    fn unverified_accounts_cannot_create_applications() {
+        use crate::testkit::TestApp;
+        let mut app = TestApp::new();
+        let mut c = app.client();
+        let pw = "Unverified123!";
+        let b = json!({"email":"new@example.com","password":pw,"passwordConfirm":pw,"consent":true});
+        assert_eq!(app.call(&mut c, "POST", "/api/auth/signup", Some(b)).0, 201);
+        assert_eq!(app.call(&mut c, "POST", "/api/auth/login", Some(json!({"email":"new@example.com","password":pw}))).0, 200);
+        let (s, v, _) = app.call(&mut c, "POST", "/api/applications", Some(json!({"programId":"any"})));
+        assert_eq!((s, v["error"]["code"].as_str()), (403, Some("email_unverified")));
     }
 }
