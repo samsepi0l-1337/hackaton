@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot src/server.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "eval:solar": "bun scripts/eval/run.ts"
   },
   "dependencies": {
     "@gil/shared": "workspace:*",
