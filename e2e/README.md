@@ -13,4 +13,5 @@ e2e/run.sh e2e/specs/10-explore.mjs
 - 상담은 계정당 7일 3회라서, 상담하는 spec 은 `newAccount()` 로 새 계정을 만든다.
 - `/bufs` 관리자 비밀번호는 `ADMIN_PASSWORD`(E2E 전용), 팀 계정은 시드 `team@test.local` / `team1234!`.
 - 없는 spec 파일을 넘기면 FAIL 이다.
+- 러너는 `E2E_MAIL_LOG=1` 로 API 를 띄운다. 메일 본문이 API 로그에 남아 `lastMailBody(email)`·`lastVerifyCode(email)` 로 인증 코드와 복구 비밀번호를 읽는다 (E2E 전용).
 - 결과와 로그, 실패 스크린숏은 `e2e/.out/` 에 남는다.
