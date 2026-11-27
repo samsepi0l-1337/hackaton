@@ -87,7 +87,7 @@ export function Home() {
         <div className="middle-stack">
           <section className="pane service-panel" id="how-to">
             <div className="pane-title">
-              <h2>원스톱 창업 상담</h2>
+              <h2>원클릭 창업 상담</h2>
             </div>
             <p>아이디어 정리부터 지원사업 추천까지</p>
             <ol className="process-list">

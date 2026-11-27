@@ -5,7 +5,7 @@ async function waitTitles(titles) {
 }
 await step('home and program cards', async () => {
   await go('/');
-  await seeText('원스톱 창업 상담');
+  await seeText('원클릭 창업 상담');
   await go('/programs');
   await page.waitForSelector('article');
   const cards = await page.evaluate(() => [...document.querySelectorAll('article')].map(a => ({ title: a.querySelector('h3')?.innerText, link: a.querySelector('h3 a')?.getAttribute('href') })));
