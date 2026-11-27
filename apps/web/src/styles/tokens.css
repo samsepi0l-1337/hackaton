@@ -1,0 +1,40 @@
+/* 디자인 토큰. 색·글꼴·간격·모서리는 여기서만 바꾼다. */
+:root {
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-text: #1b1f27;
+  --color-muted: #667085;
+  --color-border: #e1e5eb;
+  --color-primary: #1d5fd6;
+  --color-primary-contrast: #ffffff;
+  --color-primary-soft: #e8f0fe;
+  --color-danger: #d92d20;
+  --color-danger-soft: #fdecea;
+  --color-warn: #b54708;
+  --color-warn-soft: #fff4e5;
+  --color-ok: #067647;
+  --color-ok-soft: #e7f6ee;
+
+  --font-base: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --font-size-sm: 13px;
+  --font-size-base: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-hero: 26px;
+  --line-height: 1.55;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+  --header-height: 56px;
+  --bottom-bar-height: 64px;
+  --content-width: 960px;
+}
