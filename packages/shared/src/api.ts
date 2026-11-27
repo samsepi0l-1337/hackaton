@@ -1,6 +1,11 @@
 // API 계약. 경로·요청·응답 모양은 여기서만 정한다. API와 웹이 이 파일을 같이 쓴다.
 // 모든 경로 앞에 /api. 인증은 HttpOnly 세션 쿠키 `sid`. 오류는 ApiError 모양, 상태 코드는 아래 주석.
 import type {
+  ExplorationOrigin, DirectionStatus, Exploration, ProblemCard, RegionalContext, RegionalContextCard, PrepItem,
+  ResourceCard, StartProfile, SummaryV2,
+} from './explore';
+import type { READINESS_OPTIONS } from './explore';
+import type {
   Agency, Application, ChatMessage, ConsultProfile, Eligibility, FieldError, IdeaSummary, PlanItem,
   Program, ProgramCard, Recommendation, Stage, Stats, TypeResult, User, Verdict,
 } from './types';
@@ -51,7 +56,92 @@ export const ROUTES = {
   retry: (id: string) => `/api/applications/${encodeURIComponent(id)}/retry`, // POST → ApplicationView (실패 시 1회)
 
   stats: '/api/admin/stats', // GET → Stats (팀 계정만)
+
+  // ---- 개정 기획(PR #7): 비회원 탐색 흐름 ----
+  // 로그인 없이 쓴다. 첫 쓰기 요청 때 게스트 기록과 쿠키 sid 를 만든다 (현재 기기 = 이 쿠키).
+  exploreOptions: '/api/explore/options', // GET → ExploreOptionsResponse
+  problems: '/api/explore/problems', // GET ?interests=AI,조선·해양&region=부산 → ProblemsResponse (최대 3개)
+  explore: '/api/explore/session', // GET → ExploreSession, DELETE → 초기화 (서버 기록·쿠키 삭제)
+  start: '/api/explore/start', // PUT StartRequest → ExploreSession (F1 자동 저장, 최소 입력만 검사)
+  exploration: '/api/explore/exploration', // PUT ExplorationRequest → ExploreSession (문제 선택·변경·보류, 방향 선택)
+  exploreChat: '/api/explore/chat', // POST ExploreChatRequest → ExploreChatResponse (최대 3문항)
+  exploreSummary: '/api/explore/summary', // POST → { summary, regional } 생성, PUT { summary } → 수정 (준비 완료 표시 초기화)
+  exploreResult: '/api/explore/result', // GET → ExploreResultResponse
+  conditions: '/api/explore/conditions', // PUT { conditions: UserConditions } → ExploreResultResponse ('모름' 허용)
+  prepDone: '/api/explore/prep', // PUT { id, done } → { prep }
+  exploreFeedback: '/api/explore/feedback', // POST ExploreFeedbackRequest → { ok: true }
+  events: '/api/explore/events', // POST { type: ExploreEventType, resourceId? } → { ok: true } (원문 대화 넣지 않음)
+  resources: '/api/resources', // GET ?type=&stage=&q= → { items: ResourceCard[] } (F18)
+  resource: (id: string) => `/api/resources/${encodeURIComponent(id)}`, // GET → ResourceCard
 } as const;
+
+// ---- 개정 기획 요청·응답 ----
+export interface ExploreOptionsResponse {
+  readiness: typeof READINESS_OPTIONS;
+  interests: string[]; // INDUSTRY_TAGS + INTEREST_EXTRA
+  regions: readonly string[];
+  coverage: Record<string, { problems: number; resources: number; contexts: number }>; // 지역별 실제 자료 수 (정직하게 표시)
+  dataVersion: string;
+  privacy: string; // 시작 전 안내: 서버·외부 AI(Upstage) 전송, 기기 저장, 초기화 범위
+}
+export interface ProblemsResponse { items: ProblemCard[]; dataVersion: string; emptyReason: string | null }
+
+export type ExploreStep = 'start' | 'chat' | 'summary' | 'result';
+export interface ExploreSession {
+  step: ExploreStep;
+  start: StartProfile;
+  exploration: Exploration | null;
+  messages: ChatMessage[];
+  questionIndex: number; // 0..3
+  maxQuestions: number; // 3
+  summary: SummaryV2 | null;
+  regional: RegionalContextCard | null;
+  updatedAt: string | null;
+}
+export interface StartRequest { start: Partial<StartProfile> }
+export interface ExplorationRequest {
+  problemId?: string | null;
+  origin?: ExplorationOrigin;
+  customProblem?: string | null;
+  selectionReason?: string | null;
+  direction?: string | null;
+  directionStatus?: DirectionStatus;
+}
+export interface ExploreChatRequest {
+  message?: string;
+  skip?: boolean; // 건너뛰기
+  unknown?: boolean; // 아직 모르겠어요 → 미정으로 저장
+  wantSuggestions?: boolean; // 방향 예시 요청 (사용자가 원할 때만, 최대 2개)
+  finish?: boolean; // 지금까지 내용 정리 (일찍 결과로)
+}
+export interface ExploreChatResponse {
+  messages: ChatMessage[]; // 누적 전체
+  questionIndex: number;
+  done: boolean;
+  suggestions: string[]; // AI 제안 (선택 전까지 사용자 선택 아님)
+  failed: boolean; // AI 장애 → 웹은 재시도·직접 정리 양식을 보여준다
+}
+export interface ExploreResultResponse {
+  summary: SummaryV2 | null;
+  regional: RegionalContextCard | null; // 선택 필드
+  contexts: RegionalContext[]; // regional.sourceIds 의 실제 자료
+  prep: { primary: PrepItem; followUps: PrepItem[] }; // 후속 최대 2개
+  resources: ResourceCard[]; // 최대 3개, 억지로 채우지 않음
+  noMatchReason: string | null; // 맞는 경로가 없을 때
+  coverageNote: string; // 실제 제공 지역·자료 범위 안내
+  conditionNote: string; // CONDITION_NOTE
+}
+export type ExploreEventType = 'start' | 'chat_done' | 'result' | 'resource_link' | 'regional_expand' | 'feedback';
+export interface ExploreFeedbackRequest {
+  helpful?: boolean;
+  reason?: string;
+  directionClear?: boolean; // 더 알아보고 싶은 창업 방향을 정리할 수 있었다
+  wantToExplore?: string; // 선택한 문제에서 더 알아보고 싶은 부분
+  knowWhatToPrepare?: { before?: number; after?: number }; // 1~5
+  regionIntent?: { before?: number; after?: number }; // 1~5, 부울경 검토 의향
+  foundRegionalPath?: boolean;
+  pathName?: string;
+}
 
 // ---- 공고 ----
 export interface ProgramListQuery {

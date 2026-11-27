@@ -11,3 +11,5 @@ export * from './query';
 export * from './seed';
 export * from './api';
 export * from './cloudflare';
+export * from './explore';
+export * from './data';
