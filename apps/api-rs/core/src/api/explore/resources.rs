@@ -207,6 +207,9 @@ pub async fn detail(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
         .record_view(id, &who, cx.now)
         .map_err(|_| bad("요청을 처리하지 못했어요"))?;
     let user = actor(cx);
+    if let Some(uid) = user.as_deref() {
+        Store::new(cx.kv, cx.now).record_recent_view(uid, id).map_err(|_| bad("요청을 처리하지 못했어요"))?;
+    }
     let s = user
         .as_deref()
         .and_then(|u| Store::new(cx.kv, cx.now).explore(u));

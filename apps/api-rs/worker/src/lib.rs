@@ -287,6 +287,7 @@ impl GilApp {
         let test = env.get("TEST_MODE").map(|s| s == "1").unwrap_or(false);
         AppOpts {
             seed_users: test,
+            application_limit: Some((2, 7)),
             purge_test_data: !test,
             ..Default::default()
         }

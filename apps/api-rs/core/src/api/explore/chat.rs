@@ -31,6 +31,7 @@ pub fn plan_questions(start: &Value, exploration: &Value, answers: &[Value]) -> 
         let slot = ["interestOnly", "prepared", "contact", "trigger", "direction", "reason"].iter().find_map(|key| plan.iter().position(|p| p == key)).unwrap_or(1);
         plan[slot] = "region".into();
     }
+    if start["focusResourceId"].as_str().is_some_and(|s| !s.is_empty()) { plan[0] = "focus".into(); }
     plan
 }
 fn norm(s: &str) -> String { s.chars().filter(|c| !crate::jsstr::is_js_ws(*c)).collect() }
