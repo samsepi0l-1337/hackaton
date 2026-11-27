@@ -1,9 +1,12 @@
 // 작업별 AI 호출 + 사실 검사 + 규칙 대체. 여기서 null 을 돌려주면 호출한 쪽이 규칙 결과를 그대로 쓴다.
-import { dDayLabel, type ConsultProfile, type FormField, type IdeaSummary, type PlanItem, type Program, type Recommendation } from '@gil/shared';
+import { dDayLabel, type ConsultProfile, type ParsedDocument, type FormField, type IdeaSummary, type PlanItem, type Program, type Recommendation } from '@gil/shared';
 import type { Bindings } from '../env';
 import { createDecide } from './decide';
 import { guardText, parseJson } from './guard';
-import { SYSTEM_PROMPTS } from './prompts';
+import { DOC_SUMMARY_PROMPT, SYSTEM_PROMPTS } from './prompts';
+
+/** 정리에 넣는 본문 최대 길이. 길면 응답이 느려져 양식 읽기 시간 제한을 넘는다. */
+export const DOC_SUMMARY_INPUT_CHARS = 12_000;
 import { createTextAi, type AiDeps } from './solar';
 
 const SUMMARY_KEYS = ['problem', 'customer', 'solution', 'revenue', 'busan'] as const;
@@ -87,6 +90,19 @@ export function createAiTasks(env: Partial<Bindings> = {}, deps: AiDeps = {}) {
         res.push({ day: i + 1, task: g, done: false });
       }
       return res;
+    },
+
+    /** F16. Document Parse 로 읽은 문서를 Solar 로 정리. 숫자·날짜가 원문에 없으면(사실 검사 탈락) null. */
+    async docSummary(doc: ParsedDocument, userId?: string): Promise<string | null> {
+      if (ai.mode === 'off' || !doc.text.trim()) return null;
+      const out = await ai.generate('extract', [
+        { role: 'system', content: DOC_SUMMARY_PROMPT },
+        { role: 'user', content: `파일: ${doc.fileName}\n본문:\n${doc.text.slice(0, DOC_SUMMARY_INPUT_CHARS)}` },
+      ], { userId });
+      const g = guardText(out, { allowedText: [doc.text, doc.fileName], maxLength: 1500 });
+      if (out && !g) console.warn('[ai] 문서 정리 사실 검사 탈락, 정리 없이 저장합니다');
+      // guardText 가 줄바꿈을 지우므로 항목 이름 앞에서 다시 줄을 나눈다.
+      return g && g.replace(/\s+(?=(?:지원 내용|신청 기간|제출 서류|신청 양식 항목):)/g, '\n');
     },
 
     /** F13. 신원 항목은 건드리지 않고, 값이 있는 비신원 항목만 글자 수 안에서 덮어쓴다. */

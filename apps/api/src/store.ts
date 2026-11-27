@@ -9,7 +9,7 @@ import {
   type BasicProfile, type PlanItem, type Program, type User,
 } from '@gil/shared';
 import { hashLegacyPassword } from './password';
-import { ApplicationSchema, BasicProfileSchema, BufsLockSchema, BufsSessionSchema, FeedbackRecordSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, RecoverySchema, SessionSchema, UserSchema, VerifySchema, ViewsSchema, LikesSchema, type ExploreState, type FeedbackRecord, type RecoveryRecord, type VerifyRecord } from './db/schema';
+import { ApplicationSchema, BasicProfileSchema, BufsLockSchema, BufsSessionSchema, FeedbackRecordSchema, ParsedDocRecordSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, RecoverySchema, SessionSchema, UserSchema, VerifySchema, ViewsSchema, LikesSchema, type ExploreState, type FeedbackRecord, type ParsedDocRecord, type RecoveryRecord, type VerifyRecord } from './db/schema';
 
 export interface UserRecord extends User { passwordHash: string }
 
@@ -93,6 +93,9 @@ export interface Store {
   likes(userId: string): string[];
   setLikes(userId: string, ids: string[]): void;
   viewCounts(): Map<string, number>;
+  /** Document Parse 로 읽은 첨부 (첨부 URL 기준). 없거나 모양이 깨졌으면 undefined. */
+  parsedDoc(url: string): ParsedDocRecord | undefined;
+  saveParsedDoc(r: ParsedDocRecord): void;
   /** 같은 보는 사람(viewer 해시)은 자료마다 VIEW_WINDOW_MS 안에 한 번만 센다. 센 경우 true. */
   recordView(resourceId: string, viewer: string, now: Date): boolean;
 
@@ -143,11 +146,23 @@ const K = {
   bufsLock: (h: string) => `bufslock:${h}`,
   bufs: (t: string) => `bufs:${t}`,
   views: (id: string) => `views:${id}`,
+  doc: (url: string) => `doc:${urlHash(url)}`,
   limitHits: 'meta:limitHits',
   seeded: 'meta:seeded',
   purged: 'meta:purged-test-v1',
   schema: 'meta:schema',
 };
+
+/** 첨부 URL 을 짧은 키로 바꾼다 (FNV-1a 두 벌). 충돌은 레코드의 url 을 비교해 막는다. */
+export function urlHash(url: string): string {
+  let a = 0x811c9dc5, b = 0xcbf29ce4;
+  for (let i = 0; i < url.length; i++) {
+    const c = url.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193) >>> 0;
+    b = Math.imul(b ^ c, 0x01000197) >>> 0;
+  }
+  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
+}
 
 /** 저장 모양 버전. 레코드 모양을 깨는 변경을 하면 올린다. 예전 모양 레코드는 읽을 때 건너뛴다. */
 export const SCHEMA_VERSION = 2;
@@ -342,6 +357,11 @@ export async function createStore(now: Date, kv: KvLike = memoryKv(), opts: Stor
       return r.success ? r.data : [];
     },
     setQuota(key, times) { kv.put(K.quota(key), check(QuotaSchema, times, K.quota(key))); },
+    parsedDoc(url) {
+      const r = ParsedDocRecordSchema.safeParse(kv.get(K.doc(url)));
+      return r.success && r.data.url === url ? r.data : undefined;
+    },
+    saveParsedDoc(r) { kv.put(K.doc(r.url), check(ParsedDocRecordSchema, r, K.doc(r.url))); },
     likes(uid) {
       const r = LikesSchema.safeParse(kv.get(K.likes(uid)));
       return r.success ? r.data : [];
