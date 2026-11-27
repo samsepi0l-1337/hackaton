@@ -10,17 +10,25 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | 영역 | 상태 |
 |---|---|
 | 공통 패키지(타입·계약·규칙·테스트 데이터) | 완료 (#5) |
-| API (메모리 저장소) | 완료 (#6) |
-| 목업 웹 | 완료 (#8) |
+| 백엔드 | 완료: Rust → WebAssembly Cloudflare Worker (`apps/api-rs`, workers-rs). TypeScript 백엔드는 삭제 |
+| 웹 | 완료: 해보까 포털 디자인으로 개편 ([DESIGN.md](../DESIGN.md)) |
 | 국내 AI (Upstage) + AI Gateway | 운영 중, 모든 호출 게이트웨이 경유. 동적 라우트 전환은 보류 |
-| Cloudflare Containers doc-worker | 구현·로컬 통합 완료, 실제 공고 확인은 배포 후 |
-| DB (Durable Object SQLite + Zod) | 완료 |
-| 배포 | 완료: https://gil-api.samsepi0l1337.workers.dev |
+| Cloudflare Containers DocWorker | 운영 중. 신청서 양식이 붙은 공고 확인은 남음 |
+| 저장소 | 완료: `GilApp` Durable Object 안의 KV |
+| 지원서 작성 | 구현 중 (이 변경과 함께 반영): 초안 → 제출 전 확인 → 모의 제출 |
+| 배포 | 완료: https://haeboka.dreamp.org (workers.dev 주소는 보조로 유지) |
 
 ## 1. 공통·기반
 
-- [x] bun 워크스페이스, `packages/shared`, `apps/api`, `apps/web` 구조 (#5)
+- [x] bun 워크스페이스, `packages/shared`, `apps/web` 구조 (#5)
 - [x] API 계약 `packages/shared/src/api.ts` (#5)
+- [x] 백엔드를 Rust(workers-rs)로 옮김. `gil-core`(공용 로직) + `gil-worker`(어댑터). 골든(`apps/api-rs/goldens`)은 고정 회귀 데이터로 유지
+- [x] TypeScript 백엔드(`apps/api`, Hono)와 비교 도구(`harness/diff.ts`, `record-http.ts`, `E2E_BACKEND`) 삭제
+- [x] 운영 주소 https://haeboka.dreamp.org (Rust Worker)
+- [x] 웹 해보까 포털 디자인 개편: 메인(자주 찾는 서비스, 단계 탭, 원클릭 창업 상담, 마감 임박 공고), 공고 목록·상세(상태·조건 배지), /mentor 3단계, /guide, /me, /test, /bufs. 이름 해보까로 통일
+- [~] 지원서 작성 (이 변경과 함께 반영)
+  - [x] API `/api/applications` (계약 `packages/shared/src/api.ts`), 공고 양식 읽기(DocWorker + Document Parse, URL별 캐시), Solar 초안(신원 정보 칸 제외), 모의 제출(`MOCK-…`)
+  - [~] 웹: 공고 상세에서 초안 만들기, `/applications/:id`(수정 → 제출 전 확인 → 모의 제출), 내 정보의 내 지원서
 - [x] 테스트 데이터: 실행일 기준 상대 마감일, 가능/확인 필요/불가/마감/상시/부산/전국 (#5)
 - [x] Cloudflare 연동 계약 `packages/shared/src/cloudflare.ts` (AI 작업 종류, doc-worker HTTP 계약)
 - [x] 개정안 PR #7 머지 (최종 d6eb693)
@@ -40,7 +48,7 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 
 | 상태 | ID | 기능 | 비고 |
 |---|---|---|---|
-| [x] | F0 | 회원가입·로그인 | PBKDF2, HttpOnly 쿠키 (#6, #8) |
+| [x] | F0 | 회원가입·로그인 | bcrypt + pepper, HttpOnly 쿠키 |
 | [x] | F1 | 사전 상담 폼 | 섹션 검사·자동 저장 (#6, #8) |
 | [~] | F2 | AI 멘토 되묻기 | 규칙 질문 완료. AI 문장은 Solar Mini (3절) |
 | [~] | F3 | 아이디어 요약 | 규칙 요약 완료. AI 요약은 Solar Pro (3절) |
@@ -48,16 +56,16 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | [~] | F5 | Top3 | 규칙 점수 (#5). 관련도는 Solar Decide (3절) |
 | [~] | F6 | 추천 이유 | 규칙 문장 완료. Solar Mini 문장 + 사실 검사 (3절) |
 | [x] | F7 | 마감 정리 | 조회 시 계산. 새벽 배치는 F8과 함께 |
-| [ ] | F8 | 새 공고 반영 | K-Startup API 키 **입력 필요**, Cron + doc-worker 내려받기 + Document Parse로 첨부 조건 추출 |
+| [x] | F8 | 새 공고 반영 | K-Startup 수집 (매일 03:00 KST cron + 운영자 요청). 첨부 조건 추출은 남음 (4절) |
 | [x] | F9 | 대화 기억 | 계정별 세션 (메모리) |
 | [x] | F10 | 추천 평가 | (#6, #8) |
 | [x] | F11 | 찾아갈 기관 | 주소는 팀 확인 **입력 필요** |
 | [x] | F12 | 7일 계획 | 규칙 계획. AI 준비 안내는 3절 |
-| [~] | F13 | 지원서 초안 | 모의 양식 항목. 실제 양식 항목은 Document Parse (3·4절) |
+| [~] | F13 | 지원서 초안 | 공고 양식을 Document Parse 로 읽고 Solar 가 초안 작성. 웹 화면 반영 중 (1절) |
 | [x] | F14 | 팀 통계 | (#6, #8) |
 | [ ] | F15 | 대학생 지원 확장 | P2 |
-| [~] | F16 | 자동 제출 | 모의 제출만. 양식 채우기는 doc-worker `/fill`, 외부 사이트 실제 제출은 약관 확인 **입력 필요** |
-| [x] | F17 | 제출 내역 | (#6, #8) |
+| [~] | F16 | 자동 제출 | 모의 제출만 한다 (실제 신청은 공식 사이트). 외부 사이트 실제 제출은 약관 확인 **입력 필요** |
+| [~] | F17 | 제출 내역 | 내 정보의 내 지원서 목록 (반영 중) |
 | [x] | F18 | 공고 모음·검색 | (#6, #8) |
 | [x] | F19 | 창업 유형 테스트 | (#5, #8) |
 | [x] | F20 | 메인 | (#8) |
@@ -103,15 +111,15 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] 계약: `packages/shared/src/cloudflare.ts` (작업별 모델, AI 모드, Decide·Document Parse 상수, doc-worker 계약)
 - [x] `recommend()`가 AI 관련도 확률(0..1)을 받음, 후보 26개 이하로 줄이는 `relevanceCandidates()`
 - [x] 라우트 정의 `infra/ai-gateway/route.json` (`dynamic/gil`): 사용자별 시간당 40회 → 하루 비용 한도 → mentor·reason은 Solar Mini, 나머지는 Solar Pro → 실패 시 Mini → Workers AI
-- [x] `apps/api/src/ai/`: Solar 클라이언트(upstage 직접 / route), 시간 초과, 규칙 폴백, 사실 검사
+- [x] `apps/api-rs/core/src/api/ai/`: Solar 클라이언트(upstage 직접 / route), 시간 초과, 규칙 폴백, 사실 검사
 - [x] 작업별 연결: F2 질문 문장, F3 요약, F6 이유, F12 계획, F13 초안
 - [x] Solar Decide 관련도 → Top3 점수 (jev와 같은 형식이라 base URL만 바꿔 비교 가능)
 - [x] 실제 키로 Solar·Decide 응답 확인 (Decide ~1초, Solar Mini ~1.5초, Solar Pro 요약 ~11초)
 - [x] Decide 는 `solar-decide-flash`, 3초 제한 + 1회 재시도 (로컬 workerd 에서 연결이 가끔 멈춤)
 - [x] Solar Pro 작업 시간 제한 15초, 요약 JSON 키 이름 흔들림 대응
-- [x] `apps/api/src/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기, discover→download→parse 파이프라인
+- [x] `apps/api-rs/core/src/api/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기, discover→download→parse 파이프라인
 - [x] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답·Document Parse 응답
-- [x] Upstage API 키 `gil-hackathon` 발급, 로컬 `apps/api/.dev.vars` (git 제외)
+- [x] Upstage API 키 `gil-hackathon` 발급, 로컬 개발 변수 파일 (git 제외)
 - [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요** — 지금은 동의 없이도 호출됨
 - [x] AI Gateway `gil-gateway` 생성(인증·로그·분당 120회), 커스텀 provider `upstage`, Upstage 키 BYOK, 동적 라우트 `dynamic/gil` 생성·배포 (`infra/ai-gateway/`)
 - [x] 운영: Solar·Decide·Document Parse 모두 게이트웨이 경유 (`UPSTAGE_BASE_URL`=custom-upstage, secret `CF_AIG_TOKEN` Run 권한). Worker 의 Upstage 키 secret 삭제
@@ -136,11 +144,11 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 
 ## 5. 배포 (선행 조건)
 
-- [x] DB: `GilApp` Durable Object 의 SQLite KV + Zod 스키마 검사 (`apps/api/src/db/schema.ts`, `store.ts`). 재시작해도 데이터 유지
+- [x] 저장소: `GilApp` Durable Object 의 KV + 스키마 검사 (`apps/api-rs/core/src/api/schema.rs`, `store.rs`). 재시작해도 데이터 유지
 - [x] 웹 정적 파일을 같은 Worker 에서 제공 (Workers Static Assets, `/api/*` 만 Worker 가 먼저 받음)
 - [x] 계정: Workers Paid $5 (확인됨)
 - [ ] 사용량 경보 설정 (Cloudflare 알림: Containers·Workers AI, Upstage 콘솔 사용량) **입력 필요**
-- [x] 배포: https://gil-api.samsepi0l1337.workers.dev (Worker + GilApp DO + DocWorker 컨테이너 + 웹)
+- [x] 배포: https://haeboka.dreamp.org (Rust Worker + GilApp DO + DocWorker 컨테이너 + 웹). workers.dev 주소는 보조로 남는다
 - [x] 배포 환경 secret `UPSTAGE_API_KEY`, `AI_MODE=upstage`, `DECIDE_ENABLED=1`
 - [x] 운영 확인: 로그인 → 상담(Solar Mini 질문 ~1.4초) → 요약(Solar Pro ~7.5초) → 결과(Decide 관련도 반영)
 

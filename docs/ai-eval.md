@@ -2,10 +2,7 @@
 
 운영 코드가 부르는 Solar 기능이 맞는 답을 내는지, 손으로 붙인 정답과 비교했다.
 
-- 실행: `EVAL_DEV_VARS=<.dev.vars 경로> bun run --cwd apps/api eval:solar`
-- 코드: `apps/api/scripts/eval/run.ts`
-- 정답: `apps/api/scripts/eval/labels.json`
-- 결과: `apps/api/scripts/eval/results.json` (마지막 실행)
+평가 스크립트(`apps/api/scripts/eval`)는 TypeScript 백엔드와 함께 삭제했다. 아래는 그때 기록한 결과다. 같은 평가를 다시 하려면 Rust 백엔드에 맞춰 새로 만들어야 한다.
 
 ## 방법
 

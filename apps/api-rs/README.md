@@ -1,14 +1,15 @@
-# api-rs — Rust(workers-rs) 백엔드
+# api-rs: Rust(workers-rs) 백엔드
 
-TS `apps/api` 와 같은 동작을 내는 Rust 백엔드. 동일성 검증을 통과하면 전환한다. 그 전까지 TS 가 운영된다.
+해보까의 백엔드. Rust → WebAssembly 로 빌드한 Cloudflare Worker 하나다. https://haeboka.dreamp.org 에서 운영 중이다.
 
-- `core/`: 플랫폼 독립 로직 (`worker` 의존 없음). `cargo test -p gil-core`.
-- `worker/`: Workers 어댑터 (GilApp DO, 저장소 동기화, fetch·메일·AI·doc-worker, cron). DocWorker 컨테이너는 TS(`js/entry.ts`).
-- `goldens/fn/`: TS 테스트가 기록한 공용 함수 입력·출력 → `cargo test -p gil-core --test fn_goldens <모듈>`.
-- `goldens/http/`: TS API 테스트가 기록한 요청·응답 → `cargo test -p gil-core --test http_goldens <파일>`.
-- 골든 다시 기록: `harness/README` 참고 (`GIL_RECORD_FN`, `GIL_RECORD_HTTP`).
+- `core/`: `gil-core`. 플랫폼 독립 로직 (`worker` 의존 없음). `cargo test -p gil-core`.
+- `worker/`: `gil-worker`. Workers 어댑터 (GilApp Durable Object, 저장소 동기화, fetch·메일·AI·DocWorker, cron). DocWorker 컨테이너는 `apps/doc-worker`.
+- `goldens/fn/`: 공용 함수의 입력·출력 기록 → `cargo test -p gil-core --test fn_goldens <모듈>`.
+- `goldens/http/`: HTTP 요청·응답 기록 → `cargo test -p gil-core --test http_goldens <파일>`.
+- 골든은 고정된 회귀 데이터다. 동작을 일부러 바꿀 때만 고친다. 공용 함수 골든 기록은 `harness/README.md` 참고 (`GIL_RECORD_FN`).
 
-## JS 와 다른 점 (꼭 지킨다)
+## 코드 규칙 (꼭 지킨다)
+골든이 JS 와 같은 결과를 기대한다. 아래 규칙을 어기면 골든 테스트가 깨진다.
 - 길이·자르기는 UTF-16 (`jsstr::len16`, `take16`). 한글은 UTF-8 3바이트라 `str::len` 은 틀린다.
 - 공백·숫자: `str::trim`, 정규식 `\s` `\d` `\b` `\w` 는 유니코드라 JS 와 다르다. `jsstr::js_trim`, `jsstr::JS_WS`(정규식 `[...]` 안), `[0-9]`, ASCII lookaround 를 쓴다.
 - 숫자를 글자로: `jsstr::js_number_string` / `js_value_string` (20.0 -> "20", 1e21 -> "1e+21"). serde `Value::to_string` 은 20.0 을 "20.0" 으로 쓴다.
@@ -16,8 +17,16 @@ TS `apps/api` 와 같은 동작을 내는 Rust 백엔드. 동일성 검증을 �
 - 출력 JSON 은 `serde_json::Map`(입력 순서 유지). undefined(키 없음)와 null 구분. zod 처럼 기본값 채우기·모르는 키 제거·깨진 레코드 건너뛰기.
 - 시각은 ms 정수, ISO 문자열은 밀리초 포함 (`jsstr::iso`). KST 날짜 계산 유지.
 
-## 로컬 실행
+## 명령
 ```bash
-cargo install worker-build --version 0.9.0 --locked
-cd worker && ../../api/node_modules/.bin/wrangler dev -c wrangler.test.jsonc
+cargo test -p gil-core                          # apps/api-rs 에서
+cargo install worker-build --version 0.9.0 --locked   # 처음 한 번
+cd worker && bun run dev                        # wrangler dev -c wrangler.test.jsonc
+cd worker && bun run deploy                     # wrangler deploy (apps/web 을 먼저 빌드)
+```
+
+## 관리자 비밀번호 해시
+```bash
+PASSWORD_PEPPER=<secret> cargo run -q -p gil-core --example hash-admin-password   # 비밀번호는 표준 입력
+cd worker && bunx wrangler secret put ADMIN_PASSWORD_HASH
 ```

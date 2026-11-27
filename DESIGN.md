@@ -82,6 +82,12 @@ Shadow: `--shadow` 0 1px 3px rgba(16,24,40,.1) for cards. Pane 0 3px 9px #183e65
 - `.portal-width` (max 960px), h1, a lead line, then `.pane` blocks. Numbered `.guide-steps` only for the AI consult sequence. Other content uses `.guide-rows` (grey rows, radius 10, bold title, 14px text) with links to each page.
 - Copy states only what the app does (labels and limits come from `@gil/shared`). No new colours, radii or shadows.
 
+## Application pages (지원서 작성)
+
+- Entry: on `/programs/:id` a logged-in user starts a draft for an open call. The page `/applications/:id` runs edit, then 제출 전 확인, then 모의 제출. The mock receipt number starts with `MOCK-`. The page says plainly that nothing was submitted and the real application is on the official site.
+- Fields the AI drafted are marked as drafts the user must check. Identity fields are never drafted.
+- 내 정보 lists 내 지원서. Use the existing pane, list row, badge and button classes. No new colours, radii or shadows.
+
 ## Icons
 
 Inline SVG from `PortalIcons.tsx`. 24x24 box, no fill, `currentColor` stroke, width 1.7, round caps and joins. Sizes: 12 to 15 in text, 18 to 20 in tiles and actions, 25 in search. Colour follows the text. Do not add an icon font or images for icons. Emoji appear only in the stage tabs.
