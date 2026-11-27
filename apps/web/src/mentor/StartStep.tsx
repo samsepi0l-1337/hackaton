@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ACTIVITY_UNDECIDED, BUSAN_DISTRICTS, IDEA_MAX_V2 } from '@gil/shared';
-import type { Exploration, ExploreOptionsResponse, ExploreSession, ExplorationRequest, ProblemCard, ReadinessStage, ReviewRegion, StartProfile } from '@gil/shared';
+import type { ConsultQuota, Exploration, ExploreOptionsResponse, ExploreSession, ExplorationRequest, ProblemCard, ReadinessStage, ReviewRegion, StartProfile } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { BottomBar } from '../components/BottomBar';
 import { Chip, ChipGroup, MultiChipGroup } from '../components/Chips';
@@ -9,14 +9,15 @@ import { Counter, Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
 import { hasNoData } from '../lib/coverage';
 import { EvidenceBadge, Progress } from './Common';
-import { toInfo } from './storage';
-import type { ProblemInfo } from './storage';
+import { patchStore } from './storage';
+import { DeviceNotice, QUOTA_NOTE, QuotaLine } from './Quota';
+import { localAiAvailable } from '../lib/localAi';
 
 type Save = 'idle' | 'saving' | 'saved' | 'error';
 
 function ProblemCards({ start, exploration, problem, onExploration }: {
-  start: StartProfile; exploration: Exploration | null; problem: ProblemInfo | null;
-  onExploration: (b: ExplorationRequest, info: ProblemInfo | null) => void;
+  start: StartProfile; exploration: Exploration | null; problem: ProblemCard | null;
+  onExploration: (b: ExplorationRequest, info: ProblemCard | null) => void;
 }) {
   const [items, setItems] = useState<ProblemCard[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -71,7 +72,7 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
               <blockquote className="quote">{p.sourceExcerpt ?? '공개 가능한 원문 발췌가 없어요. 출처에서 확인이 필요해요.'}{p.checkedAt && <div>검수일 {p.checkedAt}</div>}</blockquote>
             )}
             <div className="row">
-              <button className="btn primary" aria-pressed={sel} onClick={() => onExploration({ problemId: p.id, origin: 'card', customProblem: null }, toInfo(p))}>{sel ? '선택한 문제' : '이 문제 탐색하기'}</button>
+              <button className="btn primary" aria-pressed={sel} onClick={() => onExploration({ problemId: p.id, origin: 'card', customProblem: null }, p)}>{sel ? '선택한 문제' : '이 문제 탐색하기'}</button>
               <button className="btn" aria-expanded={open === p.id} onClick={() => setOpen(open === p.id ? null : p.id)}>{open === p.id ? '근거 닫기' : '근거 보기'}</button>
             </div>
           </article>
@@ -101,9 +102,9 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
   );
 }
 
-export function StartStep({ opts, session, initial, problem, onProblem, onStarted, onSession }: {
-  opts: ExploreOptionsResponse; session: ExploreSession; initial: StartProfile; problem: ProblemInfo | null;
-  onProblem: (p: ProblemInfo | null) => void; onStarted: (s: ExploreSession, start: StartProfile) => void; onSession: (s: ExploreSession) => void;
+export function StartStep({ opts, session, initial, problem, quota, onProblem, onStarted, onSession }: {
+  opts: ExploreOptionsResponse; session: ExploreSession; initial: StartProfile; problem: ProblemCard | null; quota: ConsultQuota | null;
+  onProblem: (p: ProblemCard | null) => void; onStarted: (s: ExploreSession, start: StartProfile) => void; onSession: (s: ExploreSession) => void;
 }) {
   const [start, setStart] = useState<StartProfile>(initial);
   const [save, setSave] = useState<Save>('idle');
@@ -119,6 +120,10 @@ export function StartStep({ opts, session, initial, problem, onProblem, onStarte
     interests: s.interests?.length ? s.interests : undefined,
   });
 
+  useEffect(() => { patchStore({ start }); }, [JSON.stringify(start)]);
+  const [ai, setAi] = useState(false);
+  useEffect(() => { void localAiAvailable().then(setAi); }, []);
+
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     setSave('saving');
@@ -132,7 +137,7 @@ export function StartStep({ opts, session, initial, problem, onProblem, onStarte
   const hasIdeaStage = start.readiness === 'has_idea' || start.readiness === 'preparing';
   const rr = start.reviewRegion;
 
-  async function exploration(b: ExplorationRequest, info: ProblemInfo | null) {
+  async function exploration(b: ExplorationRequest, info: ProblemCard | null) {
     if ('problemId' in b) onProblem(info);
     try { onSession(await api.saveExploration(b)); } catch (e) { setErr(errMessage(e)); }
   }
@@ -163,7 +168,10 @@ export function StartStep({ opts, session, initial, problem, onProblem, onStarte
         <h2 id="pv" style={{ margin: 0 }}>시작 전에 확인해 주세요</h2>
         <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{opts.privacy}</p>
         <p className="muted">진행 상황은 이 기기에도 저장돼서 새로고침해도 이어져요. 다른 기기나 브라우저에서는 이어지지 않아요. 결과 화면의 '초기화'로 모두 지울 수 있어요.</p>
+        <QuotaLine quota={quota} />
+        <p className="muted">{QUOTA_NOTE}</p>
       </section>
+      <DeviceNotice aiAvailable={ai} />
 
       <Field label="지금 상황은 어떤가요?" required error={fieldErr.readiness}>
         <ChipGroup options={opts.readiness.map((o) => o.value)} labels={Object.fromEntries(opts.readiness.map((o) => [o.value, o.label]))} value={start.readiness}

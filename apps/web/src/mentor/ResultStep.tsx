@@ -10,7 +10,9 @@ import { Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
 import { ITEM_LABEL, Progress, ProvBadge, getItem } from './Common';
 import type { ItemKey } from './Common';
-import { clearSnapshot } from './storage';
+import { clearSnapshot, patchStore, readStore } from './storage';
+import { FieldQuestions } from './FieldQuestions';
+import { rewrite } from '../lib/localAi';
 
 const SUMMARY_KEYS: ItemKey[] = ['interest', 'target', 'value', 'unknowns'];
 
@@ -115,12 +117,13 @@ function BeforeAfter({ title, value, onChange }: { title: string; value: { befor
 }
 
 function Feedback() {
-  const [f, setF] = useState<ExploreFeedbackRequest>({});
+  const [f, setF] = useState<ExploreFeedbackRequest>(() => readStore().feedback);
+  useEffect(() => { patchStore({ feedback: f }); }, [f]);
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
   const [err, setErr] = useState('');
   async function submit() {
     setState('busy'); setErr('');
-    try { await api.exploreFeedback(f); api.track('feedback'); setState('done'); } catch (e) { setErr(errMessage(e)); setState('idle'); }
+    try { await api.exploreFeedback(f); api.track('feedback'); patchStore({ feedback: {} }); setState('done'); } catch (e) { setErr(errMessage(e)); setState('idle'); }
   }
   if (state === 'done') return <section className="card" role="status"><p style={{ margin: 0 }}>의견을 보내 주셔서 고마워요.</p></section>;
   return (
@@ -159,8 +162,21 @@ function toText(summary: SummaryV2, prep: ExploreResultResponse['prep']): string
   return lines.join('\n');
 }
 
-export function ResultStep({ summary, onEditSummary, onMissingSummary }: { summary: SummaryV2; onEditSummary: () => void; onMissingSummary: () => void }) {
-  const [res, setRes] = useState<ExploreResultResponse | null>(null);
+function overlay(r: ExploreResultResponse, done: Record<string, boolean>): ExploreResultResponse {
+  const m = (p: PrepItem): PrepItem => ({ ...p, done: done[p.id] ?? p.done });
+  return { ...r, prep: { primary: m(r.prep.primary), followUps: r.prep.followUps.map(m) } };
+}
+const doneMap = (r: ExploreResultResponse): Record<string, boolean> =>
+  Object.fromEntries([r.prep.primary, ...r.prep.followUps].map((p) => [p.id, p.done]));
+
+export function ResultStep({ summary, problemTitle, readOnly = false, onEditSummary, onMissingSummary }: {
+  summary: SummaryV2; problemTitle?: string; readOnly?: boolean; onEditSummary: () => void; onMissingSummary: () => void;
+}) {
+  const [res, setRes] = useState<ExploreResultResponse | null>(() => { const st = readStore(); return st.result ? overlay(st.result, st.prepDone) : null; });
+  const [offline, setOffline] = useState(false);
+  const [edits, setEdits] = useState<Record<string, string>>(() => readStore().fieldEdits);
+  const [localReasons, setLocalReasons] = useState<Record<string, string>>({});
+  const triedReason = useRef(new Set<string>());
   const [error, setError] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
   const [cond, setCond] = useState(false);
@@ -170,15 +186,38 @@ export function ResultStep({ summary, onEditSummary, onMissingSummary }: { summa
   const tracked = useRef(false);
   const expanded = useRef(false);
 
+  const keep = (r: ExploreResultResponse) => {
+    const ids = new Set((r.fieldQuestions ?? []).map((q) => q.id));
+    const kept = Object.fromEntries(Object.entries(readStore().fieldEdits).filter(([id]) => ids.has(id)));
+    setEdits(kept);
+    patchStore({ result: r, prepDone: doneMap(r), fieldEdits: kept });
+  };
+
   useEffect(() => {
+    if (readOnly) return;
     setError(null);
     api.exploreResult().then((r) => {
       if (!r.summary) { onMissingSummary(); return; }
-      setRes(r);
+      setRes(r); setOffline(false); keep(r);
       if (!tracked.current) { tracked.current = true; api.track('result'); }
-    }, setError);
+    }, (e) => { if (readStore().result) setOffline(true); else setError(e); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
+
+  // 이 기기의 AI 로 지원 경로 이유 문장을 다듬는다 (쓸 수 있을 때만). 실패하면 서버 문장 그대로.
+  useEffect(() => {
+    if (!res) return;
+    for (const c of res.resources.slice(0, 3)) {
+      const key = `${c.resource.id}:${c.reason}`;
+      if (triedReason.current.has(key)) continue;
+      triedReason.current.add(key);
+      const r0 = c.resource;
+      const facts = [r0.title, r0.agency, r0.content, r0.target, r0.procedure, r0.prep, r0.costPeriod, r0.affiliationLimit,
+        res.summary?.interest.text, res.summary?.target.text, res.summary?.value.text].filter((x): x is string => !!x);
+      void rewrite({ task: 'reason', original: c.reason, facts, maxLength: 200 })
+        .then((t) => { if (t) setLocalReasons((m) => ({ ...m, [r0.id]: t })); });
+    }
+  }, [res]);
 
   if (error) return <div className="stack"><Progress current={2} /><ErrorState error={error} onRetry={() => setTick(tick + 1)} /></div>;
   if (!res) return <div className="stack"><Progress current={2} /><CardSkeletons count={3} /></div>;
@@ -192,7 +231,9 @@ export function ResultStep({ summary, onEditSummary, onMissingSummary }: { summa
       followUps: r.prep.followUps.map((x) => (x.id === p.id ? { ...x, done: d } : x)),
     } }));
     apply(done);
-    try { await api.setPrepDone(p.id, done); } catch (e) { apply(p.done); setNote(errMessage(e)); }
+    patchStore({ prepDone: { ...readStore().prepDone, [p.id]: done } });
+    if (readOnly) return;
+    try { await api.setPrepDone(p.id, done); } catch (e) { apply(p.done); patchStore({ prepDone: { ...readStore().prepDone, [p.id]: p.done } }); setNote(errMessage(e)); }
   };
   const onLink = (id: string) => () => api.track('resource_link', id);
   const hasOtherRegion = res.resources.some((c) => c.resource.regions.some((r) => r === '울산' || r === '경남'));
@@ -204,16 +245,17 @@ export function ResultStep({ summary, onEditSummary, onMissingSummary }: { summa
   }
   async function reset() {
     setBusy(true);
-    try { await api.resetExplore(); clearSnapshot(); window.location.assign('/mentor'); } catch (e) { setNote(errMessage(e)); setBusy(false); setConfirm(false); }
+    try { if (!readOnly) await api.resetExplore(); clearSnapshot(); window.location.assign('/mentor'); } catch (e) { setNote(errMessage(e)); setBusy(false); setConfirm(false); }
   }
 
   return (
     <div className="stack">
       <Progress current={2} />
       <h1>나의 창업 준비 방향</h1>
+      {offline && <p className="muted" role="status">서버에 연결하지 못해 이 기기에 저장된 결과를 보여줘요. 최신 내용과 다를 수 있어요.</p>}
 
       <section className="card stack" aria-labelledby="sum">
-        <div className="row between"><h2 id="sum" style={{ margin: 0 }}>구상 요약</h2><button className="btn small" onClick={onEditSummary}>내용 수정</button></div>
+        <div className="row between"><h2 id="sum" style={{ margin: 0 }}>구상 요약</h2>{!readOnly && <button className="btn small" onClick={onEditSummary}>내용 수정</button>}</div>
         <p className="muted">지금 준비 상태를 점수나 등급으로 평가하지 않아요.</p>
         <div><strong>탐색 방향</strong> <ProvBadge p={s.exploration.direction.provenance} /> <span className="badge">{s.exploration.direction.status === 'hold' ? '아직 탐색 중' : ''}</span>
           <p style={{ margin: 0 }}>{s.exploration.direction.text || '아직 탐색 중'}</p></div>
@@ -267,20 +309,26 @@ export function ResultStep({ summary, onEditSummary, onMissingSummary }: { summa
         )}
       </section>
 
+      <FieldQuestions questions={res.fieldQuestions ?? []} edits={edits} problemTitle={problemTitle}
+        onEdit={(id, text) => {
+          const next = { ...edits }; if (text === null) delete next[id]; else next[id] = text;
+          setEdits(next); patchStore({ fieldEdits: next });
+        }} />
+
       <section className="stack" aria-labelledby="rs">
         <div className="row between">
           <h2 id="rs" style={{ margin: 0 }}>{hasOtherRegion ? '선택한 지역의 준비 경로' : '부산에서 연결할 수 있는 지원'}</h2>
-          <button className="btn small" onClick={() => setCond(true)}>내 조건 확인</button>
+          {!readOnly && <button className="btn small" onClick={() => setCond(true)}>내 조건 확인</button>}
         </div>
         <p className="muted">{res.coverageNote}</p>
         {res.resources.length === 0
           ? <EmptyState message="현재 확인된 자료에서 맞는 경로를 찾지 못했어요." action={res.noMatchReason ? <p className="muted">{res.noMatchReason}</p> : undefined} />
-          : res.resources.slice(0, 3).map((c) => <ResourceResultCard key={c.resource.id} card={c} onLink={onLink(c.resource.id)} />)}
+          : res.resources.slice(0, 3).map((c) => <ResourceResultCard key={c.resource.id} card={c} localReason={localReasons[c.resource.id]} onLink={onLink(c.resource.id)} />)}
         <p className="muted">{res.conditionNote}</p>
         <p><Link to="/programs">지역 지원 전체 살펴보기</Link></p>
       </section>
 
-      <Feedback />
+      {!readOnly && <Feedback />}
 
       <section className="card stack">
         <h2 style={{ margin: 0 }}>저장과 초기화</h2>
@@ -292,7 +340,7 @@ export function ResultStep({ summary, onEditSummary, onMissingSummary }: { summa
         {note && <p className="muted" role="status">{note}</p>}
       </section>
 
-      {cond && <ConditionForm initial={undefined} onClose={() => setCond(false)} onSave={async (c) => { const r = await api.saveConditions(c); setRes(r); setCond(false); }} />}
+      {cond && <ConditionForm initial={undefined} onClose={() => setCond(false)} onSave={async (c) => { const r = await api.saveConditions(c); setRes(r); keep(r); setCond(false); }} />}
       {confirm && (
         <ConfirmDialog title="처음부터 다시 할까요?" confirmLabel="초기화" danger busy={busy} onConfirm={reset} onCancel={() => setConfirm(false)}>
           <p>아래 내용이 지워지고 되돌릴 수 없어요.</p>

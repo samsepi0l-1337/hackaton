@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { DIRECTION_STATUS_LABEL } from '@gil/shared';
-import type { ChatMessage, DirectionStatus, ExploreChatRequest, ExploreSession, SummaryV2 } from '@gil/shared';
-import { api } from '../api/client';
+import type { ChatMessage, ConsultQuota, DirectionStatus, ExploreChatRequest, ExploreSession, SummaryV2 } from '@gil/shared';
+import type { ProblemCard } from '@gil/shared';
+import { api, ApiClientError } from '../api/client';
 import { Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
 import { ITEM_LABEL, Progress, ProblemLine, item } from './Common';
+import { LOCAL_AI_NOTE, rewrite } from '../lib/localAi';
+import { patchStore, readStore, toInfo } from './storage';
 import type { ProblemInfo } from './storage';
+import { QUOTA_NOTE, QuotaLine, resetDate } from './Quota';
 
 const MANUAL_KEYS = ['interest', 'target', 'value', 'unknowns'] as const;
 
@@ -82,14 +87,19 @@ function Suggestions({ list, status, direction, onChange }: {
   );
 }
 
-export function ChatStep({ session, problem, onSession, onBackToStart, onSummary }: {
-  session: ExploreSession; problem: ProblemInfo | null;
-  onSession: (s: ExploreSession) => void; onBackToStart: () => void; onSummary: (s: SummaryV2) => void;
+export function ChatStep({ session, problem: card, quota, onSession, onQuota, onRefreshQuota, onBackToStart, onSummary }: {
+  session: ExploreSession; problem: ProblemCard | null; quota: ConsultQuota | null;
+  onSession: (s: ExploreSession) => void; onQuota: (q: ConsultQuota) => void; onRefreshQuota: () => void;
+  onBackToStart: () => void; onSummary: (s: SummaryV2) => void;
 }) {
+  const problem: ProblemInfo | null = card ? toInfo(card) : null;
   const [messages, setMessages] = useState<ChatMessage[]>(session.messages);
   const [qIndex, setQIndex] = useState(session.questionIndex);
-  const [suggestions, setSuggestions] = useState<string[]>(session.exploration?.suggestions ?? []);
-  const [input, setInput] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>(session.exploration?.suggestions?.length ? session.exploration.suggestions : readStore().suggestions);
+  const [input, setInput] = useState(() => readStore().draft);
+  const [limit, setLimit] = useState<{ message: string; quota?: ConsultQuota } | null>(null);
+  const [soft, setSoft] = useState<Record<number, string>>({});
+  const tried = useRef(new Set<number>());
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [err, setErr] = useState('');
@@ -111,15 +121,23 @@ export function ChatStep({ session, problem, onSession, onBackToStart, onSummary
 
   async function send(req: ExploreChatRequest, text?: string) {
     last.current = req;
-    setSending(true); setErr(''); setFailed(false);
+    setSending(true); setErr(''); setFailed(false); setLimit(null);
     try {
       const r = await api.exploreChat(req);
+      onRefreshQuota();
       setMessages(r.messages); setQIndex(r.questionIndex);
       if (r.suggestions.length) setSuggestions(r.suggestions);
       if (r.failed) { setFailed(true); setManual(true); if (text !== undefined) setInput(text); return; }
       setInput('');
       if (r.done) { await goSummary(); return; }
-    } catch (e) { setFailed(true); setErr(errMessage(e)); if (text !== undefined) setInput(text); } finally { setSending(false); }
+    } catch (e) {
+      if (e instanceof ApiClientError && e.code === 'limit') {
+        // 상담 횟수 초과: 입력은 그대로 두고, 이미 만든 요약·지원 경로 목록은 계속 볼 수 있게 한다.
+        if (e.quota) onQuota(e.quota);
+        setLimit({ message: e.message, quota: e.quota });
+        if (text !== undefined) setInput(text);
+      } else { setFailed(true); setErr(errMessage(e)); if (text !== undefined) setInput(text); }
+    } finally { setSending(false); }
   }
 
   useEffect(() => {
@@ -129,6 +147,20 @@ export function ChatStep({ session, problem, onSession, onBackToStart, onSummary
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest' }); }, [messages.length]);
+  useEffect(() => { patchStore({ messages, questionIndex: qIndex, suggestions }); }, [messages, qIndex, suggestions]);
+  useEffect(() => {
+    const t = window.setTimeout(() => patchStore({ draft: input }), 400);
+    return () => window.clearTimeout(t);
+  }, [input]);
+
+  // 이 기기의 AI 가 쓸 수 있을 때만 마지막 질문의 말투를 다듬는다. 실패하면 서버 문장 그대로.
+  useEffect(() => {
+    let idx = -1;
+    messages.forEach((m, i) => { if (m.role === 'mentor') idx = i; });
+    if (idx < 0 || sending || tried.current.has(idx)) return;
+    tried.current.add(idx);
+    void rewrite({ task: 'mentor', original: messages[idx]!.text, maxLength: 160 }).then((t) => { if (t) setSoft((c) => ({ ...c, [idx]: t })); });
+  }, [messages, sending]);
 
   async function setDir(d: string | null, status: DirectionStatus) {
     try {
@@ -153,10 +185,12 @@ export function ChatStep({ session, problem, onSession, onBackToStart, onSummary
       )}
 
       <p className="muted" aria-live="polite">질문 {n}/{max}</p>
+      <QuotaLine quota={quota} />
       <div className="chat" role="log" aria-label="대화">
         {messages.map((m, i) => (
           <div key={i} className={`bubble ${m.role}${m.skipped ? ' skipped' : ''}`}>
-            <span className="sr-only">{m.role === 'mentor' ? '질문: ' : '내 답변: '}</span>{m.skipped ? (m.text || '건너뜀') : m.text}
+            <span className="sr-only">{m.role === 'mentor' ? '질문: ' : '내 답변: '}</span>{m.skipped ? (m.text || '건너뜀') : (soft[i] ?? m.text)}
+            {soft[i] && <div className="muted" style={{ fontSize: 'var(--font-size-sm)' }}>{LOCAL_AI_NOTE}</div>}
           </div>
         ))}
         {sending && <div className="bubble mentor" role="status">생각을 정리하는 중이에요...</div>}
@@ -172,9 +206,22 @@ export function ChatStep({ session, problem, onSession, onBackToStart, onSummary
           </div>
         </div>
       )}
+      {limit && (
+        <div className="card stack" role="alert">
+          <p style={{ margin: 0 }}><strong>이번 주 상담 횟수를 모두 사용했어요.</strong> {limit.message}</p>
+          {(limit.quota?.resetAt ?? quota?.resetAt) && <p style={{ margin: 0 }}>{resetDate(limit.quota?.resetAt ?? quota?.resetAt ?? null)} 이후에 다시 상담할 수 있어요.</p>}
+          <p className="muted">입력한 내용은 이 기기에 그대로 남아 있어요. {QUOTA_NOTE}</p>
+          <div className="row">
+            {session.summary && <button className="btn primary" onClick={() => onSummary(session.summary!)}>이미 만든 구상 요약 보기</button>}
+            <Link className="btn" to="/programs">지역 지원 목록 보기</Link>
+            <button className="btn" onClick={() => send(last.current, input)} disabled={sending}>다시 확인</button>
+            <button className="btn ghost" onClick={onBackToStart}>이전</button>
+          </div>
+        </div>
+      )}
       {!failed && err && <p className="error-text" role="alert">{err}</p>}
 
-      <fieldset className="stack" disabled={sending} style={{ border: 0, padding: 0, margin: 0 }}>
+      <fieldset className="stack" disabled={sending || !!limit} style={{ border: 0, padding: 0, margin: 0 }}>
         <Field label="내 답변" hint="편하게 적어 주세요. 모르면 아래 버튼을 눌러도 돼요.">
           <textarea className="input" rows={3} value={input} onChange={(e) => setInput(e.target.value)} />
         </Field>
