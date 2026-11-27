@@ -236,6 +236,7 @@ export const ParsedDocRecordSchema = z.object({
   fields: z.array(z.object({ label: z.string().max(300), maxLength: z.number().int().nullable(), required: z.boolean() })).max(200),
   warnings: z.array(z.string().max(300)).max(20),
   summary: z.string().max(2000).nullable(),
+  summaryAttempts: z.number().int().min(0).default(0),
   parsedAt: isoTime,
 });
 export type ParsedDocRecord = z.infer<typeof ParsedDocRecordSchema>;
