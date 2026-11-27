@@ -159,7 +159,14 @@ export const ExploreStateSchema = z.object({
     regionIntent: z.object({ before: z.number().min(1).max(5).optional(), after: z.number().min(1).max(5).optional() }).optional(),
     at: isoTime,
   }).nullable().default(null),
+  /** 이 세션이 상담 1회로 이미 세어졌는지 (첫 질문 재요청을 두 번 세지 않는다). */
+  counted: z.boolean().default(false),
+  /** 현장 확인 질문 (문제·방향 서명이 같을 때만 쓴다). */
+  fieldQ: z.object({ sig: z.string(), items: z.array(z.object({ id: z.string(), question: z.string().max(300), purpose: z.string().max(400), source: z.enum(['rule', 'ai']) })).max(3) }).nullable().default(null),
   /** 이벤트 횟수. 원문 대화는 넣지 않는다. */
   events: z.record(z.string(), z.number().int().min(0)).default({}),
 });
 export type ExploreState = z.infer<typeof ExploreStateSchema>;
+
+/** 상담 시작 시각 목록 (키마다 `quota:<key>`). 7일이 지난 항목은 쓸 때 지운다. */
+export const QuotaSchema = z.array(isoTime).max(100);

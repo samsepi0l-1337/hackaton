@@ -28,3 +28,6 @@ AI_MODE=upstage UPSTAGE_API_KEY=... DECIDE_ENABLED=1 bun run dev:api   # + 관�
 - 저장소는 모양이 맞지 않는 레코드를 건너뛰고(경고 한 줄), `meta:schema` 에 버전을 기록한다.
 - `POST /api/explore/chat` 의 선택 필드 `questionIndex`: 화면이 보던 질문 번호. 이미 지난 번호면 재전송으로 보고 무시한다.
 - `/api/admin/stats` 에 `explore`(비회원·회원 분리, 기기 세션 단위) 가 추가된다.
+- 상담 횟수 제한: 1인 7일 3회 (`CONSULT_LIMIT`). 상담 1회 = 대화가 빈 세션에서 `POST /api/explore/chat` 첫 질문을 받는 순간 (`counted` 로 재요청은 세지 않음). 회원은 user id, 비회원은 쿠키 id 와 접속 IP 해시(SHA-256(ip + `IP_HASH_SALT`), 원본 IP 저장 안 함)를 KV `quota:<key>` 에 7일치만 둔다. 어느 쪽이든 3회면 429 `limit` (`error.quota`). 초기화는 횟수를 돌려주지 않고, 팀 계정은 제외. 테스트용 `createApp({ consultLimit })`. 막은 횟수는 `/api/admin/stats` 의 `explore.limitHits`.
+- 로컬 AI: 요청 헤더 `x-local-ai: mentor,reason,field` 에 든 작업은 Solar 를 부르지 않고 규칙 문장만 돌려준다 (웹이 로컬에서 다듬고 shared `guardText` 로 검사). 헤더에 없는 작업은 그대로.
+- 현장 확인 질문(F12 P1): `GET /api/explore/result` 의 `fieldQuestions` (최대 3개). 규칙 `buildFieldQuestions` 가 현재 방식·실제 경험부터 묻고, AI 는 'field'(mentor 모델) 로 문장만 다듬는다 (사실·전제 검사 통과 시에만, 문제·방향이 바뀌면 다시 만든다).

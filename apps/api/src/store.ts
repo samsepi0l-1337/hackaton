@@ -9,7 +9,7 @@ import {
   type PlanItem, type Program, type User,
 } from '@gil/shared';
 import { hashPassword } from './password';
-import { ApplicationSchema, ExploreStateSchema, MentorStateSchema, SessionSchema, UserSchema, type ExploreState } from './db/schema';
+import { ApplicationSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, SessionSchema, UserSchema, type ExploreState } from './db/schema';
 
 export interface UserRecord extends User { passwordHash: string }
 
@@ -50,6 +50,12 @@ export interface Store {
   allExplores(): [string, ExploreState][];
   setExplore(actorId: string, s: ExploreState): void;
   deleteExplore(actorId: string): void;
+  /** 상담 횟수 제한: 키(`u:<id>`, `c:<쿠키id>`, `ip:<해시>`)별 상담 시작 시각(ISO). */
+  quota(key: string): string[];
+  setQuota(key: string, times: string[]): void;
+  /** 상담 횟수 초과로 막은 횟수 (관리자 통계). */
+  limitHits(): number;
+  addLimitHit(): void;
   getApplication(id: string): Application | undefined;
   saveApplication(a: Application): void;
   /** 이번 요청에서 읽거나 바꾼 레코드를 검사해 저장한다. */
@@ -86,6 +92,8 @@ const K = {
   mentor: (uid: string) => `mentor:${uid}`,
   app: (id: string) => `app:${id}`,
   explore: (id: string) => `explore:${id}`,
+  quota: (k: string) => `quota:${k}`,
+  limitHits: 'meta:limitHits',
   seeded: 'meta:seeded',
   schema: 'meta:schema',
 };
@@ -198,6 +206,13 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
       kv.put(K.app(a.id), check(ApplicationSchema, a, K.app(a.id)));
       apps.set(a.id, a);
     },
+    quota(key) {
+      const r = QuotaSchema.safeParse(kv.get(K.quota(key)));
+      return r.success ? r.data : [];
+    },
+    setQuota(key, times) { kv.put(K.quota(key), check(QuotaSchema, times, K.quota(key))); },
+    limitHits: () => kv.get<number>(K.limitHits) ?? 0,
+    addLimitHit() { kv.put(K.limitHits, (kv.get<number>(K.limitHits) ?? 0) + 1); },
     explore(id) {
       const e = explores.get(id);
       if (e) touchedExplores.add(id);

@@ -5,7 +5,7 @@ import { CONTEXTS, PROBLEMS, RESOURCES } from './data';
 import { kstDate } from './date';
 import {
   IDEA_MAX_V2, INDUSTRY_TAGS, INTEREST_EXTRA, REVIEW_REGIONS,
-  type ConditionCheck, type ConditionStatus, type Exploration, type IndustryTag, type PrepItem, type ProblemCard,
+  type ConditionCheck, type ConditionStatus, type Exploration, type FieldQuestion, type IndustryTag, type PrepItem, type ProblemCard,
   type ReadinessStage, type RegionalContext, type RegionalContextCard, type RegionalStatus, type Resource,
   type ReviewRegion, type SummaryItem, type SummaryV2, type StartProfile, type UserConditions,
 } from './explore';
@@ -421,4 +421,54 @@ export function coverageNote(reviewRegion?: string | null, problems = PROBLEMS, 
     test ? '일부 자료는 팀 검수 전 테스트 자료예요.' : '',
   ];
   return parts.filter(Boolean).join(' ');
+}
+
+// ---- F12 선택 보완: 현장에 확인할 질문 (P1) ----
+export const FIELD_QUESTION_MAX = 3;
+/** 어려움·구매 의향을 전제하는 말. 질문(규칙·AI 모두)에 있으면 쓰지 않는다. */
+export const FIELD_PRESUPPOSE = /불편|어려움|어렵|힘들|돈을\s*내|구매|결제|지불|사\s*주|살\s*의향|쓸\s*의향/;
+
+const FIELD_TITLE_PREFIX = /^\[[^\]]*\]\s*/;
+
+/**
+ * 현장 사람에게 물어볼 질문 최대 3개 (규칙). 현재 방식과 실제 경험을 먼저 묻고, 어려움·구매 의향은 전제하지 않는다.
+ * 응답자·답변·검증 결과는 만들지 않는다. 문제가 바뀌면 호출한 쪽이 다시 만든다.
+ */
+export function buildFieldQuestions(
+  problem: ProblemCard | undefined | null, exploration: Exploration | null, summary: SummaryV2 | null, unknowns: readonly string[] = [],
+): FieldQuestion[] {
+  const who = problem?.affectedUser ?? '이용할 사람';
+  const custom = !problem && exploration?.origin === 'custom' ? exploration.customProblem?.trim() ?? '' : '';
+  const topic = problem ? problem.title.replace(FIELD_TITLE_PREFIX, '') : custom.length > 0 && custom.length <= 40 ? custom : '';
+  const hypo = summary && summary.exploration.hypotheses.provenance !== 'unknown' ? summary.exploration.hypotheses.text.trim() : '';
+  const unknownText = unknowns.join(' ');
+
+  const current: FieldQuestion = {
+    id: 'fq-current',
+    question: topic ? `${topic} 업무는 현재 어떤 방식으로 처리하나요?` : '이 업무는 현재 어떤 방식으로 처리하나요?',
+    purpose: `${who}의 현재 처리 방식을 먼저 확인해요.${hypo ? ` 확인할 가설(미검증): ${hypo.slice(0, 80)}` : ''}`,
+    source: 'rule',
+  };
+  const tools: FieldQuestion = {
+    id: 'fq-tools',
+    question: '이 일에 지금 쓰는 도구나 서비스가 있다면 무엇이고, 어떻게 쓰나요?',
+    purpose: `${who}가 이미 쓰는 방법이 있는지 확인해요. (미확인 사항: ${unknowns.find((u) => /서비스|도구|대안/.test(u)) ?? '이미 쓰는 서비스'})`,
+    source: 'rule',
+  };
+  const time: FieldQuestion = {
+    id: 'fq-time',
+    question: '어느 단계에서 시간이 많이 드나요?',
+    purpose: `${who}가 실제로 겪는 과정을 단계별로 듣고, 시간이 드는 단계가 정말 있는지 확인해요.`,
+    source: 'rule',
+  };
+  const conditions: FieldQuestion = {
+    id: 'fq-conditions',
+    question: '외부 서비스를 검토하기 전에 어떤 조건을 확인하나요?',
+    purpose: `${who}가 새로운 방법을 검토할 때 보는 기준을 알아봐요. 이용 의향을 묻는 것이 아니에요.`,
+    source: 'rule',
+  };
+  const list = [current];
+  if (/서비스|도구|대안/.test(unknownText)) list.push(tools);
+  list.push(time, conditions);
+  return list.slice(0, FIELD_QUESTION_MAX);
 }
