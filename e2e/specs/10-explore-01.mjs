@@ -1,4 +1,14 @@
 await resetOrigin();
+async function waitForSession(predicate, message) {
+  let session;
+  for (let i = 0; i < 50; i++) {
+    session = (await api('GET', '/api/explore/session')).body;
+    if (predicate(session)) break;
+    await page.waitForTimeout(100);
+  }
+  assert(predicate(session), message);
+  return session;
+}
 await step('login gate requires an account', async () => {
   await go('/mentor');
   await page.waitForFunction(() => location.pathname === '/login' && new URLSearchParams(location.search).get('next') === '/mentor');
@@ -22,11 +32,7 @@ await step('readiness choices, 200-character idea, interests and region coverage
   }
   await page.click(`text="${options.interests[0]}"`);
   assert(await page.evaluate((interest) => [...document.querySelectorAll('button.chip[aria-pressed="true"]')].some((b) => b.textContent.trim() === interest), options.interests[0]), 'interest selected');
-  await page.waitForFunction(async (interest) => {
-    const response = await fetch('/api/explore/session');
-    const session = await response.json();
-    return session.start.interests?.includes(interest) === true;
-  }, options.interests[0], { timeout: 10000 });
+  await waitForSession((session) => session.start.interests?.includes(options.interests[0]) === true, 'interest autosaved');
   for (const region of ['울산', '경남']) {
     await page.click(`text="${region}"`);
     await seeText(`${region}: 상세 지원 경로 준비 중`);
@@ -48,13 +54,18 @@ await step('custom problem editor opens and saves on blur', async () => {
   await page.waitForFunction(() => !!document.querySelector('textarea[rows="3"]') || !!document.querySelector('[role="alert"], .error-text'));
   assert(await page.evaluate(() => !!document.querySelector('textarea[rows="3"]')), 'custom problem editor opens');
   assert(await page.evaluate(() => !document.querySelector('[role="alert"], .error-text')), 'no error alert');
+  assert(await page.evaluate(() => [...document.querySelectorAll('section[aria-labelledby="pc"] button.chip')].find((b) => b.textContent.trim() === '아직 탐색 중')?.getAttribute('aria-pressed') === 'false'), 'hold is not selected while custom editor is open');
   await page.fill('textarea[rows="3"]', '지역 상점의 배달 문제');
   await page.evaluate(() => document.querySelector('textarea[rows="3"]').blur());
-  await page.waitForFunction(async () => {
-    const session = await (await fetch('/api/explore/session')).json();
-    return session.exploration?.origin === 'custom' && session.exploration?.customProblem === '지역 상점의 배달 문제';
-  }, undefined, { timeout: 10000 });
-  const session = await api('GET', '/api/explore/session');
-  eq(session.body.exploration.origin, 'custom', 'custom origin saved');
-  eq(session.body.exploration.customProblem, '지역 상점의 배달 문제', 'custom problem saved on blur');
+  const session = await waitForSession((s) => s.exploration?.origin === 'custom' && s.exploration?.customProblem === '지역 상점의 배달 문제', 'custom problem saved on blur');
+  eq(session.exploration.origin, 'custom', 'custom origin saved');
+  eq(session.exploration.customProblem, '지역 상점의 배달 문제', 'custom problem saved on blur');
+  await page.fill('textarea[rows="3"]', '');
+  await page.evaluate(() => document.querySelector('textarea[rows="3"]').blur());
+  const cleared = await waitForSession((s) => s.exploration?.origin === 'hold' && s.exploration?.customProblem === null, 'clearing custom problem saves hold');
+  eq(cleared.exploration.origin, 'hold', 'hold origin saved');
+  eq(cleared.exploration.customProblem, null, 'custom problem cleared');
+  await page.waitForFunction(() => !document.querySelector('textarea[rows="3"]'));
+  const selected = await page.evaluate(() => [...document.querySelectorAll('section[aria-labelledby="pc"] button.chip[aria-pressed="true"]')].map((b) => b.textContent.trim()));
+  eq(selected, ['아직 탐색 중'], 'only hold chip selected after clearing');
 });

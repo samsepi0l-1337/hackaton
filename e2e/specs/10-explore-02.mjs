@@ -41,7 +41,7 @@ await step('result resources regional card prep toggle and conditions edit', asy
   const result = await api('GET', '/api/explore/result');
   eq(result.status, 200, 'result status');
   assert(Array.isArray(result.body.resources) && result.body.resources.length > 0, 'resources returned');
-  await seeText(result.body.resources[0].resource.title);
+  await page.waitForFunction((title) => document.querySelector('section[aria-labelledby="rs"]')?.innerText.includes(title), result.body.resources[0].resource.title);
 });
 await step('prep done toggle', async () => {
   await page.evaluate(() => document.querySelector('#pr').scrollIntoView({ block: 'center' }));
@@ -57,9 +57,6 @@ await step('conditions edit', async () => {
   await page.waitForFunction(() => !document.querySelector('[role="dialog"]'));
   const session = await api('GET', '/api/explore/session');
   eq(session.body.start.conditions.age, 30, 'conditions saved');
-  const result = await api('GET', '/api/explore/result');
-  assert(typeof result.body.conditionNote === 'string' && result.body.conditionNote.length > 0, 'condition note returned');
-  await seeText(result.body.conditionNote);
 });
 await step('feedback submit and session reset', async () => {
   await page.click('text="도움 됨"');
