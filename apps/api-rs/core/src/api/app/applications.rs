@@ -285,6 +285,7 @@ pub async fn update(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     if b.get("requestApproval") == Some(&json!(true)) {
         let missing: Vec<Value> = a["fields"].as_array().into_iter().flatten().filter(|f| f["required"] == true && js_trim(f["value"].as_str().unwrap_or("")).is_empty()).map(|f| json!({"field":f["key"],"message":format!("{}을(를) 입력해 주세요",f["label"].as_str().unwrap_or(""))})).collect();
         if !missing.is_empty() {
+            save(cx, a)?;
             return Err(
                 HttpError::new(400, "validation", "필수 항목을 모두 채워 주세요")
                     .with_fields(json!(missing)),
@@ -319,7 +320,7 @@ pub async fn approve(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
         ));
     }
     let p = program(cx, a["programId"].as_str().unwrap_or(""))
-        .ok_or_else(|| HttpError::not_found("공고를 찾을 수 없어요"))?;
+        .ok_or_else(|| HttpError::bad("요청을 처리하지 못했어요"))?;
     if closed(&p, cx.now) {
         return Err(HttpError::new(409, "closed", "마감된 공고예요"));
     }
@@ -358,7 +359,7 @@ pub async fn retry(cx: &mut Cx<'_>, _req: &Req, id: &str) -> HResult {
         ));
     }
     let p = program(cx, a["programId"].as_str().unwrap_or(""))
-        .ok_or_else(|| HttpError::not_found("공고를 찾을 수 없어요"))?;
+        .ok_or_else(|| HttpError::bad("요청을 처리하지 못했어요"))?;
     if closed(&p, cx.now) {
         return Err(HttpError::new(409, "closed", "마감된 공고예요"));
     }
@@ -366,4 +367,53 @@ pub async fn retry(cx: &mut Cx<'_>, _req: &Req, id: &str) -> HResult {
     simulate(cx, &mut a);
     save(cx, a.clone())?;
     Resp::ok(view(cx, a))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        app::AppOpts,
+        kv::MemKv,
+        ports::Env,
+        testkit::{block_on, FakePorts},
+    };
+
+    #[test]
+    fn approval_validation_preserves_merged_values() {
+        let mut kv = MemKv::default();
+        let env = Env::new();
+        let opts = AppOpts::default();
+        let ports = FakePorts::default();
+        let now = 1_795_741_200_000;
+        let at = iso(now - 1000);
+        let mut fields = mock_form_fields();
+        for field in &mut fields {
+            field["value"] = json!("");
+        }
+        let application = json!({"id":"a","userId":"u","programId":"p","status":"drafting","channel":"mock","formFileName":"form","fields":fields,"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[{"status":"drafting","at":at}],"createdAt":at,"updatedAt":at});
+        assert!(Store::new(&mut kv, now)
+            .save_application(application)
+            .is_ok());
+        let mut cx = Cx {
+            env: &env,
+            kv: &mut kv,
+            ports: &ports,
+            opts: &opts,
+            now,
+            user: Some(json!({"id":"u"})),
+        };
+        let req = Req {
+            body: Some(json!({"values":{"name":"Alice"},"requestApproval":true}).to_string()),
+            ..Req::default()
+        };
+        let err = block_on(update(&mut cx, &req, "a")).err();
+        assert!(err.is_some_and(|e| e.status == 400 && e.code == "validation"));
+        let saved = Store::new(cx.kv, now)
+            .get_application("a")
+            .unwrap_or(Value::Null);
+        assert_eq!(saved["fields"][0]["value"], "Alice");
+        assert_eq!(saved["status"], "drafting");
+        assert_eq!(saved["updatedAt"], at);
+    }
 }
