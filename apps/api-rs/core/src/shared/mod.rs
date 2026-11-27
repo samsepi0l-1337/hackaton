@@ -1,0 +1,20 @@
+//! packages/shared/src 를 옮긴 것. 웹은 TS 원본을 그대로 쓴다.
+pub mod account;
+pub mod api_types;
+pub mod cloudflare;
+pub mod constants;
+pub mod data;
+pub mod date;
+pub mod eligibility;
+pub mod explore;
+pub mod explore_rules;
+pub mod guard;
+pub mod kstartup;
+pub mod kstartup_resource;
+pub mod likes;
+pub mod mentor;
+pub mod profile;
+pub mod query;
+pub mod recommend;
+pub mod seed;
+pub mod type_test;
