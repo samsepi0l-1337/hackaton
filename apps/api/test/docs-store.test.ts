@@ -91,7 +91,7 @@ describe('Document Parse 결과 저장', () => {
   test('summaryAttempts 없는 이전 저장본은 0회로 취급해 다시 정리한다', async () => {
     const old = { url: att.url, fileName: att.name, kind: att.kind, text: '본문', fields: [], warnings: [], summary: null, parsedAt: now().toISOString() };
     const docs = memCache();
-    docs.data.set(att.url, old as ParsedDocRecord);
+    docs.data.set(att.url, old as unknown as ParsedDocRecord);
     let calls = 0;
     const result = await readAnnouncementForm(env, { docWorker: worker(), docs, summarize: async () => { calls++; return null; }, now }, 'u');
     expect(result).toMatchObject({ cached: true, summary: null });
@@ -102,7 +102,7 @@ describe('Document Parse 결과 저장', () => {
   test('store는 summaryAttempts 없는 이전 저장본에 기본값 0을 적용한다', async () => {
     const store = await createStore(now(), memoryKv(), { seedUsers: false });
     const old = { url: att.url, fileName: att.name, kind: att.kind, text: '본문', fields: [], warnings: [], summary: null, parsedAt: now().toISOString() };
-    store.saveParsedDoc(old as ParsedDocRecord);
+    store.saveParsedDoc(old as unknown as ParsedDocRecord);
     expect((store.parsedDoc(att.url)! as ParsedDocRecord & { summaryAttempts: number }).summaryAttempts).toBe(0);
   });
 
@@ -115,7 +115,7 @@ describe('Document Parse 결과 저장', () => {
   test('store: doc 레코드 저장·조회, URL 이 다르면 없음', async () => {
     const kv = memoryKv();
     const store = await createStore(now(), kv, { seedUsers: false });
-    const rec: ParsedDocRecord = { url: att.url, fileName: '공고문.pdf', kind: 'pdf', text: '본문', fields: [{ label: '개요', maxLength: 500, required: true }], warnings: [], summary: '정리', parsedAt: now().toISOString() };
+    const rec: ParsedDocRecord = { url: att.url, fileName: '공고문.pdf', kind: 'pdf', text: '본문', fields: [{ label: '개요', maxLength: 500, required: true }], warnings: [], summary: '정리', summaryAttempts: 0, parsedAt: now().toISOString() };
     store.saveParsedDoc(rec);
     expect(kv.data.has(`doc:${urlHash(att.url)}`)).toBe(true);
     expect(store.parsedDoc(att.url)).toEqual(expect.objectContaining(rec));
