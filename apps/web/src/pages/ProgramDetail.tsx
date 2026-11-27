@@ -6,6 +6,7 @@ import { ConditionBadge, RecruitBadge, ResourceFacts, SourceLine } from '../comp
 import { HeartButton } from '../components/HeartButton';
 import { useAuth } from '../components/AuthContext';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
+import '../styles/pages-programs.css';
 
 export function ProgramDetail() {
   const { id = '' } = useParams();
@@ -18,7 +19,7 @@ export function ProgramDetail() {
   if (error || !data) return <div className="container"><ErrorState error={error} onRetry={reload} /></div>;
   const r = data.resource;
   return (
-    <div className="container stack">
+    <div className="container stack program-detail">
       <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} />{r.regions.map((g) => <span key={g} className="tag">{g}</span>)}<HeartButton id={r.id} title={r.title} liked={!!data.liked} /></div>
       <h1>{r.title}</h1>
       <p className="muted">{r.agency}{r.startDate && ` · 등록 ${r.startDate}`}{data.views !== undefined && ` · 조회 ${data.views}`}</p>

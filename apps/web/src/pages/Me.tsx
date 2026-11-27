@@ -13,6 +13,7 @@ import { useAsync } from '../hooks/useAsync';
 import { errMessage } from '../lib/format';
 import { loadLocalTest } from '../lib/typeTestStorage';
 import { QuotaLine } from '../mentor/Quota';
+import '../styles/pages-account.css';
 
 function PasswordSection({ notice }: { notice: boolean }) {
   const { setUser, user } = useAuth();
@@ -153,7 +154,7 @@ export function Me() {
 
   if (!user) return null;
   return (
-    <div className="container stack">
+    <div className="container account-page me-page">
       <h1>내 정보</h1>
       <section className="card stack">
         <h2 style={{ margin: 0 }}>계정</h2>
@@ -182,9 +183,9 @@ export function Me() {
         <div><Link className="btn" to="/test">{type ? '다시 하기' : '테스트 하기'}</Link></div>
       </section>
 
-      {user.isTeam && <Link to="/admin">팀 통계 보기</Link>}
-      {err && <p className="error-text" role="alert">{err}</p>}
-      <section className="row">
+      {user.isTeam && <Link className="me-wide" to="/admin">팀 통계 보기</Link>}
+      {err && <p className="error-text me-wide" role="alert">{err}</p>}
+      <section className="row me-wide">
         <button className="btn" onClick={async () => { await logout(); nav('/'); }}>로그아웃</button>
         <button className="btn danger" onClick={() => setConfirm(true)}>계정 삭제</button>
       </section>

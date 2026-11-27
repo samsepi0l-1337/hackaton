@@ -9,6 +9,7 @@ import { safeNext } from '../components/RequireAuth';
 import { TextField } from '../components/TextField';
 import { VerifyPanel } from '../components/VerifyPanel';
 import { errMessage } from '../lib/format';
+import '../styles/pages-account.css';
 
 const withNext = (path: string, raw: string | null) => (raw ? `${path}?next=${encodeURIComponent(raw)}` : path);
 const mentorNext = (raw: string | null) => safeNext(raw ?? '/mentor');
@@ -47,7 +48,7 @@ export function Signup() {
 
   if (sentTo) {
     return (
-      <div className="container stack" style={{ maxWidth: 480 }}>
+      <div className="container stack account-page narrow">
         <h1>인증 메일을 보냈어요</h1>
         <p><strong>{sentTo}</strong>로 인증 메일을 보냈어요. 24시간 안에 메일의 링크를 누르거나 6자리 코드를 입력해 주세요. 인증하면 바로 로그인돼요.</p>
         <VerifyPanel email={sentTo} initialCooldown={VERIFY_RESEND_SECONDS} onDone={() => nav(mentorNext(sp.get('next')), { replace: true })} />
@@ -57,7 +58,7 @@ export function Signup() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: 440 }}>
+    <div className="container account-page narrow">
       <h1>가입하기</h1>
       <p className="muted">창업 준비는 가입하고 이메일을 인증한 뒤 쓸 수 있어요. 계정 1개로 일주일에 3번 상담할 수 있어요.</p>
       <form className="card" onSubmit={submit} noValidate>
@@ -116,7 +117,7 @@ export function Login() {
 
   if (needVerify) {
     return (
-      <div className="container stack" style={{ maxWidth: 480 }}>
+      <div className="container stack account-page narrow">
         <h1>이메일 인증이 필요해요</h1>
         <p>아직 이메일 인증을 마치지 않았어요. 메일의 링크를 누르거나 코드를 입력해 주세요. 메일이 없다면 다시 보낼 수 있어요.</p>
         <VerifyPanel email={needVerify} onDone={() => nav(next, { replace: true })} />
@@ -125,7 +126,7 @@ export function Login() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: 440 }}>
+    <div className="container account-page narrow">
       <h1>로그인</h1>
       <form className="card" onSubmit={submit} noValidate>
         <TextField label="이메일" type="email" autoComplete="email" value={email} onChange={setEmail} error={errors.email} />
@@ -183,9 +184,9 @@ export function Verify() {
     }
   }
 
-  if (status === 'working') return <div className="container"><p role="status">이메일을 인증하는 중이에요...</p></div>;
+  if (status === 'working') return <div className="container account-page narrow"><p role="status">이메일을 인증하는 중이에요...</p></div>;
   return (
-    <div className="container stack" style={{ maxWidth: 480 }}>
+    <div className="container stack account-page narrow">
       <h1>이메일 인증</h1>
       {status === 'failed' && <p className="error-text" role="alert">{error}</p>}
       <div className="card stack">
@@ -225,7 +226,7 @@ export function Forgot() {
   }
 
   return (
-    <div className="container stack" style={{ maxWidth: 440 }}>
+    <div className="container stack account-page narrow">
       <h1>비밀번호 찾기</h1>
       <p>가입한 이메일을 입력하면 복구 비밀번호를 보내 드려요. 복구 비밀번호는 {RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있고, 로그인한 뒤 새 비밀번호로 바꿔야 해요.</p>
       <form className="card" onSubmit={submit} noValidate>

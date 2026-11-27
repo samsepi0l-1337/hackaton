@@ -7,6 +7,7 @@ import { RecruitBadge } from '../components/ResourceView';
 import { HeartButton } from '../components/HeartButton';
 import { useAuth } from '../components/AuthContext';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
+import '../styles/pages-programs.css';
 
 const PAGE_SIZE = 10;
 
@@ -62,7 +63,7 @@ export function Programs() {
   }
 
   return (
-    <div className="container stack">
+    <div className="container stack programs-page">
       <h1>지역 지원 살펴보기</h1>
       <p className="muted">교육·상담·공간·지원사업 중 공식 자료로 확인한 경로예요. 로그인 없이 볼 수 있어요.</p>
       <form className="row" onSubmit={(e) => { e.preventDefault(); update({ q: qText.trim() || undefined }); }}>
@@ -111,7 +112,7 @@ export function Programs() {
           {pageItems.map(({ resource: r, views, liked }) => {
             const d = r.recruitStatus === 'closed' ? -1 : dDay(r.endDate, now);
             return (
-            <article key={r.id} className="card stack">
+            <article key={r.id} className="card stack program-card">
               <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /><HeartButton id={r.id} title={r.title} liked={!!liked} onChange={(v) => setLiked(r.id, v)} /></div>
               <h3 style={{ margin: 0 }}><Link to={`/programs/${encodeURIComponent(r.id)}`}>{r.title}</Link></h3>
               <p className="muted">{r.agency}</p>

@@ -1,0 +1,54 @@
+/* /programs, /programs/:id 디자인 (디자인 사이트 기준) */
+.programs-page, .program-detail { color: var(--portal-ink); }
+.programs-page h1, .program-detail h1 { font-size: 24px; font-weight: 800; letter-spacing: -.035em; line-height: 1.4; margin: 0 0 var(--space-3); }
+.programs-page > p.muted, .program-detail > p.muted { font-size: 13px; color: #566a80; }
+
+/* 폼 */
+.programs-page .input { border: 1px solid var(--panel-line); border-radius: 12px; background: #fff; min-height: 44px; }
+.programs-page .input:focus-visible { outline: 3px solid #075ec7; outline-offset: 3px; }
+.programs-page .field { margin-bottom: 0; }
+.programs-page .field > .label { font-size: 13px; font-weight: 700; color: #324459; }
+
+/* 버튼 */
+.programs-page .btn, .program-detail .btn { border-radius: 999px; border: 1px solid #d6e0ed; background: #fff; color: #1859b8; font-weight: 700; box-shadow: 0 3px 9px #183e6508; }
+.programs-page .btn:hover, .program-detail .btn:hover { color: #155bc1; border-color: #92b9eb; }
+.programs-page .btn.primary, .program-detail .btn.primary { background: var(--portal-blue); border-color: var(--portal-blue); color: #fff; }
+.programs-page .btn.primary:hover, .program-detail .btn.primary:hover { color: #fff; filter: brightness(.95); }
+.programs-page .btn.ghost { box-shadow: none; background: transparent; }
+.programs-page .btn:disabled { box-shadow: none; }
+
+/* 카드 */
+.programs-page .card, .program-detail .card { border: 1px solid var(--panel-line); border-radius: 12px; box-shadow: 0 3px 9px #183e6508; padding: 17px 17px 18px; }
+.programs-page .card > .stack-gap, .programs-page .card.stack > * + * { margin-top: 8px; }
+.program-card h3 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -.035em; line-height: 1.45; }
+.program-card h3 a { color: var(--portal-ink); }
+.program-card h3 a:hover, .program-detail a:hover { color: #155bc1; text-decoration: underline; }
+.program-card p { margin-bottom: 0; }
+.program-card p:not(.muted) { font-size: 14px; color: #324459; }
+.program-card .btn.small { align-self: flex-start; }
+
+/* 태그·배지 */
+.programs-page .tag, .program-detail .tag { background: #f7f9fc; border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; padding: 1px 8px; color: #566a80; }
+.programs-page .badge, .program-detail .badge { font-size: 13px; font-weight: 700; border-radius: 6px; padding: 1px 8px; }
+
+/* 하트 */
+.programs-page .heart, .program-detail .heart { min-width: 36px; min-height: 36px; }
+
+/* 정렬·페이지 */
+.programs-page [role="group"] .btn.small { min-height: 34px; }
+.programs-page [role="note"] { background: #f2f6fb; border-radius: 7px; padding: 8px 11px; color: #4d5e72; }
+.programs-page nav[aria-label="페이지"] { margin-top: var(--space-4); }
+.programs-page nav[aria-label="페이지"] .btn { min-width: 34px; }
+.programs-page .grid.cols-2 { gap: 12px; }
+
+/* 상세 */
+.program-detail h2 { font-size: 18px; font-weight: 800; letter-spacing: -.055em; margin: 0; }
+.program-detail .banner { border-radius: 12px; font-size: 14px; }
+.program-detail .facts { gap: 12px; }
+.program-detail .facts dt { font-size: 12px; color: #627084; }
+.program-detail .facts dd { font-size: 16px; color: var(--portal-ink); }
+.program-detail .plain-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid #e7edf3; }
+.program-detail .plain-list li:last-child { border-bottom: 0; }
+.program-detail .quote { border-left: 3px solid var(--panel-line); background: #f2f6fb; border-radius: 0 7px 7px 0; }
+.program-detail > .btn { align-self: flex-start; }
+.program-detail > a.btn { display: inline-flex; }

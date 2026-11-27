@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ConsultQuota, ExploreOptionsResponse, ExploreSession, ExploreStep, ProblemCard, StartProfile, SummaryV2 } from '@gil/shared';
+import '../styles/pages-mentor.css';
 import { api } from '../api/client';
 import { CardSkeletons, ErrorState } from '../components/States';
 import { errMessage } from '../lib/format';
@@ -102,9 +103,9 @@ export function Mentor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
-  if (error) return <div className="container"><ErrorState error={error} onRetry={() => setTick(tick + 1)} message="준비 화면을 불러오지 못했어요. 입력한 내용은 이 기기에 남아 있어요." /></div>;
-  if (!boot) return <div className="container"><CardSkeletons count={3} /></div>;
-  return <div className="container"><Flow key={gen} boot={boot} quotaHint={quotaHint} onResumed={() => setTick((t) => t + 1)} /></div>;
+  if (error) return <div className="container mentor-page"><ErrorState error={error} onRetry={() => setTick(tick + 1)} message="준비 화면을 불러오지 못했어요. 입력한 내용은 이 기기에 남아 있어요." /></div>;
+  if (!boot) return <div className="container mentor-page"><CardSkeletons count={3} /></div>;
+  return <div className="container mentor-page"><Flow key={gen} boot={boot} quotaHint={quotaHint} onResumed={() => setTick((t) => t + 1)} /></div>;
 }
 
 function LocalSummary({ summary }: { summary: SummaryV2 }) {
