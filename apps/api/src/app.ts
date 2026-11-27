@@ -14,6 +14,8 @@ import { hashPassword, randomToken, verifyPassword } from './password';
 import type { Bindings } from './env';
 import { createAiTasks } from './ai/tasks';
 import { readAnnouncementForm, type DocWorkerClient } from './docs/pipeline';
+import { HttpError, type AppEnv } from './http';
+import { exploreStats, mountExplore } from './explore/routes';
 import { createStore, emptyMentor, type MentorState, type Store, type UserRecord } from './store';
 
 export interface AppOptions {
@@ -28,14 +30,13 @@ export interface AppOptions {
   docWorkerFor?: (env: Bindings) => DocWorkerClient | null;
   /** 저장소. 기본은 메모리. Workers 에서는 Durable Object KV. */
   store?: () => Promise<Store>;
+  /** 탐색 AI 호출 한도 (행위자당 시간당). 기본 40. */
+  exploreAiLimit?: number;
 }
 
-type Env = { Bindings: Bindings; Variables: { store: Store; user: UserRecord | null; now: Date; ai: ReturnType<typeof createAiTasks> } };
+type Env = AppEnv;
 type Ctx = Context<Env>;
 
-class HttpError extends Error {
-  constructor(public status: 400 | 401 | 403 | 404 | 409, public code: ErrorCode, message: string, public fields?: FieldError[]) { super(message); }
-}
 const bad = (m: string) => new HttpError(400, 'bad_request', m);
 const notFound = (m = '찾을 수 없어요') => new HttpError(404, 'not_found', m);
 
@@ -585,8 +586,10 @@ export function createApp(opts: AppOptions = {}) {
       submitSuccessRate: rate(done, done + failed),
       testToConsultRate: rate(withType.filter((x) => store.mentor(x.id).messages.length > 0).length, withType.length),
     };
-    return c.json(stats);
+    return c.json({ ...stats, explore: exploreStats(store) });
   });
+
+  mountExplore(app, { clock, aiLimit: opts.exploreAiLimit });
 
   return app;
 }

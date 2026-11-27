@@ -15,6 +15,8 @@ export function createAiTasks(env: Partial<Bindings> = {}, deps: AiDeps = {}) {
   const decide = createDecide(env, deps);
   return {
     mode: ai.mode,
+    /** 탐색(F2·F3) 라우트가 직접 쓰는 문장 생성기. */
+    raw: ai,
 
     /** F2. 질문 묶음은 규칙이 정하고 AI는 말투만 바꾼다. */
     async mentorQuestion(base: string, lastAnswer: string, userId?: string): Promise<string> {
