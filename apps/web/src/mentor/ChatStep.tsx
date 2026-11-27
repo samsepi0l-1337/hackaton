@@ -7,7 +7,6 @@ import { api, ApiClientError } from '../api/client';
 import { Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
 import { ITEM_LABEL, Progress, ProblemLine, item } from './Common';
-import { LOCAL_AI_NOTE, rewrite } from '../lib/localAi';
 import { patchStore, readStore, toInfo } from './storage';
 import type { ProblemInfo } from './storage';
 import { QUOTA_NOTE, QuotaLine, resetDate } from './Quota';
@@ -98,8 +97,6 @@ export function ChatStep({ session, problem: card, quota, onSession, onQuota, on
   const [suggestions, setSuggestions] = useState<string[]>(session.exploration?.suggestions?.length ? session.exploration.suggestions : readStore().suggestions);
   const [input, setInput] = useState(() => readStore().draft);
   const [limit, setLimit] = useState<{ message: string; quota?: ConsultQuota } | null>(null);
-  const [soft, setSoft] = useState<Record<number, string>>({});
-  const tried = useRef(new Set<number>());
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [err, setErr] = useState('');
@@ -153,14 +150,7 @@ export function ChatStep({ session, problem: card, quota, onSession, onQuota, on
     return () => window.clearTimeout(t);
   }, [input]);
 
-  // 이 기기의 AI 가 쓸 수 있을 때만 마지막 질문의 말투를 다듬는다. 실패하면 서버 문장 그대로.
-  useEffect(() => {
-    let idx = -1;
-    messages.forEach((m, i) => { if (m.role === 'mentor') idx = i; });
-    if (idx < 0 || sending || tried.current.has(idx)) return;
-    tried.current.add(idx);
-    void rewrite({ task: 'mentor', original: messages[idx]!.text, maxLength: 160 }).then((t) => { if (t) setSoft((c) => ({ ...c, [idx]: t })); });
-  }, [messages, sending]);
+  // 질문 문장은 다시 쓰지 않는다 (2026-11-27 평가: AI 가 다시 쓰면 뜻이 바뀜). 서버가 반응 한 문장 + 규칙 질문을 보낸다.
 
   async function setDir(d: string | null, status: DirectionStatus) {
     try {
@@ -189,8 +179,7 @@ export function ChatStep({ session, problem: card, quota, onSession, onQuota, on
       <div className="chat" role="log" aria-label="대화">
         {messages.map((m, i) => (
           <div key={i} className={`bubble ${m.role}${m.skipped ? ' skipped' : ''}`}>
-            <span className="sr-only">{m.role === 'mentor' ? '질문: ' : '내 답변: '}</span>{m.skipped ? (m.text || '건너뜀') : (soft[i] ?? m.text)}
-            {soft[i] && <div className="muted" style={{ fontSize: 'var(--font-size-sm)' }}>{LOCAL_AI_NOTE}</div>}
+            <span className="sr-only">{m.role === 'mentor' ? '질문: ' : '내 답변: '}</span>{m.skipped ? (m.text || '건너뜀') : m.text}
           </div>
         ))}
         {sending && <div className="bubble mentor" role="status">생각을 정리하는 중이에요...</div>}

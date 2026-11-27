@@ -2,10 +2,28 @@
 // 출처 표시(provenance)는 여기서 정하지 않는다. 호출한 쪽(코드)이 붙인다.
 import { FIELD_PRESUPPOSE, RESOURCES, type AiFill, type FieldQuestion, type LocalAiTask, type ProblemCard, type Resource } from '@gil/shared';
 import { guardText, parseJson } from '../ai/guard';
-import { SYSTEM_PROMPTS } from '../ai/prompts';
 import type { TextAi } from '../ai/solar';
 
 const RULES = '당신은 창업을 처음 생각하는 청년의 생각 정리를 돕는 한국어 도우미예요. 해요체로 짧게 써요. 점수를 매기거나 성공 가능성을 평가하거나 과하게 칭찬하지 않아요. 기관·프로그램 이름, 금액, 마감일, 날짜, 숫자를 절대 쓰지 않아요. 사용자가 말하지 않은 경험·인터뷰·매출·팀을 지어내지 않아요. 확인되지 않은 것은 가설이라고 써요.';
+
+/** 반응 문장 프롬프트. 질문·조언·평가를 하지 않고, 사용자가 한 말만 짧게 받아 준다. */
+export const REACTION_PROMPT = `${RULES}
+사용자의 직전 답을 듣고 짧게 받아 주는 반응 한 문장만 써요. 예: "동네 어르신들의 장보기 불편을 직접 보셨군요."
+- 사용자가 한 말만 바탕으로 써요. 새로운 사실·조언·평가·칭찬을 더하지 않아요.
+- 질문하지 않아요. 물음표를 쓰지 않아요. 다음 질문은 코드가 붙여요.
+- 40자 안팎, 마침표로 끝나는 한 문장만 출력해요.`;
+export const REACTION_MAX = 60;
+
+/** 반응 문장 검사: 한 문장, 질문 아님, 너무 길지 않음. 통과 못 하면 null (규칙 질문만 쓴다). */
+export function cleanReaction(t: string | null): string | null {
+  if (!t) return null;
+  const s = t.replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '').replace(/\s+/g, ' ');
+  if (!s || s.length > REACTION_MAX || /[?？]/.test(s)) return null;
+  // 두 문장 이상이면 쓰지 않는다 (끝의 마침표 하나만 허용).
+  if ((s.match(/[.!。]/g) ?? []).length > 1) return null;
+  if (/(까요|나요|세요|신가요|인가요)[.!]?$/.test(s)) return null; // 질문·권유형 끝맺음
+  return /[.!。]$/.test(s) ? s : `${s}.`;
+}
 
 export interface AiCall { text: string | null; /** 한도 때문에 부르지 않음 */ limited: boolean; /** AI 가 켜져 있는데 응답이 없음 */ failed: boolean }
 
@@ -33,10 +51,15 @@ export function exploreAi(ai: TextAi, allow: (id: string, now: number) => boolea
   const otherTitles = (own?: string[]) => RESOURCES.map((r) => r.title).filter((t) => !own?.includes(t));
 
   return {
-    /** 질문 말투. 질문 뜻은 규칙이 정하고 AI 는 직전 답에 가볍게 반응하며 바꿔 말한다. */
+    /**
+     * 질문. 질문 문장은 규칙 원문을 그대로 쓴다 (2026-11-27 평가: AI 가 다시 쓰면 11건 중 6건의 뜻이 바뀜).
+     * AI 는 직전 답에 대한 짧은 반응 한 문장만 쓰고, 코드가 그 뒤에 규칙 질문을 붙인다. 직전 답이 없으면 AI 를 부르지 않는다.
+     */
     async question(base: string, lastAnswer: string): Promise<{ text: string; failed: boolean }> {
-      const r = await call('mentor', SYSTEM_PROMPTS.mentor, `질문: ${base}\n사용자의 직전 답: ${lastAnswer || '(없음)'}`, 'mentor');
-      return { text: guardText(r.text, { allowedText: [base, lastAnswer], knownTitles: otherTitles(), maxLength: 220 }) ?? base, failed: r.failed };
+      if (!lastAnswer.trim()) return { text: base, failed: false };
+      const r = await call('mentor', REACTION_PROMPT, `사용자의 직전 답: ${lastAnswer}`, 'mentor');
+      const reaction = cleanReaction(guardText(r.text, { allowedText: [lastAnswer], knownTitles: otherTitles(), maxLength: REACTION_MAX }));
+      return { text: reaction ? `${reaction} ${base}` : base, failed: r.failed };
     },
 
     /** 접근 방향 예시 최대 2개. 사용자가 요청했을 때만 부른다. 통과한 것만 돌려준다. */

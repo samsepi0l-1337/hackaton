@@ -4,9 +4,13 @@ import type { Bindings } from '../env';
 import { resolveMode, type AiDeps } from './solar';
 import { upstageHeaders, upstageReady } from './upstage';
 
+/** Decide 선택지 하나: id 와 설명 글. */
+export interface DecideChoice { id: string; text: string }
 export interface Decide {
   enabled: boolean;
   relevance(stateText: string, candidates: Program[]): Promise<Record<string, number> | null>;
+  /** 일반 선택지 관련도 (0..1, 가장 높은 것이 1). 실패·꺼짐이면 null. */
+  rank(stateText: string, choices: DecideChoice[], instructions: string): Promise<Record<string, number> | null>;
 }
 
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
@@ -25,24 +29,22 @@ export function createDecide(env: Partial<Bindings> = {}, deps: AiDeps = {}): De
   const doFetch = deps.fetch ?? fetch;
   const enabled = resolveMode(env) !== 'off' && upstageReady(env) && env.DECIDE_ENABLED === '1';
   const base = (env.UPSTAGE_BASE_URL || UPSTAGE_BASE_URL).replace(/\/+$/, '');
-  return {
-    enabled,
-    async relevance(stateText, candidates) {
-      const list = candidates.slice(0, DECIDE_MAX_CHOICES);
+  const rank = async (stateText: string, choices: DecideChoice[], instructions: string): Promise<Record<string, number> | null> => {
+      const list = choices.slice(0, DECIDE_MAX_CHOICES);
       if (!enabled || list.length < 2) return null;
     const once = async (): Promise<Record<string, number> | null> => {
       const ctl = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => { ctl.abort(); rej(new Error('timeout')); }, DECIDE_TIMEOUT_MS); });
       try {
-        const criteria = Object.fromEntries(list.map((p) => [p.id, clip(`${p.title} / ${p.category} / ${p.content}`, 200)]));
+        const criteria = Object.fromEntries(list.map((p) => [p.id, clip(p.text, 240)]));
         const headers = upstageHeaders(env, { 'content-type': 'application/json', 'cf-aig-metadata': JSON.stringify({ app: 'gil', task: 'decide', user_id: 'server' }) });
         const res = await Promise.race([timeout, doFetch(`${base}/systemone`, {
           method: 'POST', headers, signal: ctl.signal,
           body: JSON.stringify({
             model: DECIDE_MODEL,
             state: clip(stateText, 2000),
-            questions: { fit: { type: 'choice', instructions: '예비 창업자의 아이디어와 가장 관련이 큰 지원사업을 고르세요.', criteria } },
+            questions: { fit: { type: 'choice', instructions, criteria } },
           }),
         })]);
         if (!res.ok) throw new Error(`http ${res.status}`);
@@ -61,6 +63,10 @@ export function createDecide(env: Partial<Bindings> = {}, deps: AiDeps = {}): De
         }
       }
       return null;
-    },
+  };
+  return {
+    enabled,
+    rank,
+    relevance: (stateText, candidates) => rank(stateText, candidates.map((p) => ({ id: p.id, text: `${p.title} / ${p.category} / ${p.content}` })), '예비 창업자의 아이디어와 가장 관련이 큰 지원사업을 고르세요.'),
   };
 }

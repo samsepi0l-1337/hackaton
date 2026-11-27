@@ -17,6 +17,9 @@ export function createAiTasks(env: Partial<Bindings> = {}, deps: AiDeps = {}) {
     mode: ai.mode,
     /** 탐색(F2·F3) 라우트가 직접 쓰는 문장 생성기. */
     raw: ai,
+    /** Solar Decide 일반 선택지 관련도 (탐색 추천 순위). 꺼져 있거나 실패하면 null. */
+    rank: decide.rank,
+    decideEnabled: decide.enabled,
 
     /** F2. 질문 묶음은 규칙이 정하고 AI는 말투만 바꾼다. */
     async mentorQuestion(base: string, lastAnswer: string, userId?: string): Promise<string> {

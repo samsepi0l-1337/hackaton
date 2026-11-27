@@ -182,21 +182,28 @@ function fakeSolar(text: string) {
 
 describe('로컬 AI 헤더 (x-local-ai)', () => {
   test('mentor 가 목록에 있으면 질문에서 Solar 를 부르지 않고 규칙 문장을 돌려준다', async () => {
-    const fk = fakeSolar('안녕하세요, 어떤 분야를 생각하세요?');
+    const fk = fakeSolar('동네 장보기 불편을 직접 보셨군요.');
     const w = world({ env: ON, fetch: fk.f });
-    const local = await w.client('1.1.1.1', { 'x-local-ai': 'mentor,reason,field' }).consult();
+    const lc = w.client('1.1.1.1', { 'x-local-ai': 'mentor,reason,field' });
+    const local = await lc.consult();
     expect(local.status).toBe(200);
-    expect(fk.calls.length).toBe(0);
     expect(local.body.messages.length).toBeGreaterThan(0);
-    // 헤더가 없으면 지금처럼 Solar 를 부른다
-    await w.client('1.1.1.2').consult();
+    await lc.post('/api/explore/chat', { message: '동네 어르신 장보기' });
+    expect(fk.calls.length).toBe(0);
+    // 헤더가 없으면 직전 답에 대한 반응 문장에 Solar 를 부른다 (첫 질문은 답이 없어 부르지 않는다)
+    const nc = w.client('1.1.1.2');
+    await nc.consult();
+    expect(fk.calls.length).toBe(0);
+    await nc.post('/api/explore/chat', { message: '동네 어르신 장보기' });
     expect(fk.calls.length).toBe(1);
   });
 
   test('목록에 없는 작업은 그대로 Solar 를 쓴다', async () => {
-    const fk = fakeSolar('안녕하세요, 어떤 분야를 생각하세요?');
+    const fk = fakeSolar('동네 장보기 불편을 직접 보셨군요.');
     const w = world({ env: ON, fetch: fk.f });
-    await w.client('1.1.1.1', { 'x-local-ai': 'reason,field' }).consult();
+    const c = w.client('1.1.1.1', { 'x-local-ai': 'reason,field' });
+    await c.consult();
+    await c.post('/api/explore/chat', { message: '동네 어르신 장보기' });
     expect(fk.calls.length).toBe(1);
   });
 

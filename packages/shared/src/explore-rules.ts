@@ -191,6 +191,11 @@ export interface ExploreRecommendInput {
   problems?: ProblemCard[];
   /** 관심 표시(하트)한 자료의 특징. 후보를 늘리지 않고, 같은 점수 묶음 안의 순서에만 쓴다. */
   likes?: LikeProfile | null;
+  /**
+   * Solar Decide 관련도 (자료 id → 0..1, 가장 높은 것이 1). 있으면 decideCandidates 후보 안에서 관련도 순으로 고른다.
+   * 규칙은 후보 거르기(마감·명시 조건 불일치·단계)에만 쓴다. 관련도가 RELEVANCE_MIN 보다 낮으면 억지로 채우지 않는다.
+   */
+  relevance?: Record<string, number> | null;
 }
 export interface Recommended { resource: Resource; condition: ConditionResult; regionMatch: boolean; linked: boolean; capMatch: boolean }
 
@@ -207,14 +212,58 @@ export function reasonFor(r: Resource, readiness: ReadinessStage | undefined, li
   return `${linked ? '선택한 문제와 연결된 경로예요. ' : ''}${goal}에 쓸 수 있어요. ${help}. 실제 운영 범위와 대상은 공식 안내로 확인해 주세요.`;
 }
 
+/** Decide 관련도가 가장 높은 후보 대비 이 비율보다 낮으면 추천하지 않는다. */
+export const RELEVANCE_MIN = 0.2;
+/** Decide 에 보낼 최대 후보 수 (cloudflare.ts DECIDE_MAX_CHOICES 와 같다). */
+export const DECIDE_CANDIDATES_MAX = 26;
+
+/**
+ * 준비 단계로 받는 자료 단계. '아이디어 없음'은 실제 공고에 단계가 없어서(평가 2026-11-27) 예비창업자 대상(has_idea)도 받는다.
+ */
+const stagesFor = (readiness: ReadinessStage | undefined): ReadinessStage[] | null =>
+  !readiness ? null : readiness === 'no_idea' ? ['no_idea', 'has_idea'] : [readiness];
+
+/**
+ * Decide 후보: 마감·명시 조건 불일치를 빼고, 단계가 맞는 자료를 규칙 점수(문제 연결·도움 종류·하트·지역) 순으로 최대 26건.
+ * 도움 종류가 맞지 않아도 후보에는 넣는다 (Decide 가 사용자의 글을 읽고 고른다).
+ */
+export function decideCandidates(input: ExploreRecommendInput): Resource[] {
+  const resources = input.resources ?? RESOURCES;
+  const problems = input.problems ?? PROBLEMS;
+  const linkedIds = new Set(problems.find((p) => p.id === input.problemId)?.resourceIds ?? []);
+  const caps = new Set([...(input.readiness ? WANT_CAPS[input.readiness] : []), ...directionCaps(input.direction)]);
+  const stages = stagesFor(input.readiness);
+  const rows: { r: Resource; score: number }[] = [];
+  for (const r of resources) {
+    if (stages && !r.stages.some((s) => stages.includes(s))) continue;
+    const c = checkConditions(r, input.conditions, input.now);
+    if (c.closed || c.status === 'mismatch') continue;
+    const score = (linkedIds.has(r.id) ? 2 : 0) + (r.capabilityTags.some((t) => caps.has(t)) ? 1 : 0) + 0.9 * likeSimilarity(r, input.likes)
+      + (resourceRegionMatch(r, input.reviewRegion) ? 0.3 : 0);
+    rows.push({ r, score });
+  }
+  rows.sort((a, b) => b.score - a.score || a.r.id.localeCompare(b.r.id));
+  return rows.slice(0, DECIDE_CANDIDATES_MAX).map((x) => x.r);
+}
+
+/** Decide 질문 지시문 (운영·평가 공통). */
+export const DECIDE_INSTRUCTIONS = '이 사람이 지금 준비 단계에서 가장 먼저 이용하면 도움이 될 지원을 고르세요. 사용자가 원하는 도움의 종류와 하고 싶은 일에 맞는지를 보고, 나이·거주지·사업자 여부 조건에 맞지 않는 것은 고르지 마세요.';
+
+/** Decide 선택지 글: 유형·도움 종류·대상·제공 내용. 기관 이름은 넣지 않는다 (이름이 아니라 내용으로 고르게). */
+export function decideChoiceText(r: Resource): string {
+  return [`[${r.type}] ${r.title}`, r.capabilityTags.length ? `도움: ${r.capabilityTags.join('·')}` : '', r.target ? `대상: ${r.target}` : '', r.content].filter(Boolean).join(' / ');
+}
+
 export function recommendResources(input: ExploreRecommendInput): { items: Recommended[]; noMatchReason: string | null } {
+  if (input.relevance && Object.keys(input.relevance).length) return recommendByRelevance(input, input.relevance);
   const resources = input.resources ?? RESOURCES;
   const problems = input.problems ?? PROBLEMS;
   const linkedIds = new Set(problems.find((p) => p.id === input.problemId)?.resourceIds ?? []);
   const caps = new Set([...(input.readiness ? WANT_CAPS[input.readiness] : []), ...directionCaps(input.direction)]);
   const rows: (Recommended & { fit: number })[] = [];
+  const stages = stagesFor(input.readiness);
   for (const r of resources) {
-    if (input.readiness && !r.stages.includes(input.readiness)) continue;
+    if (stages && !r.stages.some((s) => stages.includes(s))) continue;
     const condition = checkConditions(r, input.conditions, input.now);
     if (condition.closed || condition.status === 'mismatch') continue;
     const linked = linkedIds.has(r.id);
@@ -228,6 +277,22 @@ export function recommendResources(input: ExploreRecommendInput): { items: Recom
   // 지역은 동등한 후보 사이의 순서에만 쓴다. 마감 임박 가산점 없음.
   rows.sort((a, b) => b.fit - a.fit || Number(b.regionMatch) - Number(a.regionMatch) || a.resource.id.localeCompare(b.resource.id));
   const items = rows.slice(0, 3).map(({ fit: _fit, ...x }) => x);
+  return { items, noMatchReason: items.length ? null : REGION_NOTHING };
+}
+
+/** Decide 관련도로 고른다. 후보 밖 자료와 관련도가 낮은 자료는 넣지 않는다. 같은 관련도면 하트·지역 순. */
+function recommendByRelevance(input: ExploreRecommendInput, rel: Record<string, number>): { items: Recommended[]; noMatchReason: string | null } {
+  const problems = input.problems ?? PROBLEMS;
+  const linkedIds = new Set(problems.find((p) => p.id === input.problemId)?.resourceIds ?? []);
+  const caps = new Set([...(input.readiness ? WANT_CAPS[input.readiness] : []), ...directionCaps(input.direction)]);
+  const rows = decideCandidates(input)
+    .filter((r) => (rel[r.id] ?? 0) >= RELEVANCE_MIN)
+    .map((r) => ({ r, p: rel[r.id]!, like: likeSimilarity(r, input.likes), regionMatch: resourceRegionMatch(r, input.reviewRegion) }))
+    .sort((a, b) => b.p - a.p || b.like - a.like || Number(b.regionMatch) - Number(a.regionMatch) || a.r.id.localeCompare(b.r.id));
+  const items = rows.slice(0, 3).map(({ r, regionMatch }) => ({
+    resource: r, condition: checkConditions(r, input.conditions, input.now), regionMatch,
+    linked: linkedIds.has(r.id), capMatch: r.capabilityTags.some((t) => caps.has(t)),
+  }));
   return { items, noMatchReason: items.length ? null : REGION_NOTHING };
 }
 

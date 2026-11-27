@@ -324,6 +324,13 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
           {!readOnly && <button className="btn small" onClick={() => setCond(true)}>내 조건 확인</button>}
         </div>
         <p className="muted">{res.coverageNote}</p>
+        {res.resources.length > 0 && (
+          <p className="muted">
+            {res.ranking === 'ai'
+              ? <><span className="badge">AI 관련도 순</span> 마감·명시 조건 불일치를 뺀 후보 중에서 AI(Solar Decide)가 내 구상·내 정보와 관련이 큰 순서로 골랐어요. 참고용이에요.</>
+              : <>준비 단계와 원하는 도움 종류에 맞춘 순서예요.</>}
+          </p>
+        )}
         {res.resources.length === 0
           ? <EmptyState message="현재 확인된 자료에서 맞는 경로를 찾지 못했어요." action={res.noMatchReason ? <p className="muted">{res.noMatchReason}</p> : undefined} />
           : res.resources.slice(0, 3).map((c) => <ResourceResultCard key={c.resource.id} card={c} localReason={localReasons[c.resource.id]} onLink={onLink(c.resource.id)} />)}

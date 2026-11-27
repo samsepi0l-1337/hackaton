@@ -5,7 +5,7 @@ import type { Context, Hono } from 'hono';
 import {
   CONDITION_NOTE, CONTEXTS, RESOURCE_SORTS, type ResourceSort, activeResources, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, LOCAL_AI_HEADER, LOCAL_AI_TASKS, buildFieldQuestions, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
   REVIEW_REGIONS, applySummaryEdit, buildPrep, mergeConditions, buildRegional, buildSummary, checkConditions, coverageByRegion, coverageNote,
-  problemOf, problemsFor, reasonFor, recommendResources, validateStart, LIKES_MAX, likeProfile, likeSimilarity, likeTopics, type LikeProfile, type LikesResponse,
+  problemOf, problemsFor, reasonFor, recommendResources, decideCandidates, decideChoiceText, DECIDE_INSTRUCTIONS, validateStart, LIKES_MAX, likeProfile, likeSimilarity, likeTopics, type LikeProfile, type LikesResponse,
   type Exploration, type ExploreResultResponse, type FieldQuestion, type LocalAiTask, type ExploreSession, type PrepItem, type ReadinessStage,
   type RegionalContextCard, type Resource, type ResourceCard, type StartProfile, type SummaryEdit, type SummaryV2, type UserConditions,
 } from '@gil/shared';
@@ -94,8 +94,9 @@ function aiContext(s: ExploreState): string {
 function computeResult(s: ExploreState, now: Date, resources: Resource[], defaults?: UserConditions, likes?: LikeProfile | null): ExploreResultResponse {
   const ex = s.exploration as Exploration | null;
   const summary = asSummary(s.summary) ?? buildSummary({ start: s.start as StartProfile, exploration: ex, answers: s.answers });
-  const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: mergeConditions(s.start.conditions as UserConditions | undefined, defaults), now, resources, likes });
   const sig = aiSig(s);
+  const relevance = s.ai?.sig === sig ? s.ai.rank : null;
+  const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: mergeConditions(s.start.conditions as UserConditions | undefined, defaults), now, resources, likes, relevance });
   const cards: ResourceCard[] = rec.items.map((r) => {
     const rule = reasonFor(r.resource, s.start.readiness, r.linked);
     const aiText = s.ai?.sig === sig ? s.ai.reasons[r.resource.id] : undefined;
@@ -118,6 +119,7 @@ function computeResult(s: ExploreState, now: Date, resources: Resource[], defaul
     conditionNote: CONDITION_NOTE,
     // 저장된 AI 문장은 문제·방향 서명이 같을 때만 쓴다. 문제가 바뀌면 규칙 질문으로 다시 만든다.
     fieldQuestions: s.fieldQ?.sig === fieldSig(s) ? s.fieldQ.items as FieldQuestion[] : ruleFieldQuestions(s, summary),
+    ranking: relevance && Object.keys(relevance).length ? 'ai' : 'rule',
   };
 }
 
@@ -182,6 +184,29 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
   const likesOf = (c: Ctx): LikeProfile | null => {
     const ids = new Set(likedIds(c));
     return ids.size ? likeProfile(resourcesNow().filter((r) => ids.has(r.id))) : null;
+  };
+  /**
+   * Solar Decide 로 창업 준비 추천 순위를 정한다. 후보는 규칙이 거른다 (마감·명시 조건 불일치·단계, 최대 26건).
+   * 입력: 대화 맥락 + 요약 + 내 정보 조건 + 하트 관심. 꺼져 있거나 실패하면 null (규칙 순위).
+   */
+  const decideRank = async (c: Ctx, s: ExploreState, actorId: string): Promise<Record<string, number> | null> => {
+    const tasks = c.get('ai');
+    if (!tasks.decideEnabled || !allow(actorId, c.get('now').getTime())) return null;
+    const ex = s.exploration as Exploration | null;
+    const conditions = mergeConditions(s.start.conditions as UserConditions | undefined, defaultsOf(c));
+    const likes = likesOf(c);
+    const input = { readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions, now: c.get('now'), resources: resourcesNow(), likes };
+    const cands = decideCandidates(input);
+    if (cands.length < 2) return null;
+    const summary = asSummary(s.summary);
+    const state = [
+      aiContext(s),
+      summary ? `도움받을 사람: ${summary.target.text} / 해결해볼 불편: ${summary.value.text}` : '',
+      `접근 방향: ${ex?.direction ?? '아직 탐색 중'}`,
+      conditionsText(conditions),
+      likes ? `관심 표시한 공고의 주제: ${likeTopics(likes).join(', ')}` : '',
+    ].filter(Boolean).join('\n');
+    return tasks.rank(state, cands.map((r) => ({ id: r.id, text: decideChoiceText(r) })), DECIDE_INSTRUCTIONS);
   };
   const writeActor = (c: Ctx): Actor => {
     const a = readActor(c);
@@ -442,14 +467,15 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     if (hadSummary) s.prepDone = {};
     s.summary = summary;
     s.regional = reg?.card ?? null;
-    // 추천 이유는 규칙 결과에 대해서만 AI 문장으로 다듬는다.
-    const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: mergeConditions(s.start.conditions as UserConditions | undefined, defaultsOf(c)), now, resources: resourcesNow(), likes: likesOf(c) });
+    // 추천 순위: Solar Decide (실패하면 규칙). 이유 문장은 정해진 상위 3개에 대해서만 다듬는다.
+    const rank = await decideRank(c, s, actor.id);
+    const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: mergeConditions(s.start.conditions as UserConditions | undefined, defaultsOf(c)), now, resources: resourcesNow(), likes: likesOf(c), relevance: rank });
     const reasons: Record<string, string> = {};
     await Promise.all(rec.items.map(async (r) => {
       const t = await ai.reason(r.resource, reasonFor(r.resource, s.start.readiness, r.linked), ctx);
       if (t) reasons[r.resource.id] = t;
     }));
-    s.ai = { sig: aiSig(s), reasons };
+    s.ai = { sig: aiSig(s), reasons, rank };
     s.step = 'summary';
     touch(s, c);
     return c.json({ summary, regional: s.regional, prepReset, failed: filled.failed });
@@ -491,6 +517,11 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     const s = (a && c.get('store').explore(a.id)) || emptyState(c.get('now'), a?.kind ?? 'guest');
     const saved = !!a && !!c.get('store').explore(a.id);
     if (saved) { bump(s, 'result'); s.step = 'result'; touch(s, c); }
+    // 요약을 고쳐 서명이 바뀌었으면 순위를 다시 정한다 (이유 문장은 규칙 문장).
+    if (saved && a && s.summary && (s.ai?.sig !== aiSig(s) || !s.ai.rank)) {
+      const rank = await decideRank(c, s, a.id);
+      if (rank) { s.ai = { sig: aiSig(s), reasons: s.ai?.sig === aiSig(s) ? s.ai.reasons : {}, rank }; touch(s, c); }
+    }
     const result = computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c), likesOf(c));
     // 현장 질문 문장 다듬기 (선택). 로컬 AI 가 'field' 를 맡으면 Solar 를 부르지 않는다. 저장된 문장이 서명과 맞으면 다시 부르지 않는다.
     if (saved && a && s.fieldQ?.sig !== fieldSig(s) && !localTasks(c).has('field')) {
@@ -642,6 +673,17 @@ export function fitScore(card: ResourceCard, prefs: LikeProfile | null, readines
   const cond = checks.filter((x) => x.status === 'match').length * 0.5 - (checks.some((x) => x.status === 'mismatch') ? 3 : 0);
   const stage = readiness && card.resource.stages.includes(readiness) ? 1 : 0;
   return Math.round((3 * likeSimilarity(card.resource, prefs) + cond + stage) * 1000) / 1000;
+}
+
+/** Decide 입력용 조건 글. 모르는 칸은 쓰지 않는다. */
+function conditionsText(u: UserConditions | undefined): string {
+  if (!u) return '';
+  const parts: string[] = [];
+  if (typeof u.age === 'number') parts.push(`나이 ${u.age}세`);
+  if (u.residence && u.residence !== 'unknown') parts.push(`거주 ${u.residence}`);
+  if (typeof u.hasBusiness === 'boolean') parts.push(u.hasBusiness ? '사업자 있음' : '사업자 없음(예비창업자)');
+  if (u.affiliation && u.affiliation !== 'unknown') parts.push(`현재 ${u.affiliation}`);
+  return parts.length ? `사용자 정보: ${parts.join(', ')}` : '';
 }
 
 function sanitizeConditions(v: unknown): UserConditions | undefined {
