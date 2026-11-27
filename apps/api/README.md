@@ -51,3 +51,15 @@ AI_MODE=upstage UPSTAGE_API_KEY=... DECIDE_ENABLED=1 bun run dev:api   # + 관�
 - 상담 횟수 제한: 1인 7일 3회 (`CONSULT_LIMIT`). 상담 1회 = 대화가 빈 세션에서 `POST /api/explore/chat` 첫 질문을 받는 순간 (`counted` 로 재요청은 세지 않음). 계정 id 로만 센다(KV `quota:u:<id>`, 7일치). 행사장처럼 같은 IP 를 여럿이 써도 각자 3회이고, 쿠키·IP 키는 쓰지 않는다. 3회면 429 `limit` (`error.quota`). 초기화는 횟수를 돌려주지 않고, 팀 계정은 제외. 테스트용 `createApp({ consultLimit })`. 막은 횟수는 `/api/admin/stats` 의 `explore.limitHits`.
 - 로컬 AI: 요청 헤더 `x-local-ai: mentor,reason,field` 에 든 작업은 Solar 를 부르지 않고 규칙 문장만 돌려준다 (웹이 로컬에서 다듬고 shared `guardText` 로 검사). 헤더에 없는 작업은 그대로.
 - 현장 확인 질문(F12 P1): `GET /api/explore/result` 의 `fieldQuestions` (최대 3개). 규칙 `buildFieldQuestions` 가 현재 방식·실제 경험부터 묻고, AI 는 'field'(mentor 모델) 로 문장만 다듬는다 (사실·전제 검사 통과 시에만, 문제·방향이 바뀌면 다시 만든다).
+
+## 실제 지원사업 수집 (K-Startup, F8)
+
+공식 지원사업은 공공데이터포털 「창업진흥원_K-Startup 조회서비스」 `getAnnouncementInformation02` 의 실제 응답으로 채운다. 부산 모집 중 + 전국 모집 중 공고를 `pbanc_sn` 기준으로 합쳐 Durable Object KV(`ks:resource:<id>`, `ks:meta`)에 `Resource`(type '지원사업', id `ks-<pbanc_sn>`)로 둔다.
+
+- 키: `wrangler secret put KSTARTUP_SERVICE_KEY` (일반 인증키. 디코딩 키 또는 인코딩 키 모두 가능, 서버가 한 번만 인코딩한다). 로컬 실행은 `KSTARTUP_SERVICE_KEY=... bun run dev:api`. 키는 코드·`vars` 에 두지 않는다.
+- 수집 방법: (1) 매일 03:00 KST cron (`0 18 * * *` UTC, wrangler `triggers.crons`) 이 `scheduled` → GilApp `syncKStartup()` 를 부른다. (2) 팀 계정이 `POST /api/admin/kstartup/sync` 를 부르면 바로 수집하고 `KStartupSyncResponse`(`ok`, `fetchedAt`, `added`, `updated`, `closed`, `total`, `error`)를 돌려준다.
+- 실패(키 없음·401·시간 초과(요청당 15초)·형식 이상·빈 응답)면 마지막으로 수집한 자료를 그대로 쓰고 `ks:meta.lastError` 에 기록한다. 확인일(`checkedAt`)은 수집한 날이라 오래된 자료를 최신으로 보이게 하지 않는다. 키가 없어도 앱은 동작한다.
+- 이번 조회에 없는 이전 모집 중 공고는 지우지 않고 종료(`closed`)로 표시한다. 조회를 끝까지 받지 못했으면(10쪽 제한) 종료 표시는 건너뛴다.
+- 쓰임: `/api/resources`, `/api/resources/:id`, 탐색 결과 추천, `/api/explore/options` 의 지역 자료 수가 `팀 검수 자료(교육·상담·공간) + 실제 지원사업` 을 합쳐 쓴다. 실제 지원사업이 하나라도 있으면 테스트 지원사업(`rs-kstartup-pre`)은 빠진다. 종료·마감 지난 공고는 추천에서 빠지고 자료 수에도 세지 않는다.
+- `/api/programs`, `/api/home` 은 아직 기존 시드 `Program` 을 쓴다.
+- 테스트는 가짜 fetch 만 쓴다 (`test/kstartup*.test.ts`, `packages/shared/test/kstartup-resource.test.ts`).

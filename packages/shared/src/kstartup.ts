@@ -16,9 +16,27 @@ export interface KStartupItem {
   pbanc_ctnt?: string;
   support_ctnt?: string;
   detl_pg_url?: string;
+  intg_pbanc_biz_nm?: string;
+  sprv_inst?: string;
+  biz_prch_dprt_nm?: string;
+  biz_gdnc_url?: string;
+  biz_aply_url?: string;
+  prch_cnpl_no?: string;
+  aply_trgt_ctnt?: string;
+  prfn_matr?: string;
+  aply_excl_trgt_ctnt?: string;
+  aply_mthd_onli_rcpt_istc?: string;
+  aply_mthd_eml_rcpt_istc?: string;
+  aply_mthd_vst_rcpt_istc?: string;
+  aply_mthd_pssr_rcpt_istc?: string;
+  aply_mthd_fax_rcpt_istc?: string;
+  aply_mthd_etc_istc?: string;
+  eval_method?: string;
+  intg_pbanc_yn?: string;
 }
 
-function toIso(v: string | undefined): string | null {
+/** 'yyyyMMdd', 'yyyy-MM-dd', 시각이 붙은 값을 모두 'YYYY-MM-DD' 로 바꾼다. 읽을 수 없으면 null. */
+export function toIso(v: string | undefined): string | null {
   if (!v) return null;
   const digits = v.replace(/\D/g, '');
   return digits.length >= 8 ? `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}` : null;
