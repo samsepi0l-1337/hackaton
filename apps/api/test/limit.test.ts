@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { FIELD_PRESUPPOSE, PROBLEMS } from '@gil/shared';
 import { createApp } from '../src/app';
 import { createStore, memoryKv } from '../src/store';
-import { NOW } from './helpers';
+import { createDevMailer } from '../src/mail';
+import { NOW, TEST_PEPPER, lastVerification } from './helpers';
 
 const DAY = 86_400_000;
 const START = { readiness: 'no_idea', interests: ['조선·해양'], reviewRegion: '부산' };
@@ -12,10 +13,14 @@ const START = { readiness: 'no_idea', interests: ['조선·해양'], reviewRegio
 function world(opts: Parameters<typeof createApp>[0] = {}) {
   const clock = { t: NOW.getTime() };
   const kv = memoryKv();
-  const app = createApp({ now: () => new Date(clock.t), store: () => createStore(new Date(clock.t), kv), ...opts });
-  const client = (ip = '1.1.1.1', extra: Record<string, string> = {}) => {
+  const mail = createDevMailer({ quiet: true });
+  const app = createApp({ now: () => new Date(clock.t), store: () => createStore(new Date(clock.t), kv), mailer: mail, ...opts, env: { PASSWORD_PEPPER: TEST_PEPPER, ...opts.env } });
+  let n = 0;
+  /** who 가 없으면 처음 쓸 때 새 계정(가입·인증)을 만든다. 있으면 그 계정으로 로그인한다. */
+  const client = (ip = '1.1.1.1', extra: Record<string, string> = {}, who?: { email: string; password: string }) => {
     const st = { cookie: '', ip };
-    const call = async (method: string, path: string, body?: unknown) => {
+    let ready = false;
+    const raw = async (method: string, path: string, body?: unknown) => {
       const res = await app.request(path, {
         method,
         headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(st.cookie ? { cookie: st.cookie } : {}), 'cf-connecting-ip': st.ip, ...extra },
@@ -25,6 +30,18 @@ function world(opts: Parameters<typeof createApp>[0] = {}) {
       if (set) { const first = set.split(';')[0]!; st.cookie = first.endsWith('=') ? '' : first; }
       const text = await res.text();
       return { status: res.status, body: (text ? JSON.parse(text) : null) as any };
+    };
+    const call = async (method: string, path: string, body?: unknown) => {
+      if (!ready) {
+        ready = true;
+        const acct = who ?? { email: `w${++n}@x.com`, password: 'password1' };
+        if (who) await raw('POST', '/api/auth/login', acct);
+        else {
+          await raw('POST', '/api/auth/signup', { ...acct, passwordConfirm: acct.password, consent: true });
+          await raw('POST', '/api/auth/verify', { token: lastVerification({ mail }, acct.email).token });
+        }
+      }
+      return raw(method, path, body);
     };
     return {
       st,
@@ -36,7 +53,7 @@ function world(opts: Parameters<typeof createApp>[0] = {}) {
       async consult() { await call('PUT', '/api/explore/start', { start: START }); return call('POST', '/api/explore/chat', {}); },
     };
   };
-  return { app, kv, clock, client };
+  return { app, kv, mail, clock, client };
 }
 
 /** 한 사람이 쿠키를 지우고 같은 IP 에서 n 번 상담을 시작한다. */
@@ -63,39 +80,29 @@ describe('상담 횟수 제한', () => {
     expect(s.body.quota).toMatchObject({ used: 3, remaining: 0 });
   });
 
-  test('초기화(쿠키 삭제) 후 같은 IP 의 새 쿠키도 막힌다 (횟수 환불 없음)', async () => {
+  test('같은 IP 의 두 계정은 각자 3회를 쓴다 (행사장 공용 IP)', async () => {
+    const w = world();
+    const a = w.client('9.9.9.9');
+    const b = w.client('9.9.9.9');
+    await useUp(a, 3);
+    await useUp(b, 3);
+    expect((await a.consult()).status).toBe(429);
+    expect((await b.consult()).status).toBe(429);
+    expect((await w.client('9.9.9.9').consult()).status).toBe(200); // 세 번째 계정은 새 사람
+  });
+
+  test('로그아웃·재로그인, 초기화로도 횟수는 돌아오지 않는다 (계정 id 로 센다)', async () => {
     const w = world();
     const c = w.client('9.9.9.9');
     await useUp(c, 3);
-    const again = w.client('9.9.9.9'); // 쿠키 없음
+    await c.post('/api/auth/logout');
+    const again = w.client('9.9.9.9', {}, { email: 'w1@x.com', password: 'password1' });
     expect((await again.consult()).status).toBe(429);
-  });
-
-  test('IP 가 다르고 새 쿠키면 새 사람으로 본다', async () => {
-    const w = world();
-    await useUp(w.client('9.9.9.9'), 3);
-    const other = w.client('8.8.8.8');
-    expect((await other.consult()).status).toBe(200);
-  });
-
-  test('같은 쿠키는 IP 가 바뀌어도 센다 (쿠키 키)', async () => {
-    const w = world();
-    const c = w.client('1.0.0.1');
-    for (let i = 0; i < 3; i++) {
-      // 쿠키를 지우지 않고 세션만 새로 시작할 수는 없어서, 쿠키를 그대로 들고 상담을 센다.
-      expect((await c.consult()).status).toBe(200);
-      const cookie = c.st.cookie;
-      await c.del('/api/explore/session');
-      c.st.cookie = cookie; // 같은 쿠키 id 로 다시 (기록은 서버에서 지워졌다)
-      c.st.ip = `1.0.0.${i + 2}`;
-    }
-    expect((await c.consult()).status).toBe(429);
   });
 
   test('로그인 사용자는 user id 로 센다 (IP 가 달라도)', async () => {
     const w = world();
-    const u = w.client('2.2.2.2');
-    expect((await u.post('/api/auth/login', { email: 'demo@test.local', password: 'demo1234!' })).status).toBe(200);
+    const u = w.client('2.2.2.2', {}, { email: 'demo@test.local', password: 'demo1234!' });
     for (let i = 0; i < 3; i++) { u.st.ip = `2.2.2.${i}`; expect((await u.consult()).status).toBe(200); await u.del('/api/explore/session'); }
     u.st.ip = '3.3.3.3';
     expect((await u.consult()).status).toBe(429);
@@ -103,8 +110,7 @@ describe('상담 횟수 제한', () => {
 
   test('팀 계정은 제한이 없다', async () => {
     const w = world();
-    const t = w.client('4.4.4.4');
-    await t.post('/api/auth/login', { email: 'team@test.local', password: 'team1234!' });
+    const t = w.client('4.4.4.4', {}, { email: 'team@test.local', password: 'team1234!' });
     for (let i = 0; i < 5; i++) { expect((await t.consult()).status).toBe(200); await t.del('/api/explore/session'); }
     expect((await t.get('/api/explore/session')).body.quota).toMatchObject({ used: 0, limit: 3 });
   });
@@ -134,36 +140,34 @@ describe('상담 횟수 제한', () => {
     const q = (await c.get('/api/explore/session')).body.quota;
     expect(q.used).toBe(1);
     // 오래된 항목은 지워진다
-    const ip = [...w.kv.data].find(([k]) => k.startsWith('quota:ip:'))!;
-    expect(ip[1]).toHaveLength(1);
+    const q1 = [...w.kv.data].find(([k]) => k.startsWith('quota:u:'))!;
+    expect(q1[1]).toHaveLength(1);
   });
 
-  test('KV 에 원본 IP 가 없고 해시 키만 있다', async () => {
+  test('7일 뒤 오래된 항목은 지워지고, KV 에는 계정 id 키만 있다 (IP·쿠키 키 없음)', async () => {
     const w = world();
     await w.client('203.0.113.77').consult();
     const dump = JSON.stringify([...w.kv.data]);
     expect(dump).not.toContain('203.0.113.77');
     const keys = [...w.kv.data.keys()].filter((k) => k.startsWith('quota:'));
-    expect(keys.some((k) => /^quota:ip:[0-9a-f]{64}$/.test(k))).toBe(true);
-    expect(keys.some((k) => k.startsWith('quota:c:g-'))).toBe(true);
+    expect(keys.length).toBe(1);
+    expect(keys[0]).toMatch(/^quota:u:u-/);
   });
 
-  test('IP_HASH_SALT 가 키에 영향을 주고, consultLimit 옵션이 한도를 바꾼다', async () => {
-    const a = world({ env: { IP_HASH_SALT: 'A' }, consultLimit: { count: 1 } });
-    const b = world({ env: { IP_HASH_SALT: 'B' }, consultLimit: { count: 1 } });
-    await a.client('5.5.5.5').consult();
-    await b.client('5.5.5.5').consult();
-    const ipKey = (w: ReturnType<typeof world>) => [...w.kv.data.keys()].find((k) => k.startsWith('quota:ip:'));
-    expect(ipKey(a)).not.toBe(ipKey(b));
-    expect((await a.client('5.5.5.5').consult()).status).toBe(429);
+  test('consultLimit 옵션이 한도를 바꾼다', async () => {
+    const a = world({ consultLimit: { count: 1 } });
+    const c = a.client('5.5.5.5');
+    expect((await c.consult()).status).toBe(200);
+    await c.del('/api/explore/session');
+    expect((await c.consult()).status).toBe(429);
   });
 
   test('관리자 통계에 제한에 걸린 횟수가 나온다', async () => {
     const w = world();
-    await useUp(w.client('6.6.6.6'), 3);
-    await w.client('6.6.6.6').consult();
-    const admin = w.client('7.7.7.7');
-    await admin.post('/api/auth/login', { email: 'team@test.local', password: 'team1234!' });
+    const u = w.client('6.6.6.6');
+    await useUp(u, 3);
+    await u.consult();
+    const admin = w.client('7.7.7.7', {}, { email: 'team@test.local', password: 'team1234!' });
     expect((await admin.get('/api/admin/stats')).body.explore.limitHits).toBe(1);
   });
 });
