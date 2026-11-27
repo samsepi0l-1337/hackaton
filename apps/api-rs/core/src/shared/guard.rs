@@ -34,6 +34,30 @@ fn date_forms(s: &str) -> Vec<String> {
         vec![]
     }
 }
+fn quoted_spans(s: &str) -> Vec<&str> {
+    let chars: Vec<(usize, char)> = s.char_indices().collect();
+    let mut spans = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let (start, ch) = chars[i];
+        if !matches!(ch, '\'' | '"' | '‘' | '“' | '「' | '『') {
+            i += 1;
+            continue;
+        }
+        let j = (i + 1..chars.len())
+            .find(|&j| matches!(chars[j].1, '\'' | '"' | '’' | '”' | '」' | '』'));
+        if let Some(j) = j {
+            let q = &s[start + ch.len_utf8()..chars[j].0];
+            if (3..=60).contains(&crate::jsstr::len16(q)) {
+                spans.push(q);
+                i = j + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    spans
+}
 /// `guardText(text: string | null | undefined, opts: GuardOptions = {}): string | null`
 pub fn guard_text(text: Option<&str>, opts: &Value) -> Option<String> {
     let text = text.filter(|s| !s.is_empty())?;
@@ -62,7 +86,7 @@ pub fn guard_text(text: Option<&str>, opts: &Value) -> Option<String> {
     let source = norm(&sources.join(" "));
     for pat in [
         r"[0-9][0-9,.]*\s*(?:천|백)?\s*(?:만|억|조)?\s*원|\$\s?[0-9][0-9,.]*|[0-9][0-9,.]*\s*(?:만|억)(?![가-힣])",
-        r"(?i)[0-9]{4}[-./][0-9]{1,2}[-./][0-9]{1,2}|[0-9]{1,2}\s*월\s*[0-9]{1,2}\s*일|(?<![0-9A-Za-z_])D\s*[-+]\s*[0-9]+(?![0-9A-Za-z_])|D-day",
+        r"(?i)[0-9]{4}[-./][0-9]{1,2}[-./][0-9]{1,2}|[0-9]{1,2}\s*월\s*[0-9]{1,2}\s*일|(?<!(?-i:[0-9A-Za-z_]))D\s*[-+]\s*[0-9]+(?!(?-i:[0-9A-Za-z_]))|D-day",
     ] {
         let re = Regex::new(&pat.replace(r"\s", JS_WS)).ok()?;
         for m in re.find_iter(&t) {
@@ -81,15 +105,11 @@ pub fn guard_text(text: Option<&str>, opts: &Value) -> Option<String> {
             return None;
         }
     }
-    let quoted = Regex::new(r#"['"‘“「『]([^'"’”」』]+)['"’”」』]"#).ok()?;
-    for c in quoted.captures_iter(&t) {
-        let c = c.ok()?;
-        let q = c.get(1)?.as_str();
+    for q in quoted_spans(&t) {
         let n = norm(q);
-        if (3..=60).contains(&crate::jsstr::len16(q))
-            && ["사업", "지원", "공모", "프로그램", "챌린지", "캠프", "센터"]
-                .iter()
-                .any(|x| q.contains(x))
+        if ["사업", "지원", "공모", "프로그램", "챌린지", "캠프", "센터"]
+            .iter()
+            .any(|x| q.contains(x))
             && !titles.contains(&n)
             && !source.contains(&n)
         {
@@ -150,6 +170,15 @@ pub fn golden(f: &str, args: &[Value]) -> Option<Value> {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn rejected_short_quote_does_not_consume_next_opener() {
+        let text = "'A'형 창업가에게 맞는 지원사업은 '청년창업사관학교'입니다";
+        assert_eq!(guard_text(Some(text), &json!({})), None);
+        assert_eq!(
+            guard_text(Some(text), &json!({"allowedText":[text]})),
+            Some(text.to_owned())
+        );
+    }
     #[test]
     fn ascii_word_boundary_for_korean() {
         let text = "마감까지 D-3일 남았어요";
