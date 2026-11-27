@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import type { User } from '@gil/shared';
 import { api, AUTH_GATE_EVENT } from '../api/client';
+import { clearSnapshot } from '../mentor/storage';
 
 interface AuthValue {
   user: User | null;
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onGate = (e: Event) => {
       const code = (e as CustomEvent<string>).detail;
       setUserState((u) => {
-        if (code === 'unauthorized') return null;
+        if (code === 'unauthorized') { if (u) clearSnapshot(); return null; }
         if (!u) return u;
         if (code === 'email_unverified') return { ...u, emailVerified: false };
         if (code === 'password_change_required') return { ...u, mustChangePassword: true };
@@ -46,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await api.logout().catch(() => {});
+    // 같은 브라우저를 쓰는 다음 사람에게 이전 창업 준비 기록이 보이지 않게 한다.
+    clearSnapshot();
     setUserState(null);
   }, []);
 

@@ -107,13 +107,19 @@ function ProfileSection() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [saved, setSaved] = useState(false);
+  const [loadErr, setLoadErr] = useState('');
 
   // null 은 저장 전(또는 모름). 모름과 선택 안 함은 서버에서 모두 null 이므로 화면에서는 '선택 안 함'으로 보인다.
   function fill(p: BasicProfile) {
     setAge(p.age === null ? '' : String(p.age)); setAgeUnknown(false);
     setResidence(p.residence ?? ''); setBiz(p.hasBusiness === null ? '' : String(p.hasBusiness)); setOcc(p.occupation ?? '');
   }
-  useEffect(() => { api.myProfile().then((r) => fill(r.profile), () => {}).finally(() => setLoaded(true)); }, []);
+  // 불러오기에 실패하면 저장을 막는다. 빈 값으로 저장하면 기존 정보가 지워진다.
+  function load() {
+    setLoadErr('');
+    api.myProfile().then((r) => { fill(r.profile); setLoaded(true); }, (x) => setLoadErr(errMessage(x)));
+  }
+  useEffect(load, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -161,6 +167,7 @@ function ProfileSection() {
             <option value={UNKNOWN}>모름</option>
           </select>
         </Field>
+        {loadErr && <p className="error-text" role="alert">기본 정보를 불러오지 못했어요. {loadErr} <button type="button" className="btn" onClick={load}>다시 불러오기</button></p>}
         {err && <p className="error-text" role="alert">{err}</p>}
         {saved && <p role="status">저장했어요.</p>}
         <div><button className="btn primary" disabled={busy || !loaded}>{busy ? '저장 중...' : '저장'}</button></div>

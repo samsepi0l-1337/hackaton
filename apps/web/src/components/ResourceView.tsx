@@ -3,6 +3,7 @@ import { CONDITION_NOTE } from '@gil/shared';
 import { LOCAL_AI_NOTE } from '../lib/localAi';
 import { HeartButton } from './HeartButton';
 import type { ConditionStatus, RecruitStatus, Resource, ResourceCard } from '@gil/shared';
+import { safeHref } from '../lib/format';
 
 // 화면에 쓰는 짧은 이름. 공유 라벨(API·Rust 와 맞물림)은 바꾸지 않는다.
 const RECRUIT_TEXT: Record<RecruitStatus, string> = { open: '모집 중', closed: '마감', always: '상시', unknown: '마감일 미정' };
@@ -18,8 +19,8 @@ export function ConditionBadge({ status }: { status: ConditionStatus }) {
 export function SourceLine({ r, onLink, label = '공식 안내 확인' }: { r: Resource; onLink?: () => void; label?: string }) {
   return (
     <p className="muted">
-      출처: {r.url
-        ? <a href={r.url} target="_blank" rel="noreferrer" onClick={onLink}>{r.agency} 공식 안내 (새 창)</a>
+      출처: {safeHref(r.url)
+        ? <a href={safeHref(r.url)} target="_blank" rel="noreferrer" onClick={onLink}>{r.agency} 공식 안내 (새 창)</a>
         : '공식 링크 확인 필요'} · 확인일 {r.checkedAt ?? '확인 필요'}
       {r.test && ' · 팀 검수 전 테스트 자료'}
       <span className="sr-only"> {label}</span>
@@ -59,8 +60,8 @@ export function ResourceResultCard({ card, onLink, localReason }: { card: Resour
         <p className="muted">{CONDITION_NOTE}</p>
       </div>
       <SourceLine r={r} onLink={onLink} />
-      {r.url
-        ? <a className="btn primary" href={r.url} target="_blank" rel="noreferrer" onClick={onLink}>공식 안내 확인</a>
+      {safeHref(r.url)
+        ? <a className="btn primary" href={safeHref(r.url)} target="_blank" rel="noreferrer" onClick={onLink}>공식 안내 확인</a>
         : <Link className="btn" to={`/programs/${encodeURIComponent(r.id)}`}>자세히 보기</Link>}
     </article>
   );

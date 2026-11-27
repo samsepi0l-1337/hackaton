@@ -3,7 +3,7 @@ import { DIRECTION_STATUS_LABEL } from '@gil/shared';
 import type { SummaryV2 } from '@gil/shared';
 import { api } from '../api/client';
 import { BottomBar } from '../components/BottomBar';
-import { errMessage } from '../lib/format';
+import { errMessage, safeHref } from '../lib/format';
 import { EvidenceBadge, ITEM_LABEL, Progress, ProvBadge, getItem, withItem } from './Common';
 import type { ItemKey } from './Common';
 
@@ -82,7 +82,7 @@ export function SummaryStep({ summary, onChange, onBackToChat, onBackToStart, on
             <div>
               <div>{p.title}</div>
               <div className="row">{p.evidenceLevel && <EvidenceBadge level={p.evidenceLevel} />}</div>
-              <div className="muted">출처: {p.source ? (/^https?:/.test(p.source) ? <a href={p.source} target="_blank" rel="noreferrer">원문 (새 창)</a> : p.source) : '확인 필요'}</div>
+              <div className="muted">출처: {p.source ? (safeHref(p.source) ? <a href={safeHref(p.source)} target="_blank" rel="noreferrer">원문 (새 창)</a> : p.source) : '확인 필요'}</div>
             </div>
           ) : <p style={{ margin: 0 }}>아직 탐색 중</p>}
         </div>
