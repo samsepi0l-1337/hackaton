@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ACTIVITY_UNDECIDED, BUSAN_DISTRICTS, IDEA_MAX_V2 } from '@gil/shared';
+import { IDEA_MAX_V2 } from '@gil/shared';
 import type { ConsultQuota, ExploreOptionsResponse, ExploreSession, ReadinessStage, ReviewRegion, StartProfile } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { BottomBar } from '../components/BottomBar';
 import { ChipGroup, MultiChipGroup } from '../components/Chips';
+import { RegionPicker } from '../components/RegionPicker';
 import { Counter, Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
 import { hasNoData } from '../lib/coverage';
@@ -101,15 +102,9 @@ export function StartStep({ opts, initial, quota, onStarted }: {
             <input className="input" maxLength={IDEA_MAX_V2} value={start.interestNote ?? ''} onChange={(e) => set('interestNote', e.target.value)} aria-label="관심 분야 직접 적기" />
           </Field>
 
-          <Field label="활동 지역 (선택)" hint="사업자등록 주소를 요구하지 않아요.">
-            <select className="input" value={start.district ?? ''} onChange={(e) => set('district', e.target.value || undefined)} aria-label="활동 지역">
-              <option value="">선택 안 함</option>
-              {BUSAN_DISTRICTS.map((d) => <option key={d} value={d}>부산 {d}</option>)}
-              <option value={ACTIVITY_UNDECIDED}>{ACTIVITY_UNDECIDED}</option>
-            </select>
-          </Field>
           <Field label="어디에서 창업을 검토하고 있나요? (선택)" hint="거주지나 신청 자격과는 별개예요.">
-            <ChipGroup options={opts.regions as readonly ReviewRegion[]} allowClear value={rr} onChange={(v) => set('reviewRegion', v)} />
+            <RegionPicker id="review-region" region={rr} district={rr === '미정' ? undefined : start.district} allLabel="선택 안 함" extras={[{ value: '미정', label: '미정' }]}
+              onChange={(r, d) => { setStart((s) => ({ ...s, reviewRegion: r as ReviewRegion | undefined, district: d })); setFieldErr({}); }} />
             {rr && rr !== '미정' && hasNoData(opts.coverage, rr) && <p className="muted" role="status">{rr}: 상세 지원 경로 준비 중이에요. 구상 정리는 그대로 할 수 있어요.</p>}
           </Field>
         </>

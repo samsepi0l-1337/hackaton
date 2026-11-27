@@ -64,17 +64,6 @@
 .programs-page [role="note"] { background: #f2f6fb; border-radius: 8px; padding: 8px 12px; color: #4d5e72; }
 .programs-page nav[aria-label="페이지"] { margin-top: var(--space-4); }
 .programs-page nav[aria-label="페이지"] .btn { min-width: 34px; }
-/* 지역 선택 (당근식 중첩 목록) */
-.programs-page .region-picker { position: relative; }
-.programs-page .region-trigger { width: 100%; display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer; font: inherit; }
-.programs-page .region-panel { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: max(100%, 280px); max-width: calc(100vw - 32px); max-height: 60vh; overflow-y: auto; background: #fff; border: 1px solid var(--panel-line); border-radius: 12px; box-shadow: 0 8px 24px #183e651f; padding: 6px; }
-.programs-page .region-top { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 40px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--portal-ink); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
-.programs-page .region-top:hover { background: #edf4ff; color: #155bc1; }
-.programs-page .region-top[aria-pressed=true], .programs-page .region-top[aria-expanded=true] { color: #1859b8; }
-.programs-page .region-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px 10px; }
-.programs-page .region-chips .chip { cursor: pointer; font: inherit; font-size: 14px; background: #fff; }
-.programs-page .region-chips .chip[aria-pressed=true] { background: #e8f0fe; border-color: var(--portal-blue); color: #1859b8; font-weight: 700; }
-.programs-page :is(.region-trigger, .region-top, .region-chips .chip):focus-visible { outline: 2px solid var(--portal-blue); outline-offset: 2px; }
 .programs-page .heart,.program-detail .heart { min-width: 36px; min-height: 36px; }
 
 .program-card.card { padding: 17px 20px 18px; }

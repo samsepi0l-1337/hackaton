@@ -40,7 +40,9 @@ await step('readiness choices, 200-character idea, interests and region coverage
   assert(await page.evaluate((interest) => [...document.querySelectorAll('button.chip[aria-pressed="true"]')].some((b) => b.textContent.trim() === interest), options.interests[0]), 'interest selected');
   await waitForSession((session) => session.start.interests?.includes(options.interests[0]) === true, 'interest autosaved');
   for (const region of ['울산', '경남']) {
-    await page.click(`text="${region}"`);
+    await page.click('#review-region');
+    await page.click(`.region-panel button.region-top:has-text("${region}")`);
+    await page.click(`.region-chips button:has-text("${region} 전체")`);
     await seeText(`${region}: 상세 지원 경로 준비 중`);
   }
 });
