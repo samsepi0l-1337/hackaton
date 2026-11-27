@@ -70,6 +70,7 @@ describe('F4 조건 대조', () => {
     expect(get(['전국'], { residence: '서울' })).toBe('match');
     expect(get(['부산'], { residence: '서울' })).toBe('check');
     expect(get(['부산'], {})).toBe('check');
+    expect(status(res({ conditions: null, regions: ['부산'] }), {}).checks.find((c) => c.key === 'residence')!.detail).toContain('부산이에요');
   });
   test('나이 제한 없음(ageAny)은 부합', () => {
     const c = status(res({ conditions: { ageAny: true } }), { age: 52 }).checks.find((x) => x.key === 'age')!;
