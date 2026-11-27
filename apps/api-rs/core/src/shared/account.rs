@@ -34,6 +34,11 @@ pub const OCCUPATIONS: [&str; 8] = [
 ];
 /// TS: `export const RESIDENCE_OPTIONS: readonly string[]`.
 pub const RESIDENCE_OPTIONS: [&str; 4] = ["부산", "울산", "경남", "그 밖의 지역"];
+pub const ULSAN_DISTRICTS: [&str; 5] = ["중구", "남구", "동구", "북구", "울주군"];
+pub const GYEONGNAM_DISTRICTS: [&str; 18] = [
+    "창원시", "진주시", "통영시", "사천시", "김해시", "밀양시", "거제시", "양산시", "의령군",
+    "함안군", "창녕군", "고성군", "남해군", "하동군", "산청군", "함양군", "거창군", "합천군",
+];
 /// TS: `export interface BasicProfile`.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

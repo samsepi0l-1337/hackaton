@@ -44,6 +44,8 @@ export const BCRYPT_COST = 10;
 // ---- 내 정보: 기본 정보 (F4 조건 확인의 기본값으로 쓴다, 모두 선택) ----
 export const OCCUPATIONS = ['고등학생', '대학생', '대학원생', '직장인', '프리랜서', '자영업', '구직 중', '기타'] as const;
 export const RESIDENCE_OPTIONS = ['부산', '울산', '경남', '그 밖의 지역'] as const;
+export const ULSAN_DISTRICTS = ['중구', '남구', '동구', '북구', '울주군'] as const;
+export const GYEONGNAM_DISTRICTS = ['창원시', '진주시', '통영시', '사천시', '김해시', '밀양시', '거제시', '양산시', '의령군', '함안군', '창녕군', '고성군', '남해군', '하동군', '산청군', '함양군', '거창군', '합천군'] as const;
 export interface BasicProfile {
   age: number | null; // 만 나이, 모르면 null
   residence: string | null; // RESIDENCE_OPTIONS 또는 부산 구·군 (BUSAN_DISTRICTS)
