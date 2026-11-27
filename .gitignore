@@ -23,6 +23,7 @@ build/
 .wrangler/
 .dev.vars
 *.log
+!bun.lock
 
 # Local agent instructions
 CLAUDE.md
