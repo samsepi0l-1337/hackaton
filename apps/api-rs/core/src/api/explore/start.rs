@@ -17,7 +17,9 @@ pub async fn problems(_cx: &mut Cx<'_>, req: &Req) -> HResult {
     Resp::ok(json!({"items":result["items"],"dataVersion":explore::EXPLORE_DATA_VERSION,"emptyReason":result["emptyReason"]}))
 }
 pub async fn get_session(cx: &mut Cx<'_>, _req: &Req) -> HResult {
-    let id=actor_id(cx)?; let state=peek(cx,&id); Resp::ok(view(cx,&state))
+    let id=actor_id(cx)?; let state=peek(cx,&id);
+    let focus=state["start"]["focusResourceId"].as_str().and_then(|id| crate::api::explore::state::resources_now(cx).into_iter().find(|r| r["id"]==id)).map(|r| json!({"id":r["id"],"title":r["title"],"agency":r["agency"],"type":r["type"],"endDate":r["endDate"],"recruitStatus":r["recruitStatus"],"url":r["url"]})).unwrap_or(Value::Null);
+    let mut result=view(cx,&state); if state["start"]["focusResourceId"].as_str().is_some_and(|id| !id.is_empty()) { result["focus"]=focus; } Resp::ok(result)
 }
 pub async fn delete_session(cx: &mut Cx<'_>, _req: &Req) -> HResult {
     let id=actor_id(cx)?; Store::new(cx.kv,cx.now).delete_explore(&id);
@@ -29,9 +31,10 @@ fn set_optional(start: &mut Value, key: &str, value: Option<Value>) {
 pub async fn put_start(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let id=actor_id(cx)?; let body=req.json_object()?;
     let p=body.get("start").and_then(Value::as_object).ok_or_else(||bad("start가 필요해요"))?;
+    let focus_resources=crate::api::explore::state::resources_now(cx);
     let mut s=open(cx,&id)?;
     let prev=json!([s["start"]["readiness"],s["start"]["idea"],s["start"]["interests"],s["start"]["interestNote"]]);
-    let prev_region=json!([s["start"]["reviewRegion"],s["start"]["district"],s["start"]["conditions"]]);
+    let prev_region=json!([s["start"]["reviewRegion"],s["start"]["district"],s["start"]["conditions"],s["start"]["focusResourceId"]]);
     let start=&mut s["start"]; let mut errors=Vec::new();
     if let Some(v)=p.get("readiness") {
         if v.is_null() || v=="" {set_optional(start,"readiness",None)}
@@ -56,9 +59,14 @@ pub async fn put_start(cx: &mut Cx<'_>, req: &Req) -> HResult {
         else if v.as_str().is_some_and(|x|explore::REVIEW_REGIONS.contains(&x)){set_optional(start,"reviewRegion",Some(v.clone()))}
         else {errors.push(json!({"field":"reviewRegion","message":"창업 검토 지역 값이 올바르지 않아요"}));}
     }
+    if let Some(v)=p.get("focusResourceId") {
+        if v.is_null() || v=="" {set_optional(start,"focusResourceId",None)}
+        else if v.as_str().is_some_and(|id| focus_resources.iter().any(|r| r["id"]==id)) {set_optional(start,"focusResourceId",Some(v.clone()))}
+        else {errors.push(json!({"field":"focusResourceId","message":"공고를 찾을 수 없어요"}));}
+    }
     if let Some(v)=p.get("conditions"){set_optional(start,"conditions",sanitize_conditions(v));}
     if json!([s["start"]["readiness"],s["start"]["idea"],s["start"]["interests"],s["start"]["interestNote"]])!=prev{s["summary"]=Value::Null;}
-    if json!([s["start"]["reviewRegion"],s["start"]["district"],s["start"]["conditions"]])!=prev_region||s["summary"].is_null(){s["regional"]=Value::Null;}
+    if json!([s["start"]["reviewRegion"],s["start"]["district"],s["start"]["conditions"],s["start"]["focusResourceId"]])!=prev_region||s["summary"].is_null(){s["regional"]=Value::Null;}
     let validation=explore_rules::validate_start(&s["start"]);
     if s["step"]=="start" && validation.is_empty(){s["step"]=json!("chat");}
     touch(&mut s,cx.now); save(cx,&id,&s)?;

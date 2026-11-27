@@ -14,7 +14,7 @@ import { VerifyPanel } from '../components/VerifyPanel';
 import { useAsync } from '../hooks/useAsync';
 import { errMessage } from '../lib/format';
 import { loadLocalTest } from '../lib/typeTestStorage';
-import { QuotaLine } from '../mentor/Quota';
+import { QuotaLine, resetDate } from '../mentor/Quota';
 import '../styles/pages-account.css';
 
 function PasswordSection({ notice }: { notice: boolean }) {
@@ -60,10 +60,18 @@ function PasswordSection({ notice }: { notice: boolean }) {
 
 function ApplicationsSection() {
   const list = useAsync(() => api.applications(), []);
+  const quota = useAsync(() => api.applicationQuota(), []);
+  const q = quota.data && quota.data.limit !== null ? quota.data : null;
   const items = list.data?.items ?? [];
   return (
     <section className="card stack">
       <h2 style={{ margin: 0 }}>내 지원서</h2>
+      {q && (
+        <p className="muted" style={{ margin: 0 }} role="status">
+          이번 주 남은 작성 횟수 {q.remaining ?? 0}/{q.limit}
+          {q.blocked && (resetDate(q.resetAt) ? ` · ${resetDate(q.resetAt)} 이후에 다시 쓸 수 있어요` : '')}
+        </p>
+      )}
       {list.loading ? <p className="muted">불러오는 중이에요.</p>
         : list.error ? <p className="muted">지원서를 불러오지 못했어요.</p>
         : items.length === 0 ? (

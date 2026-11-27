@@ -72,7 +72,7 @@ impl ExploreAi<'_> {
         (reaction.map(|s| format!("{s} {base}")).unwrap_or_else(|| base.into()), r.failed)
     }
     pub async fn suggestions(&mut self, context: &str, user_texts: &[String], avoid: &[String]) -> (Vec<String>, bool) {
-        let system = format!("{RULES}\n사용자가 요청해서 더 알아볼 만한 접근 방향 예시를 정확히 2개 제안해요. 사업 아이템을 확정하지 말고 \"무엇을 알아볼지\" 방향으로 써요. JSON 문자열 배열만 출력해요. 각 항목은 한 문장이에요.");
+        let system = format!("{RULES}\n사용자가 요청해서 더 알아볼 만한 접근 방향 예시를 정확히 2개 제안해요. 사업 아이템을 확정하지 말고 \"무엇을 알아볼지\" 방향으로 써요.\n맥락에 \"관심 공고\" 줄이 있으면, 사용자가 그 공고에 관심을 보인 것이에요. 그 공고의 대상과 지원 내용을 사용자의 생각과 이어서 제안해요. 공고 이름 대신 \"관심 공고\"라고 불러요. 하트한 공고와 최근 본 공고는 관심 분야를 짐작하는 참고로만 써요. JSON 문자열 배열만 출력해요. 각 항목은 한 문장이에요.");
         let user = format!("{context}\n이미 거절한 방향(다시 쓰지 않기): {}", if avoid.is_empty() { "없음".into() } else { avoid.join(" / ") });
         let r = self.call("mentor", &system, &user, None).await;
         let parsed = parse_json(r.text.as_deref());
@@ -81,7 +81,7 @@ impl ExploreAi<'_> {
         (items, r.failed)
     }
     pub async fn fill(&mut self, context: &str, user_texts: &[String], target: bool, value: bool) -> (Value, Option<String>, bool) {
-        let system = format!("{RULES}\n주어진 정보로 아직 비어 있는 칸에 대한 제안만 JSON 객체로 출력해요: {{\"target\":\"도움받을 사람 가설\",\"value\":\"해결해볼 불편 가설\",\"hypotheses\":\"확인할 고객·시장 가설과 확인 질문\",\"regional\":\"지역 고객 가설과 확인 질문\"}}. 모르면 빈 문자열이에요. 각 값은 한두 문장이에요.");
+        let system = format!("{RULES}\n주어진 정보로 아직 비어 있는 칸에 대한 제안만 JSON 객체로 출력해요: {{\"target\":\"도움받을 사람 가설\",\"value\":\"해결해볼 불편 가설\",\"hypotheses\":\"확인할 고객·시장 가설과 확인 질문\",\"regional\":\"지역 고객 가설과 확인 질문\"}}. 모르면 빈 문자열이에요. 각 값은 한두 문장이에요.\n맥락에 \"관심 공고\" 줄이 있으면, 사용자가 그 공고에 관심을 보인 것이에요. 그 공고의 대상과 지원 내용을 사용자의 생각과 이어서 제안해요. 공고 이름 대신 \"관심 공고\"라고 불러요. 하트한 공고와 최근 본 공고는 관심 분야를 짐작하는 참고로만 써요.");
         let r = self.call("summary", &system, context, None).await;
         let parsed = parse_json(r.text.as_deref());
         let allowed: Vec<_> = std::iter::once(context).chain(user_texts.iter().map(String::as_str)).collect();

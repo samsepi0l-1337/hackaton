@@ -257,6 +257,8 @@ pub struct Exploration {
 #[serde(rename_all = "camelCase")]
 pub struct StartProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus_resource_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub readiness: Option<ReadinessStage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub idea: Option<String>,

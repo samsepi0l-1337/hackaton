@@ -5,6 +5,8 @@ use crate::api::{
     docs::pipeline::{read_announcement_form, ParsedDocCache, PipelineDeps, Summarizer},
     store::Store,
 };
+use crate::api::explore::quota::{quota_config, quota_status, record_consult};
+use chrono::{DateTime, Datelike, Utc};
 use crate::app::Cx;
 use crate::http::{HResult, HttpError, Req, Resp};
 use crate::jsstr::{iso, js_trim, len16, take16};
@@ -173,9 +175,25 @@ pub async fn list(cx: &mut Cx<'_>, _req: &Req) -> HResult {
     let items: Vec<Value> = apps.into_iter().map(|a| view(cx, a)).collect();
     Resp::ok(json!({"items":items}))
 }
+fn application_quota(cx: &mut Cx<'_>, uid: &str) -> Value {
+    match cx.opts.application_limit {
+        Some(limit) => quota_status(&Store::new(cx.kv, cx.now), &[format!("app:{uid}")], cx.now, quota_config(Some(limit))),
+        None => json!({"used":0,"limit":null,"remaining":null,"resetAt":null,"blocked":false}),
+    }
+}
+pub async fn quota(cx: &mut Cx<'_>, _req: &Req) -> HResult {
+    let uid = user_id(cx)?;
+    Resp::ok(application_quota(cx, &uid))
+}
 /// POST /api/applications
 pub async fn create(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let uid = user_id(cx)?;
+    let q = application_quota(cx, &uid);
+    if q["blocked"] == true {
+        let date = q["resetAt"].as_str().and_then(crate::jsstr::parse_ms).and_then(|ms| DateTime::<Utc>::from_timestamp_millis(ms + 9 * 3_600_000)).map(|d| format!("{}월 {}일", d.month(), d.day())).unwrap_or_else(|| "며칠 뒤".into());
+        let count = cx.opts.application_limit.map(|x| x.0).unwrap_or(0);
+        return Err(HttpError::new(429, "application_limit", &format!("이번 주 지원서 작성 {count}회를 모두 사용했어요. {date}부터 다시 쓸 수 있어요.")));
+    }
     let body = req.json_object()?;
     let pid = body
         .get("programId")
@@ -210,7 +228,26 @@ pub async fn create(cx: &mut Cx<'_>, req: &Req) -> HResult {
             .collect::<Vec<_>>()
             .join(" / ")
         });
-    let prefill = json!({"itemName":profile["idea"].as_str().unwrap_or(""),"problem":nonempty(summary,"problem").or_else(|| nonempty(profile,"problem")).unwrap_or(""),"solution":nonempty(summary,"solution").or_else(|| nonempty(profile,"idea")).unwrap_or(""),"market":market,"plan":""});
+    let explore = Store::new(cx.kv, cx.now).explore(&uid).unwrap_or(Value::Null);
+    let es = &explore["summary"];
+    let start = &explore["start"];
+    let has_explore = !es.is_null() || nonempty(start, "idea").is_some();
+    let mut prefill = json!({"itemName":profile["idea"].as_str().unwrap_or(""),"problem":nonempty(summary,"problem").or_else(|| nonempty(profile,"problem")).unwrap_or(""),"solution":nonempty(summary,"solution").or_else(|| nonempty(profile,"idea")).unwrap_or(""),"market":market,"plan":""});
+    if has_explore {
+        let pick = |v: &Value| v.as_str().filter(|s| !s.is_empty()).map(str::to_owned);
+        if let Some(v) = pick(&start["idea"]).or_else(|| pick(&es["interest"]["text"])) { prefill["itemName"] = json!(v); }
+        if let Some(v) = pick(&es["value"]["text"]).or_else(|| pick(&es["exploration"]["problem"]["title"])).or_else(|| pick(&explore["exploration"]["customProblem"])) { prefill["problem"] = json!(v); }
+        if let Some(v) = pick(&es["exploration"]["direction"]["text"]).or_else(|| pick(&start["idea"])) { prefill["solution"] = json!(v); }
+        let market_parts: Vec<_> = [&es["target"]["text"], &start["reviewRegion"], &start["district"]].into_iter().filter_map(pick).collect();
+        if !market_parts.is_empty() { prefill["market"] = json!(market_parts.join(" / ")); }
+        let mut plan: Vec<String> = pick(&es["exploration"]["hypotheses"]["text"]).into_iter().collect();
+        for answer in explore["answers"].as_array().into_iter().flatten() {
+            if ["prepared", "direction"].contains(&answer["key"].as_str().unwrap_or("")) {
+                if let Some(t) = pick(&answer["text"]) { plan.push(t); }
+            }
+        }
+        prefill["plan"] = json!(plan.join(" / "));
+    }
     let mut fields = mock_form_fields();
     for f in &mut fields {
         let key = f["key"].as_str().unwrap_or("");
@@ -253,12 +290,16 @@ pub async fn create(cx: &mut Cx<'_>, req: &Req) -> HResult {
             }
         }
     }
+    let draft_profile = if has_explore { json!({"mentor":profile,"start":start,"summary":es,"answers":explore["answers"],"conditions":start["conditions"]}) } else { profile.clone() };
     let fields = create_ai_tasks(cx.env, cx.ports)
-        .draft(&fields, profile, &p, Some(&uid))
+        .draft(&fields, &draft_profile, &p, Some(&uid))
         .await;
     let at = iso(cx.now);
     let a = json!({"id":uuid(cx),"userId":uid,"programId":pid,"status":"drafting","channel":channel,"formFileName":filename,"fields":fields,"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[{"status":"drafting","at":at}],"createdAt":at,"updatedAt":at});
     save(cx, a.clone())?;
+    if let Some(limit) = cx.opts.application_limit {
+        record_consult(&mut Store::new(cx.kv, cx.now), &[format!("app:{uid}")], cx.now, quota_config(Some(limit))).map_err(|_| HttpError::bad("요청을 처리하지 못했어요"))?;
+    }
     Resp::created(view(cx, a))
 }
 /// GET /api/applications/:id

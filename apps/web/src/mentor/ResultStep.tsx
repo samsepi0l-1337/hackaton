@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AFFILIATIONS, OUTSIDE_BUSAN, REGIONAL_STATUS_LABEL } from '@gil/shared';
-import type { ExploreFeedbackRequest, ExploreResultResponse, PrepItem, ResourceType, SummaryV2, UserConditions } from '@gil/shared';
+import type { ExploreFeedbackRequest, ExploreResultResponse, PrepItem, ResourceCard, ResourceType, SummaryV2, UserConditions } from '@gil/shared';
 import { Chip } from '../components/Chips';
-import { api } from '../api/client';
+import { api, ApiClientError } from '../api/client';
+import type { ApplicationQuota } from '../api/client';
+import { useAuth } from '../components/AuthContext';
+import { resetDate } from './Quota';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ResourceResultCard } from '../components/ResourceView';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
@@ -18,6 +21,36 @@ import { FieldQuestions } from './FieldQuestions';
 import { rewrite } from '../lib/localAi';
 
 const SUMMARY_KEYS: ItemKey[] = ['interest', 'target', 'value', 'unknowns'];
+
+/** 서버가 관심 공고 카드에 붙이는 표시 (packages/shared 반영 전까지 로컬 확장). */
+type FocusCard = ResourceCard & { focus?: boolean };
+
+/** 추천 카드의 "지원서 작성". 이미 쓴 지원서가 있으면 이어 쓰기로 바뀐다. */
+function CardApply({ resourceId, existingId, blocked, onLimit }: { resourceId: string; existingId?: string; blocked: boolean; onLimit: () => void }) {
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function create() {
+    setBusy(true); setErr('');
+    try {
+      const a = await api.createApplication(resourceId);
+      nav(`/applications/${a.id}`);
+    } catch (x) {
+      if (x instanceof ApiClientError && x.code === 'application_limit') onLimit();
+      setErr(x instanceof ApiClientError && x.code === 'closed' ? '모집이 끝나 지원서를 만들 수 없어요.' : errMessage(x));
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="stack">
+      {existingId
+        ? <div><Link className="btn small" to={`/applications/${existingId}`}>내 지원서 이어 쓰기</Link></div>
+        : <div><button className="btn small" type="button" disabled={busy || blocked} onClick={create}>{busy ? '초안을 쓰는 중...' : '지원서 작성'}</button></div>}
+      {busy && <p className="muted" role="status">공고 양식을 읽고 초안을 쓰는 중이에요. 30초쯤 걸릴 수 있어요.</p>}
+      {err && <p className="error-text" role="alert">{err}</p>}
+    </div>
+  );
+}
 
 function PrepBlock({ prep, onToggle, primary }: { prep: PrepItem; onToggle: (p: PrepItem) => void; primary?: boolean }) {
   return (
@@ -199,6 +232,16 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
   const [condSaved, setCondSaved] = useState(false);
   const [typeFilter, setTypeFilter] = useState<ResourceType | 'all'>('all');
   useEffect(() => { api.myProfile().then((r) => setProfileCond(profileToConditions(r.profile)), () => {}); }, []);
+  const { user } = useAuth();
+  const canApply = !!user && !readOnly;
+  const [appByProgram, setAppByProgram] = useState<Record<string, string>>({});
+  const [appQuota, setAppQuota] = useState<ApplicationQuota | null>(null);
+  const loadQuota = () => { api.applicationQuota().then(setAppQuota, () => {}); };
+  useEffect(() => {
+    if (!canApply) return;
+    api.applications().then((r) => setAppByProgram(Object.fromEntries(r.items.map((a) => [a.programId, a.id]))), () => {});
+    loadQuota();
+  }, [canApply]);
   useEffect(() => {
     if (readOnly) return;
     api.exploreSession().then((s) => { if (s.start.conditions) setSavedCond(s.start.conditions); }, () => {});
@@ -265,10 +308,14 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
   const reg = res.regional;
   const regResources = reg ? res.resources.filter((c) => reg.resourceIds.includes(c.resource.id)) : [];
   const firstResource = res.resources[0]?.resource;
+  const focusCard = (res.resources as FocusCard[]).find((c) => c.focus);
+  const aq = appQuota && appQuota.limit !== null ? appQuota : null;
+  const anyOpen = res.resources.some((c) => c.resource.recruitStatus !== 'closed');
   const typeCounts = new Map<ResourceType, number>();
   for (const c of res.resources) typeCounts.set(c.resource.type, (typeCounts.get(c.resource.type) ?? 0) + 1);
   const activeType = typeFilter !== 'all' && typeCounts.has(typeFilter) ? typeFilter : 'all';
-  const shown = res.resources.filter((c) => activeType === 'all' || c.resource.type === activeType);
+  const shown = res.resources.filter((c) => activeType === 'all' || c.resource.type === activeType)
+    .sort((a, b) => Number(!!(b as FocusCard).focus) - Number(!!(a as FocusCard).focus));
   const condText = conditionLine(savedCond);
 
   async function copy() {
@@ -288,7 +335,9 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
       <section className="card highlight stack next-box" aria-labelledby="nx">
         <h2 id="nx" style={{ margin: 0 }}>다음에 할 일</h2>
         <ol className="next-list">
-          {firstResource && <li><Link to={`/programs/${encodeURIComponent(firstResource.id)}`} onClick={onLink(firstResource.id)}>{firstResource.title}</Link> 안내를 열어 신청 방법과 대상을 확인해 보세요.</li>}
+          {focusCard
+            ? <li>관심 공고 ‘<Link to={`/programs/${encodeURIComponent(focusCard.resource.id)}`} onClick={onLink(focusCard.resource.id)}>{focusCard.resource.title}</Link>’의 신청 조건과 준비물을 확인해요.</li>
+            : firstResource && <li><Link to={`/programs/${encodeURIComponent(firstResource.id)}`} onClick={onLink(firstResource.id)}>{firstResource.title}</Link> 안내를 열어 신청 방법과 대상을 확인해 보세요.</li>}
           <li><a href="#pr">{prepAll.primary.title}</a>을(를) 준비해 보세요. 정리할 결과: {prepAll.primary.output}</li>
           <li><Link to="/programs?sort=fit">맞춤형 공고</Link>에서 내 조건에 맞는 공고를 더 찾아보세요.</li>
         </ol>
@@ -381,7 +430,24 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
         )}
         {res.resources.length === 0
           ? <EmptyState message="현재 확인된 자료에서 맞는 경로를 찾지 못했어요." action={res.noMatchReason ? <p className="muted">{res.noMatchReason}</p> : undefined} />
-          : shown.slice(0, 3).map((c) => <ResourceResultCard key={c.resource.id} card={c} localReason={localReasons[c.resource.id]} onLink={onLink(c.resource.id)} />)}
+          : <>
+            {canApply && anyOpen && (
+              <p className="muted" role="status">
+                상담에서 입력한 내용으로 지원서 초안을 채워요.
+                {aq && ` 이번 주 남은 작성 횟수 ${aq.remaining ?? 0}/${aq.limit}`}
+                {aq?.blocked && (resetDate(aq.resetAt) ? ` · ${resetDate(aq.resetAt)} 이후에 다시 쓸 수 있어요` : '')}
+              </p>
+            )}
+            {shown.slice(0, 3).map((c) => (
+              <div key={c.resource.id} className="stack">
+                {(c as FocusCard).focus && <div><span className="tag">관심 공고</span></div>}
+                <ResourceResultCard card={c} localReason={localReasons[c.resource.id]} onLink={onLink(c.resource.id)} />
+                {canApply && c.resource.recruitStatus !== 'closed' && (
+                  <CardApply resourceId={c.resource.id} existingId={appByProgram[c.resource.id]} blocked={!!aq?.blocked} onLimit={loadQuota} />
+                )}
+              </div>
+            ))}
+          </>}
         <p className="muted">{res.conditionNote}</p>
         <p><Link to="/programs">지역 지원 전체 살펴보기</Link></p>
       </section>

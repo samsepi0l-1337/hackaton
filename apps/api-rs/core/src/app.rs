@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 pub struct AppOpts {
     /// 상담 횟수 제한 덮어쓰기 (count, windowDays). 기본 CONSULT_LIMIT.
     pub consult_limit: Option<(u32, u32)>,
+    pub application_limit: Option<(u32, u32)>,
     /// 탐색 AI 호출 한도 (행위자당 시간당). 기본 40.
     pub explore_ai_limit: Option<u32>,
     /// 테스트·데모용: 첫 제출 시도를 실패시킨다.

@@ -7,6 +7,7 @@ import { useAsync } from '../hooks/useAsync';
 import { ConditionBadge, RecruitBadge, ResourceFacts, SourceLine } from '../components/ResourceView';
 import { HeartButton } from '../components/HeartButton';
 import { useAuth } from '../components/AuthContext';
+import { resetDate } from '../mentor/Quota';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import '../styles/pages-programs.css';
 
@@ -14,9 +15,12 @@ function ApplyCard({ resourceId }: { resourceId: string }) {
   const { user } = useAuth();
   const nav = useNavigate();
   const mine = useAsync(() => (user ? api.applications() : Promise.resolve(null)), [user?.id]);
+  const quota = useAsync(() => (user ? api.applicationQuota() : Promise.resolve(null)), [user?.id]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const existing = mine.data?.items.find((a) => a.programId === resourceId);
+  const q = quota.data && quota.data.limit !== null ? quota.data : null;
+  const blocked = !!q?.blocked;
 
   async function create() {
     setBusy(true); setErr('');
@@ -24,6 +28,7 @@ function ApplyCard({ resourceId }: { resourceId: string }) {
       const a = await api.createApplication(resourceId);
       nav(`/applications/${a.id}`);
     } catch (x) {
+      if (x instanceof ApiClientError && x.code === 'application_limit') quota.reload();
       setErr(x instanceof ApiClientError && x.code === 'closed' ? '모집이 끝나 지원서를 만들 수 없어요.' : errMessage(x));
       setBusy(false);
     }
@@ -38,7 +43,13 @@ function ApplyCard({ resourceId }: { resourceId: string }) {
         : mine.loading ? <p className="muted">확인하는 중이에요.</p>
         : existing
           ? <div><Link className="btn" to={`/applications/${existing.id}`}>내 지원서 이어 쓰기</Link></div>
-          : <div><button className="btn" type="button" disabled={busy} onClick={create}>{busy ? '초안을 쓰는 중...' : '지원서 작성'}</button></div>}
+          : <div><button className="btn" type="button" disabled={busy || blocked} onClick={create}>{busy ? '초안을 쓰는 중...' : '지원서 작성'}</button></div>}
+      {user && q && (
+        <p className="muted" style={{ margin: 0 }} role="status">
+          이번 주 남은 작성 횟수 {q.remaining ?? 0}/{q.limit}
+          {q.blocked && (resetDate(q.resetAt) ? ` · ${resetDate(q.resetAt)} 이후에 다시 쓸 수 있어요` : ' · 다시 쓸 수 있는 날짜는 확인 중이에요')}
+        </p>
+      )}
       {busy && <p className="muted" role="status">공고 양식을 읽고 초안을 쓰는 중이에요. 30초쯤 걸릴 수 있어요.</p>}
       {err && <p className="error-text" role="alert">{err}</p>}
     </section>
@@ -91,7 +102,7 @@ export function ProgramDetail() {
         {r.url && <a className="btn primary" href={r.url} target="_blank" rel="noreferrer">공식 안내 확인</a>}
       </section>
       {r.recruitStatus !== 'closed' && <ApplyCard resourceId={r.id} />}
-      <Link className="btn" to="/mentor">내 구상에 맞는 준비 안내 받기</Link>
+      <Link className="btn" to={`/mentor?focus=${encodeURIComponent(r.id)}`}>내 구상에 맞는 준비 안내 받기</Link>
     </div>
   );
 }

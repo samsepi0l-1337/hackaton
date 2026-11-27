@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { ConsultQuota, ExploreOptionsResponse, ExploreSession, ExploreStep, ProblemCard, StartProfile, SummaryV2 } from '@gil/shared';
 import '../styles/pages-mentor.css';
 import { api } from '../api/client';
+import type { FocusSession } from '../api/client';
 import { CardSkeletons, ErrorState } from '../components/States';
 import { errMessage } from '../lib/format';
 import { ITEM_LABEL, ProvBadge, getItem } from '../mentor/Common';
@@ -18,10 +19,10 @@ const ResultStep = lazy(() => loadResult().then((m) => ({ default: m.ResultStep 
 const StartStep = lazy(() => loadStart().then((m) => ({ default: m.StartStep })));
 const SummaryStep = lazy(() => loadSummary().then((m) => ({ default: m.SummaryStep })));
 
-const EMPTY: ExploreSession = { step: 'start', start: {}, exploration: null, messages: [], questionIndex: 0, maxQuestions: 3, summary: null, regional: null, updatedAt: null };
+const EMPTY: FocusSession = { step: 'start', start: {}, exploration: null, messages: [], questionIndex: 0, maxQuestions: 3, summary: null, regional: null, updatedAt: null };
 
 interface Boot {
-  opts: ExploreOptionsResponse; session: ExploreSession; start: StartProfile; view: ExploreStep; problem: ProblemCard | null;
+  opts: ExploreOptionsResponse; session: FocusSession; start: StartProfile; view: ExploreStep; problem: ProblemCard | null;
   quota: ConsultQuota | null; readOnly: boolean; notice: string;
 }
 
@@ -38,8 +39,16 @@ function localBoot(): Boot | null {
   return { opts: st.options, session: sessionOf(st), start: st.start, view: viewOf(st.view, st.summary), problem: st.problem, quota: st.quota, readOnly: false, notice: '' };
 }
 
+/** ?focus=<id> 를 현재 시작 정보에 합쳐 저장한다. 진행 중이어도 대화·단계는 건드리지 않는다. 실패하면 조용히 넘어간다. */
+async function saveFocusParam(id: string): Promise<void> {
+  try {
+    const cur = await api.exploreSession().then((s) => s.start, () => readStore().start);
+    await api.saveStart({ start: { ...cur, focusResourceId: id } });
+  } catch { /* 관심 공고 없이 계속 */ }
+}
+
 export function Mentor() {
-  const [sp] = useSearchParams();
+  const [sp, setSp] = useSearchParams();
   const [boot, setBoot] = useState<Boot | null>(localBoot);
   const [gen, setGen] = useState(0);
   const [quotaHint, setQuotaHint] = useState<ConsultQuota | null>(null);
@@ -49,8 +58,11 @@ export function Mentor() {
   useEffect(() => {
     setError(null);
     let dead = false;
-    Promise.all([api.exploreOptions(), api.exploreSession().then((s) => ({ s, ok: true }), () => ({ s: EMPTY, ok: false }))]).then(([opts, { s: server, ok }]) => {
+    const focusId = sp.get('focus');
+    if (focusId) { const next = new URLSearchParams(sp); next.delete('focus'); setSp(next, { replace: true }); }
+    (focusId ? saveFocusParam(focusId) : Promise.resolve()).then(() => Promise.all([api.exploreOptions(), api.exploreSession().then((s) => ({ s, ok: true }), () => ({ s: EMPTY, ok: false }))])).then(([opts, { s: server, ok }]) => {
       if (dead) return;
+      const wf = (s: ExploreSession): FocusSession => ({ ...s, focus: server.focus ?? null });
       patchStore({ options: opts });
       const st = readStore();
       const local = hasLocalProgress(st);
@@ -76,7 +88,7 @@ export function Mentor() {
         const ex = st.exploration;
         if (ex) api.saveExploration({ problemId: ex.problemId, origin: ex.origin, customProblem: ex.customProblem, selectionReason: ex.selectionReason }).catch(() => {});
         const cleared = patchStore({ messages: [], questionIndex: 0, suggestions: [], view: st.view === 'chat' ? 'start' : st.view });
-        setBoot({ opts, session: sessionOf(cleared), start: cleared.start, view: viewOf(cleared.view, null), problem: cleared.problem, quota, readOnly: false, notice: '' });
+        setBoot({ opts, session: wf(sessionOf(cleared)), start: cleared.start, view: viewOf(cleared.view, null), problem: cleared.problem, quota, readOnly: false, notice: '' });
         setGen((g) => g + 1);
         return;
       }
@@ -97,7 +109,7 @@ export function Mentor() {
         return;
       }
       // 이 기기 쪽이 같거나 더 새롭다. 화면은 그대로 두고 상담 횟수만 맞춘다.
-      if (!boot) setBoot({ opts, session: sessionOf(st), start: st.start, view: viewOf(st.view, st.summary), problem: st.problem, quota, readOnly: false, notice: '' });
+      if (!boot) setBoot({ opts, session: wf(sessionOf(st)), start: st.start, view: viewOf(st.view, st.summary), problem: st.problem, quota, readOnly: false, notice: '' });
     }, (e) => { if (!dead && !boot) setError(e); });
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,7 +160,9 @@ function LocalView({ boot, onResumed }: { boot: Boot; onResumed: () => void }) {
 }
 
 function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQuota | null; onResumed: () => void }) {
-  const [session, setSession] = useState(boot.session);
+  const [session, setSession] = useState<FocusSession>(boot.session);
+  const focus = session.focus ?? null;
+  const onFocusRemoved = () => setSession((cur) => ({ ...cur, focus: null, start: { ...cur.start, focusResourceId: null } as ExploreSession['start'] }));
   const [start, setStart] = useState(boot.start);
   const [view, setViewState] = useState<ExploreStep>(boot.view);
   const [problem] = useState(boot.problem);
@@ -179,8 +193,8 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
   if (view === 'start') {
     return (
       <>{notice}
-        <Suspense fallback={<CardSkeletons />}><StartStep opts={boot.opts} initial={start} quota={quota}
-          onStarted={(s, st) => { setSession(s); setStart(st); if (s.quota) setQuota(s.quota); patchStore({ serverUpdatedAt: s.updatedAt }); setView(s.summary && s.step !== 'chat' ? 'summary' : 'chat'); }} /></Suspense>
+        <Suspense fallback={<CardSkeletons />}><StartStep opts={boot.opts} initial={start} quota={quota} focus={focus} onFocusRemoved={onFocusRemoved}
+          onStarted={(s, st) => { setSession({ ...s, focus: (s as FocusSession).focus === undefined ? session.focus : (s as FocusSession).focus }); setStart(st); if (s.quota) setQuota(s.quota); patchStore({ serverUpdatedAt: s.updatedAt }); setView(s.summary && s.step !== 'chat' ? 'summary' : 'chat'); }} /></Suspense>
       </>
     );
   }
@@ -188,7 +202,7 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
     const st = readStore();
     const chatSession: ExploreSession = { ...session, messages: st.messages, questionIndex: st.questionIndex };
     return (
-      <Suspense fallback={<CardSkeletons />}><ChatStep key={chatSession.messages.length === 0 ? 'new' : 'resume'} session={chatSession} problem={problem} quota={quota}
+      <Suspense fallback={<CardSkeletons />}><ChatStep key={chatSession.messages.length === 0 ? 'new' : 'resume'} session={chatSession} problem={problem} quota={quota} focus={focus} onFocusRemoved={onFocusRemoved}
         onSession={(s) => setSession((cur) => ({ ...cur, exploration: s.exploration }))}
         onQuota={setQuota} onRefreshQuota={refreshSession}
         onBackToStart={() => setView('start')}
