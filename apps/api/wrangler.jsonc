@@ -16,7 +16,7 @@
     "AI_GATEWAY_ID": "gil-gateway",
     "DECIDE_ENABLED": "1",
     "MAIL_FROM": "noreply@dreamp.org",
-    "APP_ORIGIN": "https://gil-api.samsepi0l1337.workers.dev",
+    "APP_ORIGIN": "https://haeboka.dreamp.org",
     "UPSTAGE_BASE_URL": "https://gateway.ai.cloudflare.com/v1/01d6807196c93a4774c1bb50ee8f4ebb/gil-gateway/custom-upstage"
   },
 
