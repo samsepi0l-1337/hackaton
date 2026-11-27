@@ -25,7 +25,13 @@ await step('mobile navigation menu and bottom bar without horizontal scrolling',
   await page.cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await go('/');
   await page.click('button[aria-label="메뉴"]');
-  assert(await page.evaluate(() => document.querySelector('button[aria-label="메뉴"]')?.getAttribute('aria-expanded') === 'true'), 'mobile menu opens');
+  await page.waitForFunction(() => document.querySelector('button[aria-label="메뉴"]')?.getAttribute('aria-expanded') === 'true');
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'home menu has no horizontal scroll');
+  await page.click('.nav-mobile a[href="/programs"]');
+  await page.waitForSelector('article');
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'programs has no horizontal scroll');
+  await page.click('button[aria-label="메뉴"]');
+  await page.waitForFunction(() => document.querySelector('button[aria-label="메뉴"]')?.getAttribute('aria-expanded') === 'true');
   await page.click('.nav-mobile a[href="/test"]');
   await seeText('창업 유형 테스트');
   await page.click('text=테스트 시작');
@@ -35,5 +41,6 @@ await step('mobile navigation menu and bottom bar without horizontal scrolling',
   }
   await page.waitForSelector('.bottom-bar');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'mobile has no horizontal scroll');
+  assert(await page.evaluate(() => { const r = document.querySelector('.bottom-bar').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; }), 'bottom bar is inside viewport');
   assert(await page.evaluate(() => !!document.querySelector('.bottom-bar button')), 'bottom bar offers action');
 });
