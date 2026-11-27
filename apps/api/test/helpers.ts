@@ -10,17 +10,21 @@ export const TEST_PEPPER = 'test-pepper-not-a-secret';
 export function setup(opts: AppOptions = {}) {
   const mail = createDevMailer({ quiet: true });
   const clock = opts.now ?? (() => NOW);
-  const app = createApp({ now: () => NOW, mailer: mail, ...opts, env: { PASSWORD_PEPPER: TEST_PEPPER, ...opts.env } });
   // Rust 동일성 골든 기록 (GIL_RECORD_HTTP 가 있을 때만). 기록만 하고 동작은 바꾸지 않는다.
   const rec = recordScenario(opts, mail, clock);
+  const app = createApp({ mailer: mail, ...opts, now: rec ? rec.clock : clock, env: { PASSWORD_PEPPER: TEST_PEPPER, ...opts.env } });
+  const states: { cookie: string; id: number; initialClient?: number }[] = [];
   return {
     app,
     /** 보낸 메일 (개발용 메일러). */
     mail,
     /** 쿠키를 들고 다니는 클라이언트. */
     client(cookie = '') {
-      const state = { cookie, id: rec?.nextClient() ?? 0 };
+      const initialClient = cookie ? states.find((s) => s.cookie === cookie)?.id : undefined;
+      const state = { cookie, id: rec?.nextClient() ?? 0, initialClient };
+      states.push(state);
       const call = async (method: string, path: string, body?: unknown) => {
+        rec?.begin();
         const res = await app.request(path, {
           method,
           headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(state.cookie ? { cookie: state.cookie } : {}) },
