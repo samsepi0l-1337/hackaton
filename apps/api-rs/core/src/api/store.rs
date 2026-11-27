@@ -14,6 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const VIEW_WINDOW_MS: i64 = 6 * 60 * 60 * 1000;
 /// TS: `export const SCHEMA_VERSION = 2`.
 pub const SCHEMA_VERSION: i64 = 2;
+/// 세션 수명(초). 쿠키 Max-Age 와 서버 만료가 같은 값을 쓴다.
+pub const SESSION_MAX_AGE_SECONDS: i64 = 14 * 24 * 60 * 60;
 
 /// TS: `export function urlHash(url: string): string`.
 pub fn url_hash(url: &str) -> String {
@@ -122,6 +124,7 @@ impl<'a> Store<'a> {
             "recovery:",
             "profile:",
             "likes:",
+            "recent_views:",
         ] {
             self.kv.delete(&format!("{prefix}{id}"));
         }
@@ -147,6 +150,11 @@ impl<'a> Store<'a> {
     /// TS: `userIdOfSession(token: string): string | undefined`.
     pub fn user_id_of_session(&self, token: &str) -> Option<String> {
         self.read("Session", &format!("session:{token}"))
+            .filter(|v| {
+                text(v, "createdAt")
+                    .and_then(jsstr::parse_ms)
+                    .is_some_and(|t| self.now - t < SESSION_MAX_AGE_SECONDS * 1000)
+            })
             .and_then(|v| text(&v, "userId").map(str::to_owned))
     }
     /// TS: `sessionMustChange(token: string): boolean`.
@@ -169,6 +177,10 @@ impl<'a> Store<'a> {
         self.kv.delete(&format!("session:{token}"));
     }
     /// TS: `deleteOtherSessions(userId: string, keepToken: string): void`.
+    /// 사용자의 모든 세션을 지운다.
+    pub fn delete_all_sessions(&mut self, user_id: &str) {
+        self.delete_user_sessions(user_id, None);
+    }
     pub fn delete_other_sessions(&mut self, user_id: &str, keep: &str) {
         self.delete_user_sessions(user_id, Some(&format!("session:{keep}")));
     }
