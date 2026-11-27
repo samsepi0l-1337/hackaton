@@ -238,6 +238,9 @@ impl Ports for WorkerPorts {
         getrandom::getrandom(&mut b).expect("getrandom");
         b
     }
+    fn now_ms(&self) -> Option<f64> {
+        Some(js_sys::Date::now())
+    }
     fn log(&self, level: &str, msg: &str) {
         match level {
             "error" => console_error!("{}", msg),
