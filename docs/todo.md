@@ -69,8 +69,8 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] 작업별 연결: F2 질문 문장, F3 요약, F6 이유, F12 계획, F13 초안
 - [x] Solar Decide 관련도 → Top3 점수 (jev와 같은 형식이라 base URL만 바꿔 비교 가능)
 - [ ] 실제 키로 Solar·Decide 응답 확인 (문서 기준으로만 구현됨)
-- [ ] `apps/api/src/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기
-- [~] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답 (완료), Document Parse 응답 (남음)
+- [x] `apps/api/src/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기, discover→download→parse 파이프라인
+- [x] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답·Document Parse 응답
 - [ ] Upstage API 키 **입력 필요** (`wrangler secret put UPSTAGE_API_KEY`, 로컬은 `.dev.vars`)
 - [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요**
 - [ ] AI Gateway 생성(인증 켜기), 커스텀 프로바이더 `upstage` (base `https://api.upstage.ai`) 등록, 라우트 업로드·배포
@@ -81,9 +81,9 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 
 역할: 공고 상세 페이지에서 첨부를 찾아 내려받고(정부 사이트의 세션·리다이렉트 처리), 승인된 값으로 신청 양식(DOCX·HWPX)을 채운다. 문서 해석은 Document Parse가 한다.
 
-- [ ] `apps/doc-worker/`: 컨테이너 이미지(linux/amd64), `/health` `/discover` `/download` `/fill`
-- [ ] 팀 모의 양식(DOCX·HWPX)으로 fill 동작
-- [ ] 로컬 Docker로 실행 테스트
+- [x] `apps/doc-worker/`: 컨테이너 이미지(linux/amd64), `/health` `/discover` `/download` `/fill`, SSRF 차단
+- [x] 합성 DOCX·HWPX로 fill 동작 (팀 모의 양식으로 다시 확인 필요)
+- [x] 로컬 Docker로 실행 테스트 (amd64 빌드, /health·/fill)
 - [ ] API 연결: `DocWorker` Durable Object(`ctx.container`), `lite` 인스턴스, 비활성 2분 후 종료, `enableInternet: true`
 - [ ] 흐름: 지원서 생성 → `/discover` → `/download` → Document Parse → 양식 항목. 실패하면 모의 양식
 - [ ] `wrangler dev`로 Worker → DO → 컨테이너 통합 실행
