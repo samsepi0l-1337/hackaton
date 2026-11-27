@@ -191,7 +191,7 @@ export function Me() {
       </section>
       {confirm && (
         <ConfirmDialog title="계정을 삭제할까요?" confirmLabel="삭제" danger busy={busy} onConfirm={remove} onCancel={() => setConfirm(false)}>
-          <p>계정과 서버에 저장된 상담·정보가 지워지고 되돌릴 수 없어요. 이 브라우저에 남은 상담 요약과 유형 테스트 결과는 따로 지워야 해요.</p>
+          <p>계정과 서버에 저장된 상담·정보가 지워지고 되돌릴 수 없어요. 이 브라우저에 저장된 입력 초안, 대화, 요약, 유형 테스트 결과는 따로 지워야 해요.</p>
         </ConfirmDialog>
       )}
     </div>

@@ -59,7 +59,7 @@ export function Home() {
           </section>
         </div>
         <section className="pane account-panel">
-          <h2>내 조건에 맞는 순으로<br />공고를 확인하세요.</h2>
+          <h2>하트와 내 정보 조건을<br />참고한 순서로 볼 수 있어요.</h2>
           <div className="account-grid">
             {ACCOUNT_LINKS.map((a) => (
               <Link key={a.label} to={a.to}><span><PortalIcon name={a.icon} size={19} /></span>{a.label}</Link>
@@ -93,7 +93,7 @@ export function Home() {
             <ol className="process-list">
               <li><PortalIcon name="doc" /><b>사업 정보 입력</b><small>아이디어와 고객</small></li>
               <li><PortalIcon name="chat" /><b>AI 멘토 상담</b><small>질문으로 구체화</small></li>
-              <li><PortalIcon name="flag" /><b>경로 최대 3개</b><small>추천과 공고 원문</small></li>
+              <li><PortalIcon name="flag" /><b>경로 최대 3개</b><small>추천과 확인된 출처 링크</small></li>
             </ol>
             <Link className="start-link" to="/mentor">상담 이어서 하기<PortalIcon name="next" size={16} /></Link>
           </section>

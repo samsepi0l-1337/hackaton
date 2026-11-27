@@ -111,12 +111,11 @@ export const api = {
     const d = await get<unknown>(ROUTES.home);
     const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
     const str = (v: unknown) => typeof v === 'string';
-    const strOrNull = (v: unknown) => v === null || v === undefined || typeof v === 'string';
     const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
     const rowOk = (c: unknown) => {
       if (!obj(c) || !obj(c.program)) return false;
       const p = c.program;
-      return str(p.id) && str(p.title) && str(p.agency) && str(p.url) && strOrNull(p.category) && strOrNull(p.region)
+      return str(p.id) && str(p.title) && str(p.agency) && str(p.url) && str(p.category) && (p.region === null || str(p.region))
         && (c.dDay === null || num(c.dDay));
     };
     const ok = obj(d) && num(d.openCount) && num(d.closingThisWeek) && Array.isArray(d.closingSoon) && d.closingSoon.every(rowOk);

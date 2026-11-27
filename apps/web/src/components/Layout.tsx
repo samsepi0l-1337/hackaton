@@ -12,7 +12,7 @@ const NAV_GROUPS: { label: string; to?: string; links: [string, string][] }[] = 
   { label: '지원사업', links: [['전체 공고', '/programs'], ['최근 공모', '/programs?sort=recent']] },
   { label: 'AI 창업 상담', to: '/mentor', links: [] },
   { label: '창업 가이드', links: [['창업 유형 테스트', '/test'], ['서비스 이용 방법', '/guide']] },
-  { label: '내 활동', links: [['내 정보', '/me'], ['내 정보 조건', '/me#profile']] },
+  { label: '내 활동', links: [['내 정보', '/me']] },
 ];
 
 function preloadMentor() { void loadMentor().catch(() => {}); }
@@ -22,7 +22,9 @@ export function Layout() {
   const loc = useLocation();
   const { user, loading } = useAuth();
   // 로그인 전에는 로그인, 로그인 뒤에는 내 정보. 확인 중에는 자리만 지킨다.
-  const loginTo = `/login?next=${encodeURIComponent(loc.pathname + loc.search)}`;
+  // 이미 로그인 화면이면 기존 next 를 그대로 쓴다 (로그인 안에 로그인을 겹치지 않는다).
+  const onLogin = loc.pathname === '/login';
+  const loginTo = onLogin ? '/login' + loc.search : `/login?next=${encodeURIComponent(loc.pathname + loc.search)}`;
   const [navOpen, setNavOpen] = useState(false);
   // 메뉴는 셋 중 하나라도 해당하면 열린다. 호버는 미리보기, 클릭은 고정, 포커스는 메뉴 안에 있는 동안 유지.
   const [pinned, setPinned] = useState<number | null>(null);
@@ -117,7 +119,7 @@ export function Layout() {
               <Link to="/programs" {...cur('/programs')}><PortalIcon name="search" /> 공고 검색</Link>
               {user || loading
                 ? <Link to="/me" {...cur('/me')} style={loading ? { visibility: 'hidden' } : undefined}><PortalIcon name="user" /> 내 정보</Link>
-                : <Link to={loginTo} {...cur('/login')}><PortalIcon name="login" /> 로그인</Link>}
+                : <Link to={loginTo} {...(onLogin ? ({ 'aria-current': 'page' } as const) : {})}><PortalIcon name="login" /> 로그인</Link>}
               <Link to="/admin" {...cur('/admin')}><PortalIcon name="bars" /> 팀 통계</Link>
             </div>
           </div>
@@ -169,7 +171,7 @@ export function Layout() {
       <footer className="footer">
         <div className="portal-width footer-inner">
           <strong>해보까</strong>
-          <p>입력한 내용은 서버에 저장되고, 문장 정리를 위해 외부 AI(Upstage)로 전송될 수 있어요. 상담을 처음부터 시작하면 탐색 기록만 지워지고, 계정을 지우면 서버 데이터가 지워져요. 이 브라우저에 저장된 상담 요약과 유형 테스트 결과는 따로 지워야 해요.</p>
+          <p>입력한 내용은 서버에 저장되고, 문장 정리를 위해 외부 AI(Upstage)로 전송될 수 있어요. 상담 결과 화면의 초기화는 서버의 탐색 기록과 이 브라우저의 상담·테스트 저장분을 지워요. 계정을 지우면 서버 데이터가 지워지고, 브라우저 저장분은 따로 지워야 해요.</p>
           <p>공고 출처 · 공공데이터포털 K-Startup　|　<Link to="/licenses">오픈소스 라이선스</Link></p>
         </div>
       </footer>

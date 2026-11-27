@@ -47,10 +47,10 @@ export const STAGE_TABS: { value: string; label: string; icon: string; prompt: s
 
 /** 유형 칩은 type 필터, 키워드 칩은 q 검색이다. 이름은 실제로 하는 일을 그대로 쓴다. */
 export const FIELD_LINKS: { label: string; to: string }[] = [
-  { label: '지원사업 유형', to: '/programs?type=' + encodeURIComponent('지원사업') },
-  { label: '교육 유형', to: '/programs?type=' + encodeURIComponent('교육') },
-  { label: '공간 유형', to: '/programs?type=' + encodeURIComponent('공간') },
-  { label: '상담 유형', to: '/programs?type=' + encodeURIComponent('상담') },
+  { label: '지원사업 유형 관련 공고', to: '/programs?type=' + encodeURIComponent('지원사업') },
+  { label: '교육 유형 관련 공고', to: '/programs?type=' + encodeURIComponent('교육') },
+  { label: '공간 유형 관련 공고', to: '/programs?type=' + encodeURIComponent('공간') },
+  { label: '상담 유형 관련 공고', to: '/programs?type=' + encodeURIComponent('상담') },
   { label: '“판로” 검색', to: '/programs?q=' + encodeURIComponent('판로') },
   { label: '“행사” 검색', to: '/programs?q=' + encodeURIComponent('행사') },
   { label: '“기술개발” 검색', to: '/programs?q=' + encodeURIComponent('기술개발') },
