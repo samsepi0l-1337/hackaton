@@ -278,8 +278,8 @@ fn explore() -> Spec {
         def("start", start, json!({})),
         def("exploration", nullable(exploration), Value::Null),
         def("messages", arr(chat(), 200), json!([])),
-        def("questionIndex", num(true, 0.0, 3.0), json!(0)),
-        def("plan", arr(s(), 3), json!([])),
+        def("questionIndex", num(true, 0.0, 12.0), json!(0)),
+        def("plan", arr(s(), 12), json!([])),
         def(
             "answers",
             arr(
@@ -288,7 +288,7 @@ fn explore() -> Spec {
                     req("text", nullable(st(0, 1000))),
                     req("how", en(&["answered", "unknown", "skipped"])),
                 ]),
-                10,
+                24,
             ),
             json!([]),
         ),

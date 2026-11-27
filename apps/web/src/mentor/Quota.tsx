@@ -22,7 +22,7 @@ export function QuotaLine({ quota }: { quota: ConsultQuota | null | undefined })
   );
 }
 
-export const QUOTA_NOTE = `AI 상담 채팅은 1인당 ${CONSULT_LIMIT.windowDays}일에 ${CONSULT_LIMIT.count}번 보낼 수 있어요. 답을 보낼 때마다 1번으로 세고, 첫 질문은 세지 않아요. 한 상담에서 길게 이야기해도 되고, 여러 번 나눠 상담해도 돼요. 초기화해도 이미 쓴 횟수는 돌아오지 않아요.`;
+export const QUOTA_NOTE = `AI 상담 채팅은 1인당 한 주(일요일~토요일)에 ${CONSULT_LIMIT.count}번 보낼 수 있고, 일요일 0시에 다시 채워져요. 답을 보낼 때마다 1번으로 세고, 첫 질문은 세지 않아요. 한 상담에서 길게 이야기해도 되고, 여러 번 나눠 상담해도 돼요. 초기화해도 이미 쓴 횟수는 돌아오지 않아요.`;
 
 /** 이 기기에 저장되는 항목 안내 + 로컬 AI 켜기/끄기. */
 export function DeviceNotice({ aiAvailable }: { aiAvailable: boolean }) {

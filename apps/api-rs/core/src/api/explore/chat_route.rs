@@ -1,5 +1,5 @@
 //! TS 원본: apps/api/src/explore/routes.ts (POST /api/explore/chat)
-use crate::api::{ai::solar::create_text_ai, app::common::{bad,bad_fields}, explore::{ai::{ExploreAi,Limiter}, chat::{self,MAX_QUESTIONS}, quota::{quota_config,quota_keys,quota_status,record_consult,limit_message,exempt_quota}, state::{actor_id, ai_context_for, bump, local_tasks, new_exploration, open, save, touch, user_texts}}, store::Store};
+use crate::api::{ai::solar::create_text_ai, app::common::{bad,bad_fields}, explore::{ai::{ExploreAi,Limiter}, chat::{self,MAX_QUESTIONS}, quota::{chat_quota_config,quota_keys,quota_status,record_consult,limit_message,exempt_quota}, state::{actor_id, ai_context_for, bump, local_tasks, new_exploration, open, save, touch, user_texts}}, store::Store};
 use crate::app::Cx;
 use crate::http::{HResult,HttpError,Req,Resp};
 use crate::jsstr::{iso,js_trim,len16,parse_ms};
@@ -24,7 +24,7 @@ fn follow_up(s: &Value) -> &'static str {
 }
 fn plan_len(s: &Value) -> usize { s["plan"].as_array().map(Vec::len).filter(|n| *n > 0).unwrap_or(MAX_QUESTIONS) }
 pub async fn chat(cx: &mut Cx<'_>, req: &Req) -> HResult {
-    let id=actor_id(cx)?; let b=req.json_or_empty(); let cfg=quota_config(cx.opts.consult_limit); let keys=quota_keys(cx.user.as_ref());
+    let id=actor_id(cx)?; let b=req.json_or_empty(); let cfg=chat_quota_config(cx.opts.consult_limit); let keys=quota_keys(cx.user.as_ref());
     let exempt=cx.user.as_ref().is_some_and(|u|u["isTeam"]==true);
     let mut s=open(cx,&id)?; let errors=validate_start(&s["start"]);
     if !errors.is_empty(){return Err(bad_fields("시작 정보를 먼저 입력해 주세요",json!(errors)));}

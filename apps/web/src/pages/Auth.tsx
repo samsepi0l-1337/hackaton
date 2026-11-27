@@ -60,7 +60,7 @@ export function Signup() {
   return (
     <div className="container account-page narrow">
       <h1>가입하기</h1>
-      <p className="muted">창업 준비는 가입하고 이메일을 인증한 뒤 쓸 수 있어요. 계정 1개로 일주일에 AI 상담 채팅을 12번 보낼 수 있어요.</p>
+      <p className="muted">창업 준비는 가입하고 이메일을 인증한 뒤 쓸 수 있어요. 계정 1개로 한 주(일요일~토요일)에 AI 상담 채팅을 12번 보낼 수 있어요.</p>
       <form className="card" onSubmit={submit} noValidate>
         <TextField label="이메일" type="email" autoComplete="email" value={email} onChange={setEmail} error={errors.email} />
         <TextField label="비밀번호" type="password" autoComplete="new-password" value={password} onChange={setPassword} error={errors.password} />
