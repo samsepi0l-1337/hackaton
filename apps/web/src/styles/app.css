@@ -365,6 +365,7 @@ details > summary { cursor: pointer; }
 .heart.on svg path { fill: currentColor; }
 .heart:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .heart:disabled { opacity: .6; cursor: progress; }
+.heart-error { font-size: var(--font-size-sm); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .heart svg path { transition: none; } }
 
 /* 지역 선택 (당근식 중첩 목록) — 지역을 고르는 모든 화면에서 쓴다 */

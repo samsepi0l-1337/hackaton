@@ -60,6 +60,7 @@ function Board({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     let dead = false;
     setError(null);
+    setData(null); // 다음 페이지가 올 때까지 이전 줄을 새 번호로 보여 주지 않는다.
     api.bufsFeedback(PAGE, offset).then((d) => { if (!dead) setData(d); }, (e) => {
       if (dead) return;
       if (e instanceof ApiClientError && (e.status === 401 || e.status === 403)) onLogout(); else setError(e);

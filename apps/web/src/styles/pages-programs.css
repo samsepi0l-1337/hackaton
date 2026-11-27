@@ -64,7 +64,7 @@
 .programs-page [role="note"] { background: #f2f6fb; border-radius: 8px; padding: 8px 12px; color: #4d5e72; }
 .programs-page nav[aria-label="페이지"] { margin-top: var(--space-4); }
 .programs-page nav[aria-label="페이지"] .btn { min-width: 34px; }
-.programs-page .heart,.program-detail .heart { min-width: 36px; min-height: 36px; }
+.programs-page .heart,.program-detail .heart { min-width: 44px; min-height: 44px; }
 
 .program-card.card { padding: 17px 20px 18px; }
 .program-card h3 { margin: 0; }

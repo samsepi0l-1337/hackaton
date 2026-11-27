@@ -65,6 +65,8 @@ export function Apply() {
 
       {editable && (
         <form className="card stack" onSubmit={(e) => e.preventDefault()} noValidate>
+          {/* 저장·확인 요청 중에는 칸을 잠근다. 응답이 오면 서버 값으로 바뀌어 그 사이에 쓴 글이 사라지기 때문이다. */}
+          <fieldset disabled={busy} className="stack" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {app.fields.map((f) => {
             const v = values[f.key] ?? '';
             const e = fieldErr(f.key);
@@ -85,6 +87,7 @@ export function Apply() {
               </div>
             );
           })}
+          </fieldset>
           {err && <p className="error-text" role="alert">{err}</p>}
           {saved && <p role="status">저장했어요.</p>}
           <div className="row">
@@ -106,8 +109,9 @@ export function Apply() {
           {err && <p className="error-text" role="alert">{err}</p>}
           <div className="row">
             <button className="btn" type="button" disabled={busy} onClick={() => run(() => api.updateApplication(app.id, { values }))}>다시 고치기</button>
-            <button className="btn primary" type="button" disabled={busy || !confirmed} onClick={() => run(() => api.approveApplication(app.id))}>{busy ? '제출하는 중...' : '모의 제출'}</button>
+            <button className="btn primary" type="button" disabled={busy || !confirmed} aria-describedby={confirmed ? undefined : 'apply-confirm-hint'} onClick={() => run(() => api.approveApplication(app.id))}>{busy ? '제출하는 중...' : '모의 제출'}</button>
           </div>
+          {!confirmed && <p id="apply-confirm-hint" className="muted" style={{ margin: 0 }}>'작성한 내용을 확인했어요'에 체크하면 모의 제출할 수 있어요.</p>}
         </section>
       )}
 
@@ -125,6 +129,7 @@ export function Apply() {
           <h2 style={{ margin: 0 }}>제출하지 못했어요</h2>
           <p style={{ margin: 0 }}>{app.failReason ?? '알 수 없는 이유로 실패했어요.'}</p>
           {err && <p className="error-text" role="alert">{err}</p>}
+          {app.retries >= 1 && <p className="muted" style={{ margin: 0 }}>다시 시도는 한 번만 할 수 있어요. 새 지원서를 만들어 주세요.</p>}
           {app.retries < 1 && <div><button className="btn primary" type="button" disabled={busy} onClick={() => run(() => api.retryApplication(app.id))}>{busy ? '다시 시도하는 중...' : '다시 시도'}</button></div>}
         </section>
       )}

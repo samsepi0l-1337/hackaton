@@ -26,16 +26,16 @@ export function Signup() {
   const [busy, setBusy] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const pw = checkPassword(password, confirm);
-  const ready = EMAIL_RE.test(email) && pw.ok && consent;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const er: Record<string, string> = {};
     if (!EMAIL_RE.test(email)) er.email = '이메일 형식이 올바르지 않아요';
     if (!consent) er.consent = '개인정보 안내에 동의해 주세요';
+    if (!pw.ok) er.password = '아래 비밀번호 조건을 모두 맞춰 주세요';
     setErrors(er);
     setFormError('');
-    if (Object.keys(er).length || !pw.ok) return;
+    if (Object.keys(er).length) return;
     setBusy(true);
     try {
       const r = await api.signup({ email, password, passwordConfirm: confirm, consent });
@@ -63,7 +63,7 @@ export function Signup() {
       <p className="muted">창업 준비는 가입하고 이메일을 인증한 뒤 쓸 수 있어요. 계정 1개로 일주일에 3번 상담할 수 있어요.</p>
       <form className="card" onSubmit={submit} noValidate>
         <TextField label="이메일" type="email" autoComplete="email" value={email} onChange={setEmail} error={errors.email} />
-        <TextField label="비밀번호" type="password" autoComplete="new-password" value={password} onChange={setPassword} />
+        <TextField label="비밀번호" type="password" autoComplete="new-password" value={password} onChange={setPassword} error={errors.password} />
         <TextField label="비밀번호 확인" type="password" autoComplete="new-password" value={confirm} onChange={setConfirm} />
         <PasswordChecklist password={password} confirm={confirm} />
         <div className={`field${errors.consent ? ' has-error' : ''}`}>
@@ -71,10 +71,10 @@ export function Signup() {
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
             <span>(필수) 입력한 정보는 창업 준비 안내와 추천에만 쓰고 행사 후 삭제하는 데 동의해요.</span>
           </label>
-          {errors.consent && <p className="error-text">{errors.consent}</p>}
+          {errors.consent && <p className="error-text" role="alert">{errors.consent}</p>}
         </div>
         {formError && <p className="error-text" role="alert">{formError}</p>}
-        <button className="btn primary block" disabled={busy || !ready}>{busy ? '처리 중...' : '가입하기'}</button>
+        <button className="btn primary block" disabled={busy}>{busy ? '처리 중...' : '가입하기'}</button>
       </form>
       <p style={{ marginTop: 16 }}>이미 계정이 있나요? <Link to={withNext('/login', sp.get('next'))}>로그인</Link></p>
     </div>
@@ -153,13 +153,14 @@ export function Verify() {
   const [confirmed, setConfirmed] = useState(false);
   const [cool, setCool] = useState(0);
   const [info, setInfo] = useState('');
+  const [sending, setSending] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
     if (!token || started.current) return;
     started.current = true;
     api.verifyEmail({ token }).then((r) => { setUser(r.user); nav(next, { replace: true }); }, (e) => {
-      setError(e instanceof ApiClientError && e.code !== 'network' ? '인증 링크가 만료됐거나 이미 사용됐어요. 이메일을 입력해 인증 메일을 다시 받아 주세요.' : errMessage(e));
+      setError(e instanceof ApiClientError && (e.code === 'bad_request' || e.code === 'validation') ? '인증 링크가 만료됐거나 이미 사용됐어요. 이메일을 입력해 인증 메일을 다시 받아 주세요.' : errMessage(e));
       setStatus('failed');
     });
   }, [token, next, nav, setUser]);
@@ -171,8 +172,10 @@ export function Verify() {
   }, [cool]);
 
   async function resend() {
+    if (sending) return;
     setInfo(''); setError('');
     if (!EMAIL_RE.test(email)) { setError('이메일 형식이 올바르지 않아요'); return; }
+    setSending(true);
     try {
       await api.resendVerification(email);
       setInfo('가입된 이메일이면 인증 메일을 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.');
@@ -181,7 +184,7 @@ export function Verify() {
     } catch (e) {
       if (e instanceof ApiClientError && e.code === 'too_many') { setCool(VERIFY_RESEND_SECONDS); setError('너무 자주 요청했어요. 잠시 뒤에 다시 보내 주세요.'); }
       else setError(errMessage(e));
-    }
+    } finally { setSending(false); }
   }
 
   if (status === 'working') return <div className="container account-page narrow"><p role="status">이메일을 인증하는 중이에요...</p></div>;
@@ -192,7 +195,7 @@ export function Verify() {
       <div className="card stack">
         <TextField label="이메일" type="email" autoComplete="email" value={email} onChange={(v) => { setEmail(v); setConfirmed(false); }} />
         <div className="row">
-          <button type="button" className="btn" disabled={cool > 0} onClick={resend}>{cool > 0 ? `다시 보내기 (${cool}초 뒤)` : '인증 메일 보내기'}</button>
+          <button type="button" className="btn" disabled={cool > 0 || sending} onClick={resend}>{cool > 0 ? `다시 보내기 (${cool}초 뒤)` : sending ? '보내는 중...' : '인증 메일 보내기'}</button>
         </div>
         {status === 'form' && error && <p className="error-text" role="alert">{error}</p>}
         {info && <p className="muted" role="status">{info}</p>}
