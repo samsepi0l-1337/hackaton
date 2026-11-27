@@ -145,3 +145,10 @@ details > summary { cursor: pointer; }
 .progress-steps li { flex: 1; text-align: center; font-size: var(--font-size-sm); padding: var(--space-2) var(--space-1); border-bottom: 3px solid var(--color-border); color: var(--color-muted); }
 .progress-steps li.done { border-bottom-color: var(--color-primary); color: var(--color-text); }
 .progress-steps li.current { border-bottom-color: var(--color-primary); color: var(--color-primary); font-weight: 700; }
+
+/* /bufs: 데스크톱은 표, 모바일은 카드 */
+.bufs-cards { display: none; }
+@media (max-width: 767px) {
+  .bufs-table { display: none; }
+  .bufs-cards { display: flex; flex-direction: column; }
+}

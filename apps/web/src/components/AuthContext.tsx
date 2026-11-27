@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '@gil/shared';
-import { api } from '../api/client';
+import { api, AUTH_GATE_EVENT } from '../api/client';
 
 interface AuthValue {
   user: User | null;
@@ -19,6 +19,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     api.me().then((r) => setUserState(r.user)).catch(() => setUserState(null)).finally(() => setLoading(false));
+  }, []);
+
+  // 창업 준비 호출이 401/403 을 받으면 화면 상태를 서버와 맞춘다 (인증 안내·비밀번호 변경 안내로 이동).
+  useEffect(() => {
+    const onGate = (e: Event) => {
+      const code = (e as CustomEvent<string>).detail;
+      setUserState((u) => {
+        if (code === 'unauthorized') return null;
+        if (!u) return u;
+        if (code === 'email_unverified') return { ...u, emailVerified: false };
+        if (code === 'password_change_required') return { ...u, mustChangePassword: true };
+        return u;
+      });
+    };
+    window.addEventListener(AUTH_GATE_EVENT, onGate);
+    return () => window.removeEventListener(AUTH_GATE_EVENT, onGate);
   }, []);
 
   const setUser = useCallback((u: User | null) => setUserState(u), []);

@@ -8,6 +8,7 @@ import { ResourceResultCard } from '../components/ResourceView';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import { Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
+import { profileToConditions } from '../lib/profile';
 import { ITEM_LABEL, Progress, ProvBadge, getItem } from './Common';
 import type { ItemKey } from './Common';
 import { clearSnapshot, patchStore, readStore } from './storage';
@@ -54,7 +55,7 @@ function ConditionForm({ initial, onSave, onClose }: { initial?: UserConditions;
     <div className="overlay" role="dialog" aria-modal="true" aria-label="내 조건 확인">
       <div className="sheet stack">
         <h2 style={{ margin: 0 }}>내 조건 확인</h2>
-        <p className="muted">지원 경로의 조건과 비교할 때만 써요. 모르면 '모름'을 골라도 되고, 건너뛰어도 요약과 준비 안내는 그대로예요.</p>
+        <p className="muted">지원 경로의 조건과 비교할 때만 써요.{initial ? ' 내 정보에 저장한 기본 정보를 먼저 채웠어요. 바꿔도 돼요.' : ''} 모르면 '모름'을 골라도 되고, 건너뛰어도 요약과 준비 안내는 그대로예요.</p>
         <Field label="만 나이">
           <input className="input" type="number" min={0} max={120} inputMode="numeric" value={age} disabled={ageUnknown} onChange={(e) => setAge(e.target.value)} />
           <label className="check"><input type="checkbox" checked={ageUnknown} onChange={(e) => setAgeUnknown(e.target.checked)} />모름</label>
@@ -180,6 +181,8 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
   const [error, setError] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
   const [cond, setCond] = useState(false);
+  const [profileCond, setProfileCond] = useState<UserConditions | undefined>(undefined);
+  useEffect(() => { api.myProfile().then((r) => setProfileCond(profileToConditions(r.profile)), () => {}); }, []);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -340,7 +343,7 @@ export function ResultStep({ summary, problemTitle, readOnly = false, onEditSumm
         {note && <p className="muted" role="status">{note}</p>}
       </section>
 
-      {cond && <ConditionForm initial={undefined} onClose={() => setCond(false)} onSave={async (c) => { const r = await api.saveConditions(c); setRes(r); keep(r); setCond(false); }} />}
+      {cond && <ConditionForm initial={profileCond} onClose={() => setCond(false)} onSave={async (c) => { const r = await api.saveConditions(c); setRes(r); keep(r); setCond(false); }} />}
       {confirm && (
         <ConfirmDialog title="처음부터 다시 할까요?" confirmLabel="초기화" danger busy={busy} onConfirm={reset} onCancel={() => setConfirm(false)}>
           <p>아래 내용이 지워지고 되돌릴 수 없어요.</p>
