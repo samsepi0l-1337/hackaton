@@ -1,4 +1,4 @@
-//! 상담 횟수 제한 (계정별 7일 3회).
+//! 상담 횟수 제한 (계정별 7일 12개 메시지).
 use crate::api::store::Store;
 use crate::jsstr::{iso, parse_ms};
 use crate::shared::explore::CONSULT_LIMIT;
@@ -13,7 +13,7 @@ pub fn quota_config(overrides: Option<(u32, u32)>) -> QuotaConfig {
     QuotaConfig { count, window_days }
 }
 pub fn quota_keys(actor: Option<&Value>) -> Vec<String> {
-    actor.and_then(|a| a.get("id")).and_then(Value::as_str).map(|id| vec![format!("u:{id}")]).unwrap_or_default()
+    actor.and_then(|a| a.get("id")).and_then(Value::as_str).map(|id| vec![format!("chat:{id}")]).unwrap_or_default()
 }
 fn live(times: &Value, now: i64, cfg: QuotaConfig) -> Vec<String> {
     let mut out: Vec<_> = times.as_array().into_iter().flatten().filter_map(Value::as_str)
@@ -40,5 +40,5 @@ pub fn record_consult(store: &mut Store<'_>, keys: &[String], now: i64, cfg: Quo
 pub fn exempt_quota(cfg: QuotaConfig) -> Value { json!({"used":0,"limit":cfg.count,"remaining":cfg.count,"resetAt":null}) }
 pub fn limit_message(q: &Value, cfg: QuotaConfig) -> String {
     let date = q["resetAt"].as_str().and_then(parse_ms).and_then(|ms| DateTime::<Utc>::from_timestamp_millis(ms + 9 * 3_600_000)).map(|d| format!("{}월 {}일",d.month(),d.day())).unwrap_or_else(|| "며칠 뒤".into());
-    format!("이번 주 상담 {}회를 모두 사용했어요. {}부터 다시 할 수 있어요.",cfg.count,date)
+    format!("이번 주 AI 상담 채팅 {}회를 모두 보냈어요. {}부터 다시 보낼 수 있어요.",cfg.count,date)
 }

@@ -108,7 +108,7 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
   const last = useRef<ExploreChatRequest>({});
   const started = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
-  const max = session.maxQuestions || 3;
+  const [max, setMax] = useState(session.maxQuestions || 3);
 
   async function goSummary() {
     setSending(true); setErr('');
@@ -124,7 +124,9 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
     setSending(true); setErr(''); setFailed(false); setLimit(null);
     try {
       const r = await api.exploreChat(req);
-      onRefreshQuota();
+      const extra = r as typeof r & { maxQuestions?: number; quota?: ConsultQuota };
+      if (extra.quota) onQuota(extra.quota); else onRefreshQuota();
+      if (extra.maxQuestions) setMax(extra.maxQuestions);
       setMessages(r.messages); setQIndex(r.questionIndex);
       if (r.suggestions.length) setSuggestions(r.suggestions);
       if (r.failed) { setFailed(true); setManual(true); if (text !== undefined) setInput(text); return; }
@@ -215,8 +217,8 @@ export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved,
       )}
       {limit && (
         <div className="card stack" role="alert">
-          <p style={{ margin: 0 }}><strong>이번 주 상담 횟수를 모두 사용했어요.</strong> {limit.message}</p>
-          {(limit.quota?.resetAt ?? quota?.resetAt) && <p style={{ margin: 0 }}>{resetDate(limit.quota?.resetAt ?? quota?.resetAt ?? null)} 이후에 다시 상담할 수 있어요.</p>}
+          <p style={{ margin: 0 }}><strong>이번 주 상담 채팅 횟수를 모두 사용했어요.</strong> {limit.message}</p>
+          {(limit.quota?.resetAt ?? quota?.resetAt) && <p style={{ margin: 0 }}>{resetDate(limit.quota?.resetAt ?? quota?.resetAt ?? null)} 이후에 다시 보낼 수 있어요.</p>}
           <p className="muted">입력한 내용은 이 기기에 그대로 남아 있어요. {QUOTA_NOTE}</p>
           <div className="row">
             {session.summary && <button className="btn primary" onClick={() => onSummary(session.summary!)}>이미 만든 구상 요약 보기</button>}

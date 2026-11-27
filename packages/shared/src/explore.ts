@@ -203,16 +203,14 @@ export const EXPLORE_DATA_VERSION = '2026-11-27.no-test-data';
 
 // ---- 상담 횟수 제한 ----
 /**
- * 상담 1회 = 탐색 세션에서 첫 질문을 받는 순간 (POST /api/explore/chat, 대화가 비어 있을 때).
- * 1인당 7일(연속 168시간) 3회. 사람 단위: 로그인 사용자 id, 게스트는 기기 쿠키 + 접속 IP 해시를 함께 센다
- * (초기화·쿠키 삭제로 횟수가 돌아오지 않게). 초기화해도 이미 쓴 횟수는 돌려주지 않는다.
+ * 사용자가 보낸 상담 채팅 메시지를 계정별로 센다. 7일(연속 168시간) 12회.
  */
-export const CONSULT_LIMIT = { count: 3, windowDays: 7 } as const;
+export const CONSULT_LIMIT = { count: 12, windowDays: 7 } as const;
 export interface ConsultQuota {
   used: number;
   limit: number;
   remaining: number;
-  resetAt: string | null; // 가장 오래된 상담이 7일이 지나 1회가 돌아오는 시각 (ISO), 남은 횟수가 있으면 null 가능
+  resetAt: string | null; // 가장 오래된 메시지가 7일이 지나 1회가 돌아오는 시각 (ISO), 남은 횟수가 있으면 null 가능
 }
 
 // ---- 브라우저 로컬 AI (Chrome 내장 Prompt API) ----

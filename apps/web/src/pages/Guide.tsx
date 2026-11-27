@@ -80,10 +80,10 @@ export function Guide() {
 
       <section className="pane" aria-labelledby="g-limit">
         <div className="pane-title">
-          <h2 id="g-limit">상담 횟수</h2>
+          <h2 id="g-limit">상담 채팅 횟수</h2>
           <Link className="text-action" to="/me">내 정보에서 남은 횟수 보기</Link>
         </div>
-        <p>일반 계정은 최근 {CONSULT_LIMIT.windowDays}일 안에 {CONSULT_LIMIT.count}번까지 상담할 수 있어요. 첫 질문을 받는 순간 1번으로 세요. 상담을 처음부터 다시 시작해도 이미 쓴 횟수는 돌아오지 않아요.</p>
+        <p>일반 계정은 최근 {CONSULT_LIMIT.windowDays}일 안에 AI 상담 채팅을 {CONSULT_LIMIT.count}번까지 보낼 수 있어요. 답을 보낼 때마다 1번으로 세고, 첫 질문은 세지 않아요. 한 상담에서 질문을 이어 받아 길게 구체화해도 되고, 짧은 상담을 여러 번 해도 돼요. 상담을 처음부터 다시 시작해도 이미 쓴 횟수는 돌아오지 않아요.</p>
         <p className="muted">남은 횟수는 이메일 인증을 마치면 내 정보에서 볼 수 있어요. 새 비밀번호를 정해야 하는 계정은 그것까지 마친 뒤에 볼 수 있어요.</p>
       </section>
 

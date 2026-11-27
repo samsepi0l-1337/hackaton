@@ -189,6 +189,15 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
     api.exploreSession().then((s) => { if (s.quota) setQuota(s.quota); setSession((cur) => ({ ...cur, exploration: s.exploration })); patchStore({ serverUpdatedAt: s.updatedAt, ...(s.quota ? { quota: s.quota } : {}) }); }, () => {});
   }, []);
   const setSummary = (s: SummaryV2) => { setSession((cur) => ({ ...cur, summary: s })); refreshSession(); };
+  /** 정리한 상담을 이어서 한다. 서버가 다음 질문을 붙이면 대화 화면으로 돌아간다. */
+  const continueChat = async () => {
+    const r = await api.exploreChat({ more: true } as Parameters<typeof api.exploreChat>[0]);
+    const extra = r as typeof r & { maxQuestions?: number; quota?: ConsultQuota };
+    patchStore({ messages: r.messages, questionIndex: r.questionIndex });
+    if (extra.quota) setQuota(extra.quota);
+    setSession((cur) => ({ ...cur, messages: r.messages, questionIndex: r.questionIndex, maxQuestions: extra.maxQuestions ?? cur.maxQuestions, step: 'chat' }));
+    setView('chat');
+  };
 
   if (boot.readOnly) return <LocalView boot={boot} onResumed={onResumed} />;
 
@@ -213,7 +222,7 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
     );
   }
   if (view === 'summary' && summary) {
-    return <Suspense fallback={<CardSkeletons />}><SummaryStep summary={summary} onChange={setSummary} onBackToChat={() => setView('chat')} onBackToStart={() => setView('start')} onResult={() => setView('result')} /></Suspense>;
+    return <Suspense fallback={<CardSkeletons />}><SummaryStep summary={summary} onChange={setSummary} onBackToChat={() => setView('chat')} onBackToStart={() => setView('start')} onResult={() => setView('result')} onContinue={continueChat} /></Suspense>;
   }
   if (summary) {
     return <Suspense fallback={<CardSkeletons />}><ResultStep summary={summary} problemTitle={problem?.title} conditions={session.start.conditions} onEditSummary={() => setView('summary')} onBackToStart={() => setView('start')} onMissingSummary={() => setView('chat')} /></Suspense>;
