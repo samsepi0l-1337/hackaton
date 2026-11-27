@@ -73,11 +73,14 @@ export interface ConditionResult {
  * 원문에 거주 조건이 없을 때: 자료의 이용·지원 지역과 입력한 거주지를 비교한다.
  * 지원 지역은 사업장 소재지 기준일 수 있어서 달라도 '불일치'로 정하지 않는다 (추천에서 빠지지 않게).
  */
+/** 받침이 있으면 '이에요', 없으면 '예요'. */
+const copula = (w: string) => { const c = w.charCodeAt(w.length - 1); return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0 ? '이에요' : '예요'; };
+
 function regionCheck(r: Resource, userRes: string | null): ConditionCheck {
   if (r.regions.includes('전국')) return mk('residence', '거주지', 'match', userRes ? `전국 대상이에요 (입력한 거주지 ${userRes})` : '전국 대상이에요');
   const area = r.regions.join('·');
   if (!area) return mk('residence', '거주지', 'check', '원문의 거주 조건을 확인하지 못했어요');
-  if (!userRes) return mk('residence', '거주지', 'check', `지원 지역은 ${area}예요. 거주지를 입력하지 않아 비교하지 못했어요`);
+  if (!userRes) return mk('residence', '거주지', 'check', `지원 지역은 ${area}${copula(area)}. 거주지를 입력하지 않아 비교하지 못했어요`);
   const have = regionOfText(userRes);
   const inArea = have !== null && r.regions.some((x) => x === have || x === '부울경');
   return inArea
