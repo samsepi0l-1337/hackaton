@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BUSAN_DISTRICTS, OCCUPATIONS, RESIDENCE_OPTIONS, checkPassword, scoreTypeTest } from '@gil/shared';
+import { APPLICATION_STATUS_LABEL, BUSAN_DISTRICTS, OCCUPATIONS, RESIDENCE_OPTIONS, checkPassword, scoreTypeTest } from '@gil/shared';
 import type { BasicProfile } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { useAuth } from '../components/AuthContext';
@@ -52,6 +52,34 @@ function PasswordSection({ notice }: { notice: boolean }) {
         {done && <p role="status">비밀번호를 바꿨어요. 다른 기기의 로그인은 끝났어요.</p>}
         <div><button className="btn primary" disabled={busy || !current || !pw.ok}>{busy ? '바꾸는 중...' : '비밀번호 바꾸기'}</button></div>
       </form>
+    </section>
+  );
+}
+
+function ApplicationsSection() {
+  const list = useAsync(() => api.applications(), []);
+  const items = list.data?.items ?? [];
+  return (
+    <section className="card stack">
+      <h2 style={{ margin: 0 }}>내 지원서</h2>
+      {list.loading ? <p className="muted">불러오는 중이에요.</p>
+        : list.error ? <p className="muted">지원서를 불러오지 못했어요.</p>
+        : items.length === 0 ? (
+          <>
+            <p className="muted" style={{ margin: 0 }}>아직 쓴 지원서가 없어요.</p>
+            <div><Link className="btn" to="/programs">공고 보러 가기</Link></div>
+          </>
+        ) : (
+          <ul className="plain-list">
+            {items.map((a) => (
+              <li key={a.id} className="app-row">
+                <Link to={`/applications/${a.id}`}>{a.program.title}</Link>
+                <span className="badge">{APPLICATION_STATUS_LABEL[a.status]}</span>
+                <span className="muted">{a.updatedAt.slice(0, 10)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
     </section>
   );
 }
@@ -162,6 +190,8 @@ export function Me() {
         <p style={{ margin: 0 }}>{user.email} <span className="badge">{user.emailVerified ? '이메일 인증 완료' : '이메일 인증 전'}</span></p>
         {!user.emailVerified && <VerifyPanel email={user.email} onDone={() => {}} lead="인증하면 창업 준비를 쓸 수 있어요. 메일의 링크를 누르거나 코드를 입력해 주세요." />}
       </section>
+
+      <ApplicationsSection />
 
       <ProfileSection />
       </div>

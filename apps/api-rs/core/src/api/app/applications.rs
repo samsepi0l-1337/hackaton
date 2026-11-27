@@ -52,11 +52,40 @@ fn own(cx: &mut Cx<'_>, id: &str) -> Result<Value, HttpError> {
         .filter(|a| a["userId"] == uid)
         .ok_or_else(|| HttpError::not_found("지원서를 찾을 수 없어요"))
 }
+fn resource_program(r: &Value) -> Value {
+    let mut tags = r["industryTags"].as_array().cloned().unwrap_or_default();
+    tags.extend(r["capabilityTags"].as_array().into_iter().flatten().cloned());
+    let mut p = Map::new();
+    for (key, value) in [
+        ("id", r["id"].clone()),
+        ("title", r["title"].clone()),
+        ("agency", r["agency"].clone()),
+        ("category", r["type"].clone()),
+        ("region", r["regions"].as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)),
+        ("startDate", r["startDate"].clone()),
+        ("endDate", r["endDate"].clone()),
+        ("recruiting", json!(r["recruitStatus"] != "closed")),
+        ("target", r["target"].clone()),
+        ("bizYears", Value::Null),
+        ("targetAge", Value::Null),
+        ("content", r["content"].clone()),
+        ("url", r.get("url").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!(""))),
+        ("registeredAt", r.get("checkedAt").filter(|v| !v.is_null()).or_else(|| r.get("startDate").filter(|v| !v.is_null())).cloned().unwrap_or_else(|| json!(""))),
+        ("tags", Value::Array(tags)),
+    ] {
+        p.insert(key.into(), value);
+    }
+    Value::Object(p)
+}
 fn program(cx: &mut Cx<'_>, id: &str) -> Option<Value> {
     Store::new(cx.kv, cx.now)
         .programs()
         .into_iter()
         .find(|p| p["id"] == id)
+        .or_else(|| crate::api::explore::state::resources_now(cx)
+            .into_iter()
+            .find(|r| r["id"] == id)
+            .map(|r| resource_program(&r)))
 }
 fn closed(p: &Value, now: i64) -> bool {
     p["recruiting"] != true || is_closed(p["endDate"].as_str(), now)

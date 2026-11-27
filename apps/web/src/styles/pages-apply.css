@@ -1,0 +1,12 @@
+/* 지원서 작성 화면 */
+.apply-page { max-width: 820px; }
+.apply-page .apply-field { display: flex; flex-direction: column; gap: var(--space-2); }
+.apply-page .apply-label { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); font-weight: 700; }
+.apply-page .apply-req { color: var(--color-danger); margin-left: 4px; }
+.apply-page textarea.input { min-height: 140px; resize: vertical; font: inherit; }
+.apply-page .apply-count { font-size: 13px; font-weight: 400; color: var(--color-muted); }
+.apply-page .apply-note { font-size: 13px; color: var(--color-muted); margin: 0; }
+.apply-page .apply-summary dt { font-weight: 700; margin-top: var(--space-3); }
+.apply-page .apply-summary dd { margin: 4px 0 0; white-space: pre-wrap; }
+.apply-page .apply-history { font-size: 13px; color: var(--color-muted); margin: 0; padding-left: var(--space-4); }
+.apply-page .apply-receipt { font-size: 20px; font-weight: 800; }
