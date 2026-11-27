@@ -76,6 +76,7 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] 운영 DB 테스트 기록 삭제 (@test.local 계정·기록, 예전 비회원 기록). 운영은 테스트 계정을 만들지 않음. 관리자 기능(공고 수집·통계)은 /bufs 로그인으로
 - [x] 이메일 인증 운영 확인 (2026-11-27)
 - [x] 게이트웨이 설정용 토큰 폐기
+- [x] [테스트] 지역 자료 삭제 (문제 카드·지역 배경·경로). 서비스 데이터는 비어 있고, 테스트 자료는 packages/shared/test/fixtures 로 이동. 공식 지원사업은 K-Startup 실제 공고
 - [x] 메일 발송: Cloudflare Email Service, noreply@dreamp.org (dreamp.org 등록 완료, 하루 1,000통)
 - [x] 창업 유형 테스트(/test) 복구, 재미·참고용 표시
 - [x] 실제 공고: K-Startup getAnnouncementInformation02 수집 (매일 03:00 KST + 운영자 요청, #29). 서비스 키 secret 등록 (개발계정, 2028-11-27까지)

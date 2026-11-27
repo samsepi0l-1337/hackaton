@@ -1,0 +1,3 @@
+[test]
+# 테스트용 지역 자료(픽스처)를 먼저 넣는다
+preload = ["./packages/shared/test/setup-fixtures.ts"]

@@ -189,7 +189,7 @@ export interface ResourceCard {
 }
 
 /** 데이터 버전. 문제 카드가 바뀌면 올린다. */
-export const EXPLORE_DATA_VERSION = '2026-11-27.test-1';
+export const EXPLORE_DATA_VERSION = '2026-11-27.no-test-data';
 
 // ---- 상담 횟수 제한 ----
 /**
