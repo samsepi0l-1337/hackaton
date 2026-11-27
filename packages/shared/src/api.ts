@@ -153,6 +153,7 @@ export interface ExploreResultResponse {
   coverageNote: string; // 실제 제공 지역·자료 범위 안내
   conditionNote: string; // CONDITION_NOTE
   fieldQuestions?: FieldQuestion[]; // 현장에 확인할 질문 최대 3개 (상태: 현장 확인 전). 문제가 바뀌면 다시 만든다
+  ranking?: 'ai' | 'rule'; // 추천 순위: Solar Decide 관련도('ai') 또는 규칙('rule')
 }
 export type ExploreEventType = 'start' | 'chat_done' | 'result' | 'resource_link' | 'regional_expand' | 'feedback';
 export interface ExploreFeedbackRequest {

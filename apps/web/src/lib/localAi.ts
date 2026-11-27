@@ -38,7 +38,8 @@ export function localAiAvailable(): Promise<boolean> {
 
 /** 요청 헤더 값 (예: 'mentor,reason,field'). 쓸 수 없으면 null. */
 export async function localAiHeaderValue(): Promise<string | null> {
-  return (await localAiAvailable()) ? LOCAL_AI_TASKS.join(',') : null;
+  // 'mentor'(질문)는 기기에서 다시 쓰지 않는다. 서버가 반응 문장 + 규칙 질문을 만든다.
+  return (await localAiAvailable()) ? LOCAL_AI_TASKS.filter((t) => t !== 'mentor').join(',') : null;
 }
 
 const SYSTEM: Record<LocalAiTask, string> = {

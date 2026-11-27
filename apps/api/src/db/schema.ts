@@ -168,7 +168,11 @@ export const ExploreStateSchema = z.object({
   }).nullable().default(null),
   prepDone: z.record(z.string(), z.boolean()).default({}),
   /** AI 가 만든 이유 문장 (자료·입력 서명이 같을 때만 쓴다). */
-  ai: z.object({ sig: z.string(), reasons: z.record(z.string(), z.string()) }).nullable().default(null),
+  ai: z.object({
+    sig: z.string(), reasons: z.record(z.string(), z.string()),
+    /** Solar Decide 관련도 (자료 id → 0..1). 없으면 규칙 순위. */
+    rank: z.record(z.string(), z.number().min(0).max(1)).nullable().default(null),
+  }).nullable().default(null),
   rejected: z.array(z.string().max(300)).max(20).default([]),
   lastBody: z.object({ sig: z.string(), at: z.string() }).nullable().default(null),
   feedback: z.object({

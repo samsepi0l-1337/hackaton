@@ -184,8 +184,9 @@ describe('§5 수용 시나리오', () => {
     await begin(c, START_NO_IDEA);
     await c.put('/api/explore/exploration', { problemId: 'pb-ship-1' });
     const first = (await c.post('/api/explore/chat')).body;
-    expect(first.failed).toBe(true);
-    expect(first.messages.at(-1).text).toContain('관심을 끌었나요'); // 규칙 질문
+    expect(first.messages.at(-1).text).toContain('관심을 끌었나요'); // 규칙 질문 (첫 질문은 AI 를 부르지 않는다)
+    const second = (await c.post('/api/explore/chat', { message: '배를 만드는 과정이 궁금해요' })).body;
+    expect(second.failed).toBe(true); // 반응 문장 실패 → 재시도 신호, 질문은 규칙 문장
     const sug = (await c.post('/api/explore/chat', { wantSuggestions: true })).body;
     expect(sug.suggestions.length).toBeGreaterThan(0);
     expect(sug.suggestions.length).toBeLessThanOrEqual(2);
