@@ -223,9 +223,12 @@ pub async fn verify(cx: &mut Cx<'_>, req: &Req) -> HResult {
     } else {
         return Err(HttpError::bad("token 또는 email과 code가 필요해요"));
     };
-    let pending = text(&rec, "pendingHash");
-    if !pending.is_empty() {
-        user["passwordHash"] = json!(pending);
+    // 인증 전에 같은 이메일로 다시 가입한 적이 있으면(다툼), 누가 정한 비밀번호인지 알 수 없다.
+    // 어느 쪽도 적용하지 않고 쓸 수 없는 비밀번호로 바꾼 뒤, 메일 주인에게 임시 비밀번호를 보낸다.
+    let contested = !text(&rec, "pendingHash").is_empty();
+    if contested {
+        let pw = create_passwords(cx.env.get("PASSWORD_PEPPER").map(String::as_str), cx.ports);
+        user["passwordHash"] = json!(pw.hash(&random_token(cx.ports)).map_err(internal)?);
     }
     user["emailVerified"] = json!(true);
     let id = text(&user, "id").to_string();
@@ -233,6 +236,10 @@ pub async fn verify(cx: &mut Cx<'_>, req: &Req) -> HResult {
     store.delete_verification(&id);
     // 인증 전에 열린 세션은 메일 소유자의 것이라고 볼 수 없다.
     store.delete_all_sessions(&id);
+    if contested {
+        let e = text(&user, "email").to_string();
+        issue_recovery(cx, &e, &id).await?;
+    }
     start_session(cx, req, &id, false, json!({"user":public_user(&user)}))
 }
 /// POST /api/auth/verify/resend
@@ -360,6 +367,26 @@ pub async fn logout(cx: &mut Cx<'_>, req: &Req) -> HResult {
 pub async fn me(cx: &mut Cx<'_>, _: &Req) -> HResult {
     Resp::ok(json!({"user":cx.user.as_ref().map(public_user)}))
 }
+/// 임시 비밀번호를 만들어 메일로 보낸다 (비밀번호 찾기, 다툼이 있던 가입의 인증).
+async fn issue_recovery(cx: &mut Cx<'_>, e: &str, id: &str) -> Result<(), HttpError> {
+    let pw = create_passwords(cx.env("PASSWORD_PEPPER"), cx.ports);
+    let alphabet = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    let password = loop {
+        let p: String = cx
+            .ports
+            .random_bytes(12)
+            .iter()
+            .map(|b| alphabet[usize::from(*b) % alphabet.len()] as char)
+            .collect();
+        if check_password(&p, &p).ok {
+            break p;
+        }
+    };
+    let hash = pw.hash(&password).map_err(internal)?;
+    Store::new(cx.kv,cx.now).set_recovery(id,json!({"hash":hash,"used":false,"createdAt":iso(cx.now),"expiresAt":iso(cx.now+i64::from(RECOVERY_TTL_MINUTES)*60_000)})).map_err(internal)?;
+    let _ = mail::send(cx.env, cx.ports, &mail::recovery_mail(e, &password)).await;
+    Ok(())
+}
 /// POST /api/auth/forgot
 pub async fn forgot(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let e = email(&body(req)?);
@@ -380,21 +407,7 @@ pub async fn forgot(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let Some(u) = u else {
         return reply();
     };
-    let alphabet = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-    let password = loop {
-        let p: String = cx
-            .ports
-            .random_bytes(12)
-            .iter()
-            .map(|b| alphabet[usize::from(*b) % alphabet.len()] as char)
-            .collect();
-        if check_password(&p, &p).ok {
-            break p;
-        }
-    };
-    let hash = pw.hash(&password).map_err(internal)?;
-    Store::new(cx.kv,cx.now).set_recovery(text(&u,"id"),json!({"hash":hash,"used":false,"createdAt":iso(cx.now),"expiresAt":iso(cx.now+i64::from(RECOVERY_TTL_MINUTES)*60_000)})).map_err(internal)?;
-    let _ = mail::send(cx.env, cx.ports, &mail::recovery_mail(&e, &password)).await;
+    issue_recovery(cx, &e, text(&u, "id")).await?;
     reply()
 }
 /// POST /api/auth/password
@@ -480,44 +493,60 @@ mod tests {
     }
     fn last_token(app: &TestApp) -> String {
         let mails = app.ports.mails.borrow();
-        let text = &mails.last().expect("mail").text;
+        let text = &mails.iter().rev().find(|m| m.text.contains("token=")).expect("verify mail").text;
         let at = text.find("token=").expect("token") + 6;
         text[at..].split_whitespace().next().unwrap().to_string()
     }
+    fn last_recovery(app: &TestApp) -> Option<String> {
+        let mails = app.ports.mails.borrow();
+        let text = &mails.iter().rev().find(|m| m.text.contains("복구 비밀번호:"))?.text;
+        let at = text.find("복구 비밀번호:")? + "복구 비밀번호:".len();
+        Some(text[at..].split_whitespace().next()?.to_string())
+    }
 
-    #[test]
-    fn signup_again_does_not_take_over_an_unverified_account() {
+    /// 같은 이메일로 두 사람이 인증 전에 가입하면, 순서·재전송 대기와 관계없이
+    /// 인증 뒤에는 어느 쪽 비밀번호도 쓸 수 없고, 메일 주인만 받은 임시 비밀번호로 로그인한다.
+    fn contested(victim_first: bool, wait_ms: i64) {
         let mut app = TestApp::new();
         let (mut attacker, mut victim) = (app.client(), app.client());
-        assert_eq!(signup(&mut app, &mut attacker, "Attacker123!"), 201);
-        assert_eq!(login(&mut app, &mut attacker, "Attacker123!"), 200);
-        assert_eq!(signup(&mut app, &mut victim, "Victim123!x"), 201);
-        assert!(me(&mut app, &mut attacker).is_null(), "attacker session closed by the new signup");
-        // 인증 전에는 아직 예전 비밀번호다. 공격자가 다시 로그인해도 인증 때 세션이 닫힌다.
-        assert_eq!(login(&mut app, &mut attacker, "Attacker123!"), 200);
+        let (first, second) = if victim_first { ("Victim123!x", "Attacker123!") } else { ("Attacker123!", "Victim123!x") };
+        let mut c1 = app.client();
+        assert_eq!(signup(&mut app, &mut c1, first), 201);
+        app.now += wait_ms;
+        let mut c2 = app.client();
+        assert_eq!(signup(&mut app, &mut c2, second), 201);
+        // 인증 전에는 계정에 먼저 가입한 쪽 비밀번호가 남아 있다. 그 세션은 인증 때 닫혀야 한다.
+        assert_eq!(login(&mut app, &mut attacker, first), 200, "unverified login with the first password");
         let token = last_token(&app);
         let (s, _, _) = app.call(&mut victim, "POST", "/api/auth/verify", Some(json!({"token":token})));
         assert_eq!(s, 200);
-        assert!(me(&mut app, &mut attacker).is_null(), "sessions opened before verify are closed");
-        assert_eq!(me(&mut app, &mut victim)["emailVerified"], true);
+        assert!(me(&mut app, &mut attacker).is_null(), "attacker session closed");
         let mut fresh = app.client();
-        assert_eq!(login(&mut app, &mut fresh, "Attacker123!"), 401);
-        assert_eq!(login(&mut app, &mut fresh, "Victim123!x"), 200);
+        assert_eq!(login(&mut app, &mut fresh, "Attacker123!"), 401, "attacker password not applied");
+        assert_eq!(login(&mut app, &mut fresh, "Victim123!x"), 401, "no signup password applied");
+        let recovery = last_recovery(&app).expect("recovery mail sent to the owner");
+        assert_eq!(login(&mut app, &mut fresh, &recovery), 200);
+        assert_eq!(me(&mut app, &mut fresh)["mustChangePassword"], true);
     }
+    #[test]
+    fn contested_signup_attacker_first() { contested(false, 0); }
+    #[test]
+    fn contested_signup_attacker_first_after_cooldown() { contested(false, 61_000); }
+    #[test]
+    fn contested_signup_victim_first_within_cooldown() { contested(true, 0); }
+    #[test]
+    fn contested_signup_victim_first_after_cooldown() { contested(true, 61_000); }
 
     #[test]
-    fn resend_keeps_the_pending_password() {
+    fn single_signup_keeps_its_password() {
         let mut app = TestApp::new();
-        let (mut a, mut v) = (app.client(), app.client());
-        signup(&mut app, &mut a, "Attacker123!");
-        signup(&mut app, &mut v, "Victim123!x");
-        app.now += 61_000;
-        let (s, _, _) = app.call(&mut v, "POST", "/api/auth/verify/resend", Some(json!({"email":EMAIL})));
-        assert_eq!(s, 200);
+        let mut c = app.client();
+        signup(&mut app, &mut c, "Victim123!x");
         let token = last_token(&app);
-        app.call(&mut v, "POST", "/api/auth/verify", Some(json!({"token":token})));
+        assert_eq!(app.call(&mut c, "POST", "/api/auth/verify", Some(json!({"token":token}))).0, 200);
         let mut fresh = app.client();
         assert_eq!(login(&mut app, &mut fresh, "Victim123!x"), 200);
+        assert!(last_recovery(&app).is_none());
     }
 
     #[test]

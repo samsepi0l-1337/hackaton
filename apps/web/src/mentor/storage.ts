@@ -128,7 +128,7 @@ export function adoptServer(patch: Partial<Store>, serverUpdatedAt: string | nul
   return patchStore({ ...patch, serverUpdatedAt });
 }
 
-/** 초기화: 이 앱이 쓴 gil.* 키를 모두 지운다. */
+/** 초기화: 창업 준비 기록(gil.explore.*)만 지운다. */
 export function clearSnapshot(): void {
   cache = null;
   try {
