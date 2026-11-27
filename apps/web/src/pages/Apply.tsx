@@ -122,7 +122,7 @@ export function Apply() {
       <h1>{p.title}</h1>
       <p className="muted">{p.agency}</p>
       <p className="banner" role="note">
-        연습용 초안이고 제출도 모의로 처리돼요. 실제 신청은 공식 사이트에서 해야 해요.
+        해보까는 지원서를 대신 제출하지 않아요. 작성을 마치면 지원서 파일을 내려받아 공식 사이트에서 직접 신청해 주세요.
         {safeHref(p.url) && <> <a href={safeHref(p.url)} target="_blank" rel="noreferrer">공식 안내에서 신청하기</a></>}
       </p>
 
@@ -200,24 +200,23 @@ export function Apply() {
           {err && <p className="error-text" role="alert">{err}</p>}
           <div className="row">
             <button className="btn" type="button" disabled={busy} onClick={() => run(() => api.updateApplication(app.id, { values }))}>다시 고치기</button>
-            <button className="btn primary" type="button" disabled={busy || !confirmed} aria-describedby={confirmed ? undefined : 'apply-confirm-hint'} onClick={() => run(() => api.approveApplication(app.id))}>{busy ? '제출하는 중...' : '모의 제출'}</button>
+            <button className="btn primary" type="button" disabled={busy || !confirmed} aria-describedby={confirmed ? undefined : 'apply-confirm-hint'} onClick={() => run(() => api.approveApplication(app.id))}>{busy ? '마무리하는 중...' : '작성 완료'}</button>
           </div>
-          {!confirmed && <p id="apply-confirm-hint" className="muted" style={{ margin: 0 }}>'작성한 내용을 확인했어요'에 체크하면 모의 제출할 수 있어요.</p>}
+          {!confirmed && <p id="apply-confirm-hint" className="muted" style={{ margin: 0 }}>'작성한 내용을 확인했어요'에 체크하면 작성을 마칠 수 있어요.</p>}
         </section>
       )}
 
       {st === 'completed' && (
         <section className="card stack">
-          <h2 style={{ margin: 0 }}>모의 제출을 마쳤어요</h2>
-          <p className="apply-receipt" style={{ margin: 0 }}>{app.receiptNo}</p>
-          <p className="muted" style={{ margin: 0 }}>연습용 접수번호예요. 실제로 접수된 것이 아니에요.</p>
+          <h2 style={{ margin: 0 }}>지원서를 완성했어요</h2>
+          <p style={{ margin: 0 }}>아래 '지원서 파일 내려받기'에서 한글·워드·PDF 파일로 받아 공식 사이트에 제출해 주세요.</p>
           {safeHref(p.url) && <div><a className="btn primary" href={safeHref(p.url)} target="_blank" rel="noreferrer">공식 안내에서 신청하기</a></div>}
         </section>
       )}
 
       {st === 'failed' && (
         <section className="card stack">
-          <h2 style={{ margin: 0 }}>제출하지 못했어요</h2>
+          <h2 style={{ margin: 0 }}>작성을 마치지 못했어요</h2>
           <p style={{ margin: 0 }}>{app.failReason ?? '알 수 없는 이유로 실패했어요.'}</p>
           {err && <p className="error-text" role="alert">{err}</p>}
           {app.retries >= 1 && <p className="muted" style={{ margin: 0 }}>다시 시도는 한 번만 할 수 있어요. 새 지원서를 만들어 주세요.</p>}
