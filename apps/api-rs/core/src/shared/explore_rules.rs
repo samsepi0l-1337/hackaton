@@ -967,7 +967,7 @@ pub fn decide_candidates(input: &Value) -> Vec<Value> {
             } else {
                 0.0
             } + if cap_match(&r, input) { 1.0 } else { 0.0 }
-                + 0.9 * similarity(&r, &input["likes"])
+                + 0.9 * similarity(&r, &input["likes"]) + 0.45 * similarity(&r, &input["views"])
                 + if region_match(&r, input) { 0.3 } else { 0.0 };
             (r, score)
         })
@@ -1000,7 +1000,7 @@ pub fn recommend_resources(input: &Value) -> Value {
         }
         let link = linked(&r, input, &problems);
         let cap = cap_match(&r, input);
-        let like = similarity(&r, &input["likes"]);
+        let like = similarity(&r, &input["likes"]) + 0.5 * similarity(&r, &input["views"]);
         let reg = region_match(&r, input);
         let base = (if link { 2.0 } else { 0.0 }) + (if cap { 1.0 } else { 0.0 });
         let rel = relevance
@@ -1027,12 +1027,25 @@ pub fn recommend_resources(input: &Value) -> Value {
             .then_with(|| b.3.cmp(&a.3))
             .then_with(|| s(&a.0, "id").cmp(s(&b.0, "id")))
     });
-    let items: Vec<Value> = rows.into_iter().take(3).map(|(r,_,_,reg)| {
+    let mut items: Vec<Value> = rows.into_iter().take(3).map(|(r,_,_,reg)| {
         let condition = check_conditions(&r, &input["conditions"], date_ms(&input["now"]));
         let link = linked(&r, input, &problems);
         let cap = cap_match(&r, input);
         json!({"resource":r,"condition":condition,"regionMatch":reg,"linked":link,"capMatch":cap})
     }).collect();
+    if let Some(id) = input["focusResourceId"].as_str().filter(|id| !id.is_empty()) {
+        if let Some(r) = default_array(input, "resources", data::resources).into_iter().find(|r| r["id"] == id) {
+            let condition = check_conditions(&r, &input["conditions"], date_ms(&input["now"]));
+            if condition["closed"] != true {
+                items.retain(|item| item["resource"]["id"] != id);
+                let link = linked(&r, input, &problems);
+                let cap = cap_match(&r, input);
+                let reg = region_match(&r, input);
+                items.insert(0, json!({"resource":r,"condition":condition,"regionMatch":reg,"linked":link,"capMatch":cap}));
+                items.truncate(3);
+            }
+        }
+    }
     let reason = if items.is_empty() {
         Some(REGION_NOTHING)
     } else {

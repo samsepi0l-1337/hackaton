@@ -361,6 +361,16 @@ impl<'a> Store<'a> {
             .and_then(|v| v.as_u64())
             .unwrap_or(0)
     }
+    pub fn recent_views(&self, id: &str) -> Value {
+        self.read("Likes", &format!("recent_views:{id}")).unwrap_or_else(|| json!([]))
+    }
+    pub fn record_recent_view(&mut self, user: &str, resource: &str) -> Result<(), String> {
+        let mut ids = self.recent_views(user).as_array().cloned().unwrap_or_default();
+        ids.retain(|v| v != resource);
+        ids.insert(0, json!(resource));
+        ids.truncate(10);
+        self.write("Likes", &format!("recent_views:{user}"), &json!(ids))
+    }
     /// TS: `likes(userId: string): string[]`.
     pub fn likes(&self, id: &str) -> Value {
         self.read("Likes", &format!("likes:{id}"))
@@ -484,7 +494,7 @@ pub fn init(kv: &mut MemKv, now: i64, opts: &AppOpts, ports: &dyn Ports) {
                 store.kv.delete(&key);
             }
         }
-        for prefix in ["mentor:", "explore:", "profile:", "likes:"] {
+        for prefix in ["mentor:", "explore:", "profile:", "likes:", "recent_views:"] {
             for key in store.kv.keys(prefix) {
                 if !live.contains(&key[prefix.len()..]) {
                     store.kv.delete(&key);

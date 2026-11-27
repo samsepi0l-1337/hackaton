@@ -70,7 +70,7 @@ pub fn rule_field_questions(s: &Value, summary: &Value) -> Vec<Value> {
 pub fn user_texts(s: &Value) -> Vec<String> {
     [&s["start"]["idea"],&s["start"]["interestNote"],&s["exploration"]["customProblem"],&s["exploration"]["selectionReason"],&s["exploration"]["direction"]].into_iter().chain(s["answers"].as_array().into_iter().flatten().map(|a| &a["text"])).filter_map(Value::as_str).filter(|v| !v.is_empty()).map(str::to_owned).collect()
 }
-pub fn ai_context(s: &Value) -> String {
+pub fn ai_context(s: &Value, resources: &[Value], likes: &[Value], views: &[Value]) -> String {
     let start=&s["start"]; let ex=&s["exploration"];
     let readiness=explore::READINESS_OPTIONS.iter().find(|o| Some(o.value)==start["readiness"].as_str()).map(|o| o.label).unwrap_or("미정");
     let interests=start["interests"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(", ");
@@ -78,7 +78,18 @@ pub fn ai_context(s: &Value) -> String {
     let p=rules::problem_of(ex["problemId"].as_str(),&data::problems());
     let mut lines=vec![format!("준비 상태: {readiness}"),format!("하고 싶은 일: {}",start["idea"].as_str().unwrap_or("미정")),format!("관심: {} {}",if interests.is_empty(){"미정"}else{&interests},start["interestNote"].as_str().unwrap_or("")),format!("검토 지역: {}",start["reviewRegion"].as_str().unwrap_or("미정")),problem_context(p.as_ref())];
     if let Some(t)=ex["customProblem"].as_str().filter(|s| !s.is_empty()) { lines.push(format!("직접 쓴 문제(외부 검증 전): {t}")); }
+    if let Some(focus) = start["focusResourceId"].as_str().and_then(|id| resources.iter().find(|r|r["id"]==id)) {
+        lines.push(format!("관심 공고(사용자가 직접 골라 상담을 시작함): {} / {} / 대상: {} / 지원 내용: {} / 마감: {}", focus["title"].as_str().unwrap_or(""), focus["agency"].as_str().unwrap_or(""), take16(focus["target"].as_str().unwrap_or(""),120), take16(focus["content"].as_str().unwrap_or(""),200), focus["endDate"].as_str().filter(|s|!s.is_empty()).unwrap_or("미정")));
+    }
+    let titles = |ids: &[Value], exclude_focus: bool| ids.iter().filter(|id| !exclude_focus || **id != start["focusResourceId"]).filter_map(|id|resources.iter().find(|r|r["id"]==*id)).filter_map(|r|r["title"].as_str()).take(5).collect::<Vec<_>>().join(", ");
+    let liked=titles(likes,false); if !liked.is_empty(){lines.push(format!("하트한 공고: {liked}"));}
+    let seen=titles(views,true); if !seen.is_empty(){lines.push(format!("최근 본 공고: {seen}"));}
     lines.push(format!("사용자 답변: {}",if answers.is_empty(){"없음"}else{&answers})); lines.join("\n")
+}
+pub fn ai_context_for(cx: &mut Cx<'_>, id: &str, s: &Value, resources: &[Value]) -> String {
+    let store=Store::new(cx.kv,cx.now);
+    let likes=store.likes(id); let views=store.recent_views(id);
+    ai_context(s, resources, likes.as_array().map(Vec::as_slice).unwrap_or(&[]), views.as_array().map(Vec::as_slice).unwrap_or(&[]))
 }
 pub fn conditions_text(u: &Value) -> String {
     let mut p=Vec::new(); if u["age"].is_number(){ p.push(format!("나이 {}세",crate::jsstr::js_value_string(&u["age"]))); }
@@ -88,13 +99,13 @@ pub fn conditions_text(u: &Value) -> String {
     if p.is_empty(){String::new()}else{format!("사용자 정보: {}",p.join(", "))}
 }
 fn likes_value(p: Option<&LikeProfile>) -> Value { match p {None=>Value::Null,Some(p)=>json!({"count":p.count,"caps":{"$map":p.caps},"industries":{"$map":p.industries},"types":{"$map":p.types},"agencies":{"$map":p.agencies},"ids":{"$set":p.ids}})} }
-pub fn compute_result(s: &Value, now: i64, resources: &[Value], defaults: &Value, likes: Option<&LikeProfile>) -> Value {
+pub fn compute_result(s: &Value, now: i64, resources: &[Value], defaults: &Value, likes: Option<&LikeProfile>, views: Option<&LikeProfile>) -> Value {
     let start=&s["start"]; let ex=&s["exploration"]; let problems=data::problems(); let contexts=data::contexts();
     let summary=if s["summary"].is_null(){rules::build_summary(&json!({"start":start,"exploration":ex,"answers":s["answers"]}))}else{s["summary"].clone()};
     let sig=ai_sig(s); let matches=s["ai"]["sig"]==sig; let relevance=if matches {&s["ai"]["rank"]}else{&Value::Null};
-    let input=json!({"readiness":start["readiness"],"problemId":ex["problemId"],"direction":ex["direction"],"reviewRegion":start["reviewRegion"],"conditions":rules::merge_conditions(&start["conditions"],defaults),"now":now,"resources":resources,"likes":likes_value(likes),"relevance":relevance});
+    let input=json!({"readiness":start["readiness"],"problemId":ex["problemId"],"direction":ex["direction"],"reviewRegion":start["reviewRegion"],"conditions":rules::merge_conditions(&start["conditions"],defaults),"now":now,"resources":resources,"likes":likes_value(likes),"views":likes_value(views),"focusResourceId":start["focusResourceId"],"relevance":relevance});
     let rec=rules::recommend_resources(&input); let items=rec["items"].as_array().map(Vec::as_slice).unwrap_or(&[]);
-    let cards: Vec<_>=items.iter().map(|r| { let resource=&r["resource"]; let id=resource["id"].as_str().unwrap_or(""); let ai=if matches{s["ai"]["reasons"][id].as_str()}else{None}; let reason=ai.map(str::to_owned).unwrap_or_else(|| rules::reason_for(resource,start["readiness"].as_str(),r["linked"]==true)); json!({"resource":resource,"reason":reason,"reasonProvenance":if ai.is_some(){"ai"}else{"rule"},"condition":{"status":r["condition"]["status"],"checks":r["condition"]["checks"]},"regionMatch":r["regionMatch"],"liked":likes.is_some_and(|p|p.ids.iter().any(|i|i==id))}) }).collect();
+    let cards: Vec<_>=items.iter().map(|r| { let resource=&r["resource"]; let id=resource["id"].as_str().unwrap_or(""); let ai=if matches{s["ai"]["reasons"][id].as_str()}else{None}; let focus=start["focusResourceId"]==id; let reason=if focus {format!("직접 관심을 보인 공고예요. {}",rules::reason_for(resource,start["readiness"].as_str(),r["linked"]==true))} else {ai.map(str::to_owned).unwrap_or_else(|| rules::reason_for(resource,start["readiness"].as_str(),r["linked"]==true))}; let mut card=json!({"resource":resource,"reason":reason,"reasonProvenance":if ai.is_some() && !focus {"ai"}else{"rule"},"condition":{"status":r["condition"]["status"],"checks":r["condition"]["checks"]},"regionMatch":r["regionMatch"],"liked":likes.is_some_and(|p|p.ids.iter().any(|i|i==id))}); if focus {card["focus"]=json!(true);} card }).collect();
     let regional=if s["regional"].is_null(){rules::build_regional(&json!({"start":start,"exploration":ex,"now":now}))["card"].clone()}else{s["regional"].clone()};
     let context_cards: Vec<_>=contexts.iter().filter(|c| regional["sourceIds"].as_array().is_some_and(|a|a.contains(&c["id"]))).cloned().collect();
     let selected: Vec<_>=items.iter().map(|r|r["resource"].clone()).collect(); let mut prep=rules::build_prep(start["readiness"].as_str(),&summary,ex,&selected,&problems);

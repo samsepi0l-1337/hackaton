@@ -345,7 +345,7 @@ impl AiTasks<'_> {
                     format!(
                         "프로필: {}\n공고: {}\n항목: {}",
                         profile,
-                        s(program, "title"),
+                        json!({"title":program["title"],"target":program["target"],"content":program["content"]}),
                         json!(descriptors)
                     ),
                 ),

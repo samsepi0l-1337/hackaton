@@ -104,6 +104,7 @@ pub async fn dispatch(cx: &mut Cx<'_>, req: &Req) -> HResult {
         }
         ("GET", ["api", "applications"]) => crate::api::app::applications::list(cx, req).await,
         ("POST", ["api", "applications"]) => crate::api::app::applications::create(cx, req).await,
+        ("GET", ["api", "applications", "quota"]) => crate::api::app::applications::quota(cx, req).await,
         ("GET", ["api", "applications", id]) => {
             crate::api::app::applications::get(cx, req, id).await
         }

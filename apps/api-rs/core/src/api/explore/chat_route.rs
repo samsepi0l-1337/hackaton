@@ -1,13 +1,15 @@
 //! TS 원본: apps/api/src/explore/routes.ts (POST /api/explore/chat)
-use crate::api::{ai::solar::create_text_ai, app::common::{bad,bad_fields}, explore::{ai::{ExploreAi,Limiter}, chat::{self,MAX_QUESTIONS}, quota::{quota_config,quota_keys,quota_status,record_consult,limit_message}, state::{actor_id, ai_context, bump, local_tasks, new_exploration, open, save, touch, user_texts}}, store::Store};
+use crate::api::{ai::solar::create_text_ai, app::common::{bad,bad_fields}, explore::{ai::{ExploreAi,Limiter}, chat::{self,MAX_QUESTIONS}, quota::{quota_config,quota_keys,quota_status,record_consult,limit_message}, state::{actor_id, ai_context_for, bump, local_tasks, new_exploration, open, save, touch, user_texts}}, store::Store};
 use crate::app::Cx;
 use crate::http::{HResult,HttpError,Req,Resp};
 use crate::jsstr::{iso,js_trim,len16,parse_ms};
 use crate::shared::explore_rules::validate_start;
 use serde_json::{json,Value};
 
-async fn ask(s: &mut Value, ai: &mut ExploreAi<'_>, key: &str, last: &str, at: &str) -> bool {
-    let (question,failed)=ai.question(chat::question(key).unwrap_or(""),last).await;
+async fn ask(s: &mut Value, ai: &mut ExploreAi<'_>, key: &str, last: &str, at: &str, resources: &[Value]) -> bool {
+    let focused = (key == "focus").then(|| resources.iter().find(|r| r["id"] == s["start"]["focusResourceId"])).flatten();
+    let text = focused.map(|r| format!("‘{}’에 관심을 보이셨어요. 이 지원을 받으면 가장 먼저 해 보고 싶은 일은 무엇인가요?", r["title"].as_str().unwrap_or(""))).unwrap_or_else(|| chat::question(key).unwrap_or("").to_owned());
+    let (question,failed)=ai.question(&text,last).await;
     let message=json!({"role":"mentor","text":question,"at":at,"questionIndex":s["questionIndex"]});
     if let Some(a)=s["messages"].as_array_mut(){a.push(message);} failed
 }
@@ -28,13 +30,15 @@ pub async fn chat(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let sig=json!([message,skip,unknown]).to_string();
     let duplicate=has_answer && (b.get("questionIndex").and_then(Value::as_f64).is_some_and(|n|n < index as f64) || (!message.is_empty() && s["lastBody"]["sig"]==sig && s["lastBody"]["at"].as_str().and_then(parse_ms).is_some_and(|t|cx.now-t<2000)));
     let done=s["finished"]==true||index>=MAX_QUESTIONS; let at=iso(cx.now);
+    let resources=crate::api::explore::state::resources_now(cx);
+    let ctx=ai_context_for(cx,&id,&s,&resources);
     let raw=create_text_ai(cx.env,cx.ports); let mut limiter=Limiter::load(cx.opts.explore_ai_limit.unwrap_or(40) as usize,&cx.kv.scratch); let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)}; let mut failed=false;
     if !done && !duplicate {
         if s["messages"].as_array().is_some_and(Vec::is_empty) {
             if s["counted"]!=true { if !exempt {record_consult(&mut Store::new(cx.kv,cx.now),&keys,cx.now,cfg).map_err(|_|bad("요청을 처리하지 못했어요"))?;}s["counted"]=json!(true); }
             if s["plan"].as_array().is_some_and(Vec::is_empty) {s["plan"]=json!(chat::plan_questions(&s["start"],&s["exploration"],s["answers"].as_array().map(Vec::as_slice).unwrap_or(&[])));}
             if let Some(a)=s["messages"].as_array_mut(){a.push(json!({"role":"mentor","text":chat::OPENING,"at":at}));}
-            let key=s["plan"][0].as_str().unwrap_or("").to_owned(); failed |= ask(&mut s,&mut ai,&key,"",&at).await;
+            let key=s["plan"][0].as_str().unwrap_or("").to_owned(); failed |= ask(&mut s,&mut ai,&key,"",&at,&resources).await;
         }
         if has_answer {
             let key=s["plan"][index].as_str().unwrap_or("").to_owned(); let how=if unknown{"unknown"}else if skip&&message.is_empty(){"skipped"}else{"answered"};
@@ -43,14 +47,14 @@ pub async fn chat(cx: &mut Cx<'_>, req: &Req) -> HResult {
             if let Some(a)=s["messages"].as_array_mut(){a.push(item);}
             if let Some(a)=s["answers"].as_array_mut(){a.push(json!({"key":key,"text":if how=="answered"{Some(message)}else{None},"how":how}));}
             s["questionIndex"]=json!(index+1); s["lastBody"]=json!({"sig":sig,"at":at});
-            if !finish && index+1<MAX_QUESTIONS {let key=s["plan"][index+1].as_str().unwrap_or("").to_owned(); failed |= ask(&mut s,&mut ai,&key,message,&at).await;}
+            if !finish && index+1<MAX_QUESTIONS {let key=s["plan"][index+1].as_str().unwrap_or("").to_owned(); failed |= ask(&mut s,&mut ai,&key,message,&at,&resources).await;}
         }
         if finish||s["questionIndex"].as_u64().unwrap_or(0)>=MAX_QUESTIONS as u64 {s["finished"]=json!(true);if let Some(a)=s["messages"].as_array_mut(){a.push(json!({"role":"mentor","text":chat::CLOSING,"at":at}));}bump(&mut s,"chat_done");s["step"]=json!("summary");} else {s["step"]=json!("chat");}
     }
     if want {
         let mut ex=if s["exploration"].is_null(){new_exploration()}else{s["exploration"].clone()};
         let rejected:Vec<String>=s["rejected"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect();
-        let (mut items, ai_failed)=ai.suggestions(&ai_context(&s),&user_texts(&s),&rejected).await; failed |= ai_failed;
+        let (mut items, ai_failed)=ai.suggestions(&ctx,&user_texts(&s),&rejected).await; failed |= ai_failed;
         let mut avoid=rejected; avoid.extend(items.clone());items.extend(chat::rule_suggestions(&s["start"],&ex,&avoid,None));items.truncate(2);ex["suggestions"]=json!(items);
         if ex["directionStatus"]=="hold"||ex["directionStatus"]=="ai_suggested"{ex["directionStatus"]=json!("ai_suggested");}s["exploration"]=ex;
     }
