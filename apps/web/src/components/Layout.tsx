@@ -3,9 +3,8 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 const MENU = [
-  { to: '/programs', label: '공고 모음' },
-  { to: '/mentor', label: '상담' },
-  { to: '/test', label: '창업 유형 테스트' },
+  { to: '/mentor', label: '창업 준비' },
+  { to: '/programs', label: '지역 지원 살펴보기' },
 ];
 
 export function Layout() {
@@ -40,8 +39,8 @@ export function Layout() {
       <main className="main"><Outlet /></main>
       <footer className="footer">
         <div className="container stack">
-          <p>입력한 정보는 지원사업 추천과 사용자가 승인한 지원서 제출에만 사용하며, 행사 후 삭제해요.</p>
-          <p>데이터 출처: 공공데이터포털 K-Startup 지원사업 공고. 이 서비스는 지원 자격을 보장하지 않아요.</p>
+          <p>입력한 정보는 창업 구상 정리와 준비 안내에만 사용해요. 로그인 없이 쓸 수 있고, 초기화하면 지울 수 있어요.</p>
+          <p>지역 자료는 공식 출처와 확인일을 함께 표시해요. 이 서비스는 신청 자격이나 창업 성공을 보장하지 않아요.</p>
           <p><Link to="/licenses">오픈소스 라이선스 고지</Link></p>
         </div>
       </footer>

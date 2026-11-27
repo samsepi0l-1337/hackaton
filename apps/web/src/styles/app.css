@@ -119,3 +119,29 @@ textarea.input { min-height: 96px; resize: vertical; }
 .timeline { list-style: none; padding: 0; margin: 0; display: flex; gap: var(--space-1); flex-wrap: wrap; }
 .timeline li { padding: 2px var(--space-2); border-radius: var(--radius-pill); background: var(--color-bg); font-size: var(--font-size-sm); color: var(--color-muted); }
 .timeline li.on { background: var(--color-primary); color: #fff; }
+
+/* 개정 기획 화면 */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.plain-list li + li { margin-top: var(--space-2); }
+.choice-card { color: var(--color-text); display: block; }
+.choice-card:hover, .choice-card:focus-visible { border-color: var(--color-primary); }
+:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+details > summary { cursor: pointer; }
+.facts { margin: 0; display: grid; gap: var(--space-2); }
+.facts dt { font-size: var(--font-size-sm); color: var(--color-muted); }
+.facts dd { margin: 0; white-space: pre-wrap; }
+.quote { margin: 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--color-border); color: var(--color-muted); }
+.badge.recruit-open, .badge.cond-match, .badge.prov-user { background: var(--color-ok-soft); color: var(--color-ok); }
+.badge.recruit-closed, .badge.cond-mismatch { background: var(--color-danger-soft); color: var(--color-danger); }
+.badge.recruit-unknown, .badge.cond-check, .badge.prov-ai, .badge.prov-unknown { background: var(--color-warn-soft); color: var(--color-warn); }
+.badge.recruit-always { background: var(--color-primary-soft); color: var(--color-primary); }
+.problem-card.selected { border-color: var(--color-primary); border-width: 2px; }
+.summary-item { border-top: 1px solid var(--color-border); padding-top: var(--space-3); }
+.bubble.mentor, .bubble.user { max-width: 100%; }
+.scale { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.scale label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 36px; }
+.progress-steps { display: flex; gap: var(--space-1); list-style: none; padding: 0; margin: 0 0 var(--space-4); }
+.progress-steps li { flex: 1; text-align: center; font-size: var(--font-size-sm); padding: var(--space-2) var(--space-1); border-bottom: 3px solid var(--color-border); color: var(--color-muted); }
+.progress-steps li.done { border-bottom-color: var(--color-primary); color: var(--color-text); }
+.progress-steps li.current { border-bottom-color: var(--color-primary); color: var(--color-primary); font-weight: 700; }

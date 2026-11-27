@@ -1,12 +1,10 @@
 import { ROUTES } from '@gil/shared';
-import type { ApiError, ErrorCode, FieldError, ProgramListQuery } from '@gil/shared';
+import type { ApiError, ErrorCode, FieldError } from '@gil/shared';
 import type {
-  ApplicationView, ApproveRequest, AuthResponse, ChatRequest, ChatResponse, CreateApplicationRequest, FeedbackRequest,
-  HomeResponse, LoginRequest, MentorResultResponse, MentorSession, PlanUpdateRequest, ProfileUpdateRequest,
-  ProfileUpdateResponse, ProgramDetailResponse, ProgramListResponse, SignupRequest, SurveyRequest, TypeTestRequest,
-  TypeTestResponse, UpdateApplicationRequest,
+  AuthResponse, ExploreChatRequest, ExploreChatResponse, ExploreEventType, ExploreFeedbackRequest, ExploreOptionsResponse,
+  ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, StartRequest,
 } from '@gil/shared';
-import type { IdeaSummary, PlanItem, Stats, User } from '@gil/shared';
+import type { RegionalContextCard, ResourceCard, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
 
 export class ApiClientError extends Error {
   code: ErrorCode | 'network';
@@ -47,48 +45,39 @@ const post = <T>(p: string, b?: unknown) => request<T>('POST', p, b ?? {});
 const put = <T>(p: string, b: unknown) => request<T>('PUT', p, b);
 const del = <T>(p: string) => request<T>('DELETE', p);
 
-/** 값이 있는 항목만 쿼리 문자열로 만든다. 웹 URL과 API가 같은 이름을 쓴다. */
-export function buildQuery(q: ProgramListQuery): string {
+export interface ResourceQuery { type?: ResourceType; stage?: ReadinessStage; q?: string }
+const qs = (o: Record<string, string | undefined>) => {
   const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(q)) {
-    if (v === undefined || v === '' || v === false) continue;
-    sp.set(k, String(v));
-  }
+  for (const [k, v] of Object.entries(o)) if (v) sp.set(k, v);
   const s = sp.toString();
   return s ? `?${s}` : '';
-}
+};
 
 export const api = {
-  home: () => get<HomeResponse>(ROUTES.home),
-  programs: (q: ProgramListQuery) => get<ProgramListResponse>(ROUTES.programs + buildQuery(q)),
-  program: (id: string) => get<ProgramDetailResponse>(ROUTES.program(id)),
-  categories: () => get<{ categories: string[] }>(ROUTES.categories),
-
   signup: (b: SignupRequest) => post<AuthResponse>(ROUTES.signup, b),
   login: (b: LoginRequest) => post<AuthResponse>(ROUTES.login, b),
   logout: () => post<{ ok: true }>(ROUTES.logout),
   me: () => get<{ user: User | null }>(ROUTES.me),
   deleteAccount: () => del<{ ok: true }>(ROUTES.account),
-
-  session: () => get<MentorSession>(ROUTES.session),
-  newSession: () => del<unknown>(ROUTES.session),
-  saveProfile: (b: ProfileUpdateRequest) => put<ProfileUpdateResponse>(ROUTES.profile, b),
-  chat: (b: ChatRequest) => post<ChatResponse>(ROUTES.chat, b),
-  createSummary: () => post<{ summary: IdeaSummary }>(ROUTES.summary),
-  saveSummary: (summary: IdeaSummary) => put<{ summary: IdeaSummary }>(ROUTES.summary, { summary }),
-  result: () => get<MentorResultResponse>(ROUTES.result),
-  updatePlan: (b: PlanUpdateRequest) => put<{ plan: PlanItem[] }>(ROUTES.plan, b),
-  feedback: (b: FeedbackRequest) => post<{ ok: true }>(ROUTES.feedback, b),
-  survey: (b: SurveyRequest) => post<{ ok: true }>(ROUTES.survey, b),
-
-  typeTest: (b: TypeTestRequest) => post<TypeTestResponse>(ROUTES.typeTest, b),
-
-  applications: () => get<{ items: ApplicationView[] }>(ROUTES.applications),
-  createApplication: (b: CreateApplicationRequest) => post<ApplicationView>(ROUTES.applications, b),
-  application: (id: string) => get<ApplicationView>(ROUTES.application(id)),
-  updateApplication: (id: string, b: UpdateApplicationRequest) => put<ApplicationView>(ROUTES.application(id), b),
-  approve: (id: string, b: ApproveRequest) => post<ApplicationView>(ROUTES.approve(id), b),
-  retry: (id: string) => post<ApplicationView>(ROUTES.retry(id)),
-
   stats: () => get<Stats>(ROUTES.stats),
+
+  // 비회원 탐색 흐름 (/api/explore/*)
+  exploreOptions: () => get<ExploreOptionsResponse>(ROUTES.exploreOptions),
+  problems: (interests: string[], region?: string) => get<ProblemsResponse>(ROUTES.problems + qs({ interests: interests.join(','), region })),
+  exploreSession: () => get<ExploreSession>(ROUTES.explore),
+  resetExplore: () => del<unknown>(ROUTES.explore),
+  saveStart: (b: StartRequest) => put<ExploreSession>(ROUTES.start, b),
+  saveExploration: (b: ExplorationRequest) => put<ExploreSession>(ROUTES.exploration, b),
+  exploreChat: (b: ExploreChatRequest) => post<ExploreChatResponse>(ROUTES.exploreChat, b),
+  createSummary: () => post<{ summary: SummaryV2; regional: RegionalContextCard | null }>(ROUTES.exploreSummary),
+  saveSummary: (summary: SummaryV2) => put<{ summary: SummaryV2; regional?: RegionalContextCard | null }>(ROUTES.exploreSummary, { summary }),
+  exploreResult: () => get<ExploreResultResponse>(ROUTES.exploreResult),
+  saveConditions: (conditions: UserConditions) => put<ExploreResultResponse>(ROUTES.conditions, { conditions }),
+  setPrepDone: (id: string, done: boolean) => put<unknown>(ROUTES.prepDone, { id, done }),
+  exploreFeedback: (b: ExploreFeedbackRequest) => post<{ ok: true }>(ROUTES.exploreFeedback, b),
+  /** 통계용 이벤트. 실패해도 화면 흐름을 막지 않는다. 대화 원문은 보내지 않는다. */
+  track: (type: ExploreEventType, resourceId?: string) => { post<{ ok: true }>(ROUTES.events, { type, resourceId }).catch(() => {}); },
+
+  resources: (q: ResourceQuery) => get<{ items: ResourceCard[] }>(ROUTES.resources + qs({ ...q })),
+  resource: (id: string) => get<ResourceCard>(ROUTES.resource(id)),
 };
