@@ -18,12 +18,14 @@ fn result(cx: &mut Cx<'_>, id: &str, s: &Value) -> Value {
 }
 fn summary(s: &Value) -> Value { if s["summary"].is_null(){rules::build_summary(&json!({"start":s["start"],"exploration":s["exploration"],"answers":s["answers"]}))}else{s["summary"].clone()} }
 async fn rank(cx: &Cx<'_>, s: &Value, resources: &[Value], defaults: &Value, prefs: Option<&LikeProfile>, limiter: &mut Limiter, id: &str, ctx: &str) -> Option<Value> {
-    let tasks=create_ai_tasks(cx.env,cx.ports); if !tasks.decide_enabled || !limiter.allow(id,cx.now) {return None;}
+    let tasks=create_ai_tasks(cx.env,cx.ports); if !tasks.decide_enabled {return None;}
     let start=&s["start"];let ex=&s["exploration"];
     let conditions=rules::merge_conditions(&start["conditions"],defaults);
     let pref=prefs.map(|p|json!({"count":p.count,"caps":{"$map":p.caps},"industries":{"$map":p.industries},"types":{"$map":p.types},"agencies":{"$map":p.agencies},"ids":{"$set":p.ids}})).unwrap_or(Value::Null);
     let input=json!({"readiness":start["readiness"],"problemId":ex["problemId"],"direction":ex["direction"],"reviewRegion":start["reviewRegion"],"conditions":conditions,"now":cx.now,"resources":resources,"likes":pref});
     let candidates=rules::decide_candidates(&input);if candidates.len()<2{return None;}
+    // 후보가 모자라 AI 를 부르지 않으면 한도를 쓰지 않는다.
+    if !limiter.allow(id,cx.now){return None;}
     let mut pieces=vec![ctx.to_owned()];
     if !s["summary"].is_null(){pieces.push(format!("도움받을 사람: {} / 해결해볼 불편: {}",s["summary"]["target"]["text"].as_str().unwrap_or(""),s["summary"]["value"]["text"].as_str().unwrap_or("")));}
     pieces.push(format!("접근 방향: {}",ex["direction"].as_str().unwrap_or("아직 탐색 중")));
@@ -77,7 +79,10 @@ pub async fn get_result(cx: &mut Cx<'_>, req: &Req) -> HResult {
     if saved && s["fieldQ"]["sig"]!=field_sig(&s) && !local_tasks(req).contains("field") {
         let resources=crate::api::explore::state::resources_now(cx); let ctx=ai_context_for(cx,&id,&s,&resources);
         let raw=create_text_ai(cx.env,cx.ports);let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)};
-        let (items,changed)=ai.field(&rule_field_questions(&s,&out["summary"]),&ctx).await;if changed{s["fieldQ"]=json!({"sig":field_sig(&s),"items":items});out["fieldQuestions"]=json!(items);}
+        let (items,changed,attempted)=ai.field(&rule_field_questions(&s,&out["summary"]),&ctx).await;
+        // AI 를 불렀는데 쓸 만한 문장이 없었으면 규칙 질문을 그대로 저장한다. 저장하지 않으면 결과를 열 때마다 AI 를 다시 부른다.
+        // 한도·꺼짐으로 부르지 못했으면 저장하지 않고 다음에 다시 시도한다.
+        if changed||attempted{s["fieldQ"]=json!({"sig":field_sig(&s),"items":items});out["fieldQuestions"]=json!(items);}
     }
     limiter.save(&mut cx.kv.scratch);
     if saved{save(cx,&id,&s)?;}Resp::ok(out)

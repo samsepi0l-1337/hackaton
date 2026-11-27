@@ -180,10 +180,13 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
     patchStore({ view, start, problem, exploration: session.exploration, summary, regional: session.regional, quota });
   }, [boot.readOnly, view, start, problem, session.exploration, summary, session.regional, quota]);
 
-  const setView = useCallback((v: ExploreStep) => { setViewState(v); window.scrollTo(0, 0); }, []);
+  // 대화 화면은 들어올 때만 새로 만든다. 메시지 수로 key 를 정하면 첫 답이 온 뒤 다시 만들어져 오류·재시도 상태가 사라진다.
+  const [chatKey, setChatKey] = useState(0);
+  const setView = useCallback((v: ExploreStep) => { if (v === 'chat') setChatKey((k) => k + 1); setViewState(v); window.scrollTo(0, 0); }, []);
   /** 서버 세션을 다시 읽어 상담 횟수와 동기화 시각을 맞춘다. */
   const refreshSession = useCallback(() => {
-    api.exploreSession().then((s) => { if (s.quota) setQuota(s.quota); patchStore({ serverUpdatedAt: s.updatedAt, ...(s.quota ? { quota: s.quota } : {}) }); }, () => {});
+    // 탐색 상태(방향)도 서버 값으로 맞춘다: 요약에서 고친 방향이 대화 화면에 보이게.
+    api.exploreSession().then((s) => { if (s.quota) setQuota(s.quota); setSession((cur) => ({ ...cur, exploration: s.exploration })); patchStore({ serverUpdatedAt: s.updatedAt, ...(s.quota ? { quota: s.quota } : {}) }); }, () => {});
   }, []);
   const setSummary = (s: SummaryV2) => { setSession((cur) => ({ ...cur, summary: s })); refreshSession(); };
 
@@ -202,7 +205,7 @@ function Flow({ boot, quotaHint, onResumed }: { boot: Boot; quotaHint: ConsultQu
     const st = readStore();
     const chatSession: ExploreSession = { ...session, messages: st.messages, questionIndex: st.questionIndex };
     return (
-      <Suspense fallback={<CardSkeletons />}><ChatStep key={chatSession.messages.length === 0 ? 'new' : 'resume'} session={chatSession} problem={problem} quota={quota} focus={focus} onFocusRemoved={onFocusRemoved}
+      <Suspense fallback={<CardSkeletons />}><ChatStep key={chatKey} session={chatSession} problem={problem} quota={quota} focus={focus} onFocusRemoved={onFocusRemoved}
         onSession={(s) => setSession((cur) => ({ ...cur, exploration: s.exploration }))}
         onQuota={setQuota} onRefreshQuota={refreshSession}
         onBackToStart={() => setView('start')}

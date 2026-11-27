@@ -70,8 +70,9 @@ export function StartStep({ opts, initial, quota, focus, onFocusRemoved, onStart
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     setSave('saving');
+    // 저장에 성공하면 서버 시각을 기록한다. 없으면 새로고침 때 더 오래된 서버 값이 로컬 입력을 덮는다.
     const t = window.setTimeout(() => {
-      api.saveStart({ start: clean(latest.current) }).then(() => setSave('saved'), () => setSave('error'));
+      api.saveStart({ start: clean(latest.current) }).then((r) => { patchStore({ serverUpdatedAt: r.updatedAt }); setSave('saved'); }, () => setSave('error'));
     }, 800);
     return () => window.clearTimeout(t);
   }, [JSON.stringify(start)]);
