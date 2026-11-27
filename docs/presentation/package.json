@@ -1,0 +1,11 @@
+{
+  "name": "@gil/pitch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.mjs"
+  },
+  "dependencies": {
+    "pptxgenjs": "3.12.0"
+  }
+}
