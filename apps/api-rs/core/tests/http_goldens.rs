@@ -129,8 +129,13 @@ fn run(file: &str) {
     );
     let scenarios: Vec<Value> =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    let (mut ran, mut skipped, mut failed) = (0, 0, vec![]);
+    let (mut ran, mut skipped, mut failed_scenarios, mut failed) = (0, 0, 0, vec![]);
     for sc in &scenarios {
+        if let Some(reason) = sc["excluded"].as_str() {
+            skipped += 1;
+            eprintln!("{file}: {} 건너뜀: {reason}", sc["name"].as_str().unwrap_or("?"));
+            continue;
+        }
         let o = &sc["opts"];
         if o["custom"]
             .as_array()
@@ -162,12 +167,26 @@ fn run(file: &str) {
             ..Default::default()
         };
         let mut app = TestApp::with(env, opts);
+        if let Some(init) = sc["initNow"].as_str().or_else(|| sc["steps"][0]["now"].as_str()) {
+            let init_ms = gil_core::jsstr::parse_ms(init).unwrap();
+            app.kv = gil_core::kv::MemKv::default();
+            gil_core::app::init_store(&mut app.kv, init_ms, &app.opts, &app.ports);
+            app.now = init_ms;
+        }
+        let mut scenario_failed = false;
         let mut clients: HashMap<u64, Client> = HashMap::new();
         let mut map: HashMap<String, String> = HashMap::new();
         let mut mails_seen = 0;
         for (i, st) in sc["steps"].as_array().unwrap().iter().enumerate() {
             let cid = st["client"].as_u64().unwrap_or(0);
-            let client = clients.entry(cid).or_insert_with(|| app.client());
+            if !clients.contains_key(&cid) {
+                let mut client = app.client();
+                if let Some(source) = st["initialClient"].as_u64() {
+                    client.cookie = clients.get(&source).expect("initial client missing").cookie.clone();
+                }
+                clients.insert(cid, client);
+            }
+            let client = clients.get_mut(&cid).unwrap();
             app.now = gil_core::jsstr::parse_ms(st["now"].as_str().unwrap()).unwrap();
             let method = st["method"].as_str().unwrap();
             let p = subst_str(st["path"].as_str().unwrap(), &map);
@@ -232,21 +251,24 @@ fn run(file: &str) {
                 }
             }
             if !diffs.is_empty() {
+                scenario_failed = true;
                 failed.push(format!(
                     "{} 단계 {i} {method} {p}\n    {}",
                     sc["name"].as_str().unwrap_or("?"),
                     diffs.into_iter().take(6).collect::<Vec<_>>().join("\n    ")
                 ));
-                break;
             }
+        }
+        if scenario_failed {
+            failed_scenarios += 1;
         }
     }
     eprintln!("{file}: 시나리오 {ran} 재생, {skipped} 건너뜀 (주입된 fetch·doc-worker·저장소)");
     if !failed.is_empty() {
         panic!(
             "{file}: {}/{ran} 실패\n{}",
-            failed.len(),
-            failed.into_iter().take(5).collect::<Vec<_>>().join("\n")
+            failed_scenarios,
+            failed.join("\n").lines().take(200).collect::<Vec<_>>().join("\n")
         );
     }
 }
