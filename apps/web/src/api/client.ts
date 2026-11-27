@@ -7,7 +7,7 @@ import type {
   ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
   BasicProfile, BufsFeedbackResponse, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
-import type { LikesResponse, RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
+import type { HomeResponse, LikesResponse,RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
 
 export const AUTH_GATE_EVENT = 'gil:auth-gate';
 
@@ -107,6 +107,7 @@ export const api = {
   /** 통계용 이벤트. 실패해도 화면 흐름을 막지 않는다. 대화 원문은 보내지 않는다. */
   track: (type: ExploreEventType, resourceId?: string) => { post<{ ok: true }>(ROUTES.events, { type, resourceId }).catch(() => {}); },
 
+  home: () => get<HomeResponse>(ROUTES.home),
   resources: (q: ResourceQuery) => get<{ items: ResourceCard[] }>(ROUTES.resources + qs({ ...q })),
   resource: (id: string) => get<ResourceCard>(ROUTES.resource(id)),
   likes: () => get<LikesResponse>(ROUTES.likes),

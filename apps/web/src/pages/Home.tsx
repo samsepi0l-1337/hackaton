@@ -1,73 +1,162 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { useAuth } from '../components/AuthContext';
 import { useAsync } from '../hooks/useAsync';
-import { coverageLine } from '../lib/coverage';
-import { QuotaLine } from '../mentor/Quota';
-import { readStore } from '../mentor/storage';
+import { PortalIcon } from '../components/PortalIcons';
+import { ACCOUNT_LINKS, FIELD_LINKS, SHORTCUTS, SHORTCUTS_COLLAPSED, STAGE_TABS } from './homeLinks';
+
+const ddayLabel = (d: number | null) => (d === null ? '상시' : d < 0 ? '마감' : d === 0 ? 'D-DAY' : `D-${d}`);
+const ddayClass = (d: number | null) => (d === null ? 'dday-always' : d < 0 ? 'dday-closed' : d <= 7 ? 'dday-soon' : '');
 
 export function Home() {
-  const opts = useAsync(() => api.exploreOptions(), []);
-  const { user } = useAuth();
-  const ready = !!user?.emailVerified && !user.mustChangePassword;
-  const sess = useAsync(() => (ready ? api.exploreSession() : Promise.resolve(null)), [ready]);
-  const o = opts.data;
-  const quota = ready ? sess.data?.quota ?? readStore().quota : null;
+  const nav = useNavigate();
+  const [q, setQ] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const [tab, setTab] = useState(0);
+  const res = useAsync(() => api.home(), []);
+  const sum = res.data;
+  const stage = STAGE_TABS[tab];
+
+  const onSearch = (e: FormEvent) => {
+    e.preventDefault();
+    const t = q.trim();
+    nav(t ? '/programs?q=' + encodeURIComponent(t) : '/programs');
+  };
+
   return (
-    <div className="container stack">
-      <section className="hero stack">
-        <h1>창업, 어디서 시작할지 몰라도 괜찮아요.</h1>
-        <p>관심과 아이디어를 정리하고, 나에게 필요한 준비사항과 부산의 지원 경로를 확인하세요.</p>
-        <p>내 구상을 부울경에서 어떻게 시작할 수 있을지 살펴보세요.</p>
-        <p className="muted" aria-live="polite">
-          {opts.loading ? '제공 지역을 확인하는 중이에요.' : o ? coverageLine(o.coverage) : '제공 지역 정보를 불러오지 못했어요. 창업 준비는 그대로 시작할 수 있어요.'}
-        </p>
-        <QuotaLine quota={quota} />
-        {user ? <Link className="btn primary" to="/mentor">창업 준비 시작하기</Link> : (
-          <div className="stack">
-            <p>창업 준비는 가입하고 이메일을 인증한 뒤 쓸 수 있어요. 계정 1개로 일주일에 3번 상담할 수 있어요.</p>
-            <div className="row">
-              <Link className="btn primary" to="/signup?next=%2Fmentor">창업 준비 시작하기 (가입)</Link>
-              <Link className="btn" to="/login?next=%2Fmentor">이미 계정이 있어요</Link>
-            </div>
+    <div className="portal-width dashboard">
+      <h1 className="sr-only">해보까</h1>
+      <div className="top-grid">
+        <div className="primary-stack">
+          <div className="search-area">
+            <form role="search" className="search-pill" onSubmit={onSearch}>
+              <div className="search-input">
+                <img src="/images/gull.png" alt="" />
+                <input aria-label="창업 지원 공고 검색" type="search" placeholder="어떤 창업 지원사업을 찾으세요?" value={q} onChange={(e) => setQ(e.target.value)} />
+                <button aria-label="검색"><PortalIcon name="search" size={25} /></button>
+              </div>
+              <Link to="/mentor">AI 창업멘토</Link>
+            </form>
+            <p>아이디어 한 줄로, 지금 신청할 수 있는 부산 창업 지원사업을 찾아보세요.</p>
           </div>
-        )}
-      </section>
-
-      <section>
-        <h2 style={{ marginTop: 0 }}>지금 상황에 가까운 쪽을 골라 주세요</h2>
-        <div className="grid cols-2">
-          <Link className="card choice-card" to="/mentor?readiness=has_idea"><h3>아이디어가 있어요</h3><p className="muted">하고 싶은 일을 200자 이내로 적으면 돼요.</p></Link>
-          <Link className="card choice-card" to="/mentor?readiness=no_idea"><h3>관심 분야부터 찾아볼게요</h3><p className="muted">관심 분야를 고르면 대화로 구체화해요.</p></Link>
+          <section className="pane shortcuts">
+            <div className="pane-title">
+              <h2>자주 찾는 서비스</h2>
+              <button className="text-action" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+                {expanded ? '접기' : '펼쳐보기'}
+                <PortalIcon name="grid" size={15} />
+              </button>
+            </div>
+            <div className="shortcut-grid">
+              {SHORTCUTS.slice(0, expanded ? SHORTCUTS.length : SHORTCUTS_COLLAPSED).map((s) => (
+                <Link key={s.label} to={s.to}>
+                  {s.label}
+                  <span className={'tile-icon ' + s.color}><PortalIcon name={s.icon} size={18} /></span>
+                </Link>
+              ))}
+            </div>
+          </section>
         </div>
-      </section>
-
-      <section className="card stack" aria-labelledby="ex">
-        <div className="row"><h2 id="ex" style={{ margin: 0 }}>결과 예시</h2><span className="badge">예시 · 실제 결과 아님</span></div>
-        <p className="muted">아래는 화면 구성을 보여주는 설명용 예시예요. 실제 수요나 협력 성과가 아니에요.</p>
-        <ol className="plain-list">
-          <li><strong>창업 구상</strong>: 'AI + 조선·해양'에 관심 → 관련 업무를 돕는 서비스 (예시)</li>
-          <li><strong>우선 준비사항</strong>: 도움을 받고 싶은 사람에게 확인할 질문 3가지 정리 (예시)</li>
-          <li><strong>지역 지원 연결</strong>: 출처와 확인일이 있는 교육·상담 경로를 최대 3개까지 안내</li>
-        </ol>
-      </section>
-
-      <section>
-        <h2>이용 과정</h2>
-        <div className="grid cols-3 steps-3">
-          <div className="card"><h3>관심 입력</h3><p className="muted">관심 분야나 생각해둔 아이디어를 알려주세요.</p></div>
-          <div className="card"><h3>구상 정리</h3><p className="muted">쉬운 질문 최대 3개로 구상을 정리해요.</p></div>
-          <div className="card"><h3>준비 안내·지역 연결</h3><p className="muted">우선 준비사항과 공식 출처가 있는 지역 경로를 확인해요.</p></div>
+        <section className="pane account-panel">
+          <h2>내 창업 활동을<br />한눈에 확인하세요.</h2>
+          <div className="account-grid">
+            {ACCOUNT_LINKS.map((a) => (
+              <Link key={a.label} to={a.to}><span><PortalIcon name={a.icon} size={19} /></span>{a.label}</Link>
+            ))}
+          </div>
+          <Link className="btn primary block" to="/me">내 정보 보기</Link>
+        </section>
+      </div>
+      <div className="lower-grid">
+        <section className="pane stage-panel">
+          <div className="pane-title">
+            <h2>단계별 창업 가이드</h2>
+            <PortalIcon name="compass" size={19} />
+          </div>
+          <div className="stage-tabs">
+            {STAGE_TABS.map((t, i) => (
+              <button key={t.value} aria-pressed={tab === i} onClick={() => setTab(i)}><span aria-hidden="true">{t.icon}</span>{t.label}</button>
+            ))}
+          </div>
+          <p className="stage-prompt">{stage.prompt}</p>
+          <div className="stage-links">
+            <Link to={stage.to}>{stage.link}<PortalIcon name="next" size={15} /></Link>
+            <Link to="/mentor">아이디어 상담받기<PortalIcon name="next" size={15} /></Link>
+            <Link to="/test">내 창업 유형 알아보기<PortalIcon name="next" size={15} /></Link>
+          </div>
+        </section>
+        <div className="middle-stack">
+          <section className="pane service-panel" id="how-to">
+            <div className="pane-title">
+              <h2>원스톱 창업 상담</h2>
+              <Link aria-label="원스톱 창업 상담 시작" to="/mentor"><PortalIcon name="next" size={18} /></Link>
+            </div>
+            <p>아이디어 정리부터 지원서 작성까지</p>
+            <ol className="process-list">
+              <li><PortalIcon name="doc" /><b>사업 정보 입력</b><small>아이디어와 고객</small></li>
+              <li><PortalIcon name="chat" /><b>AI 멘토 상담</b><small>질문으로 구체화</small></li>
+              <li><PortalIcon name="flag" /><b>지원사업 Top3</b><small>추천과 지원서</small></li>
+            </ol>
+            <Link className="start-link" to="/mentor">상담 이어서 하기<PortalIcon name="next" size={16} /></Link>
+          </section>
+          <section className="pane fields-panel">
+            <div className="pane-title">
+              <h2>분야별 지원사업</h2>
+              <Link aria-label="모든 지원 분야 보기" to="/programs"><PortalIcon name="next" size={18} /></Link>
+            </div>
+            <div className="field-links">
+              {FIELD_LINKS.map((f) => <Link key={f.label} to={f.to}>{f.label}</Link>)}
+            </div>
+          </section>
         </div>
-      </section>
-
-      <details className="card">
-        <summary><strong>저장·데이터 안내</strong></summary>
-        <div className="stack" style={{ marginTop: 12 }}>
-          <p>{o?.privacy ?? '입력한 내용은 구상 정리를 위해 서버와 외부 AI(Upstage)로 전송돼요. 현재 기기에도 임시 저장되고, 초기화하면 지워져요.'}</p>
-          <p className="muted">로그인 없이 쓸 수 있어요. 지역 자료는 공식 출처와 확인일을 함께 보여줘요. <Link to="/licenses">오픈소스 라이선스 고지</Link></p>
+        <div className="right-stack">
+          <section className="pane deadline-panel">
+            <div className="pane-title">
+              <h2>마감 임박 공고</h2>
+              <Link className="text-action" to="/programs">더 보기 <PortalIcon name="next" size={14} /></Link>
+            </div>
+            <div className="live-stats">
+              <Link to="/programs">모집 중 <b>{sum ? sum.openCount : '–'}</b>건</Link>
+              <i></i>
+              <Link to="/programs?sort=deadline">이번 주 마감 <b>{sum ? sum.closingThisWeek : '–'}</b>건</Link>
+            </div>
+            {res.loading && (
+              <ul className="deadline-list" aria-busy="true" aria-label="불러오는 중">
+                {[0, 1, 2].map((i) => <li key={i}><div className="skeleton" style={{ height: 44 }} /></li>)}
+              </ul>
+            )}
+            {res.error && (
+              <div className="state" role="alert">
+                <p>마감 공고를 불러오지 못했어요.</p>
+                <button className="btn small" onClick={res.reload}>다시 시도</button>
+              </div>
+            )}
+            {sum && sum.closingSoon.length === 0 && <p className="muted" style={{ marginTop: 12 }}>마감 예정 공고가 없습니다.</p>}
+            {sum && sum.closingSoon.length > 0 && (
+              <ul className="deadline-list">
+                {sum.closingSoon.map(({ program: p, dDay }) => (
+                  <li key={p.id}>
+                    <a title={p.title} href={p.url} target="_blank" rel="noreferrer">
+                      <strong>{p.title}</strong>
+                      <span className={'badge ' + ddayClass(dDay)}>{ddayLabel(dDay)}</span>
+                    </a>
+                    <div>
+                      <small>{[p.agency, p.region, p.category].filter(Boolean).join(' · ')}</small>
+                      <a href={p.url} target="_blank" rel="noreferrer" aria-label={p.title + ' 원문 보기'}>원문 <PortalIcon name="external" size={12} /></a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <Link className="type-banner" to="/test">
+            <span>창업 유형 테스트</span>
+            <strong>나에게 맞는<br />창업 스타일은?</strong>
+            <small>12문항 · 약 1분 <PortalIcon name="next" size={15} /></small>
+          </Link>
         </div>
-      </details>
+      </div>
     </div>
   );
 }
