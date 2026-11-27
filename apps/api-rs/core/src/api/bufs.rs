@@ -13,6 +13,7 @@ use crate::{
 };
 use serde_json::{json, Value};
 
+/// 읽기 전용 문맥에서 Store::bufs_session_valid와 같은 검사를 한다.
 fn session_valid(cx: &Cx<'_>, req: &Req) -> bool {
     req.cookie(BUFS_COOKIE)
         .filter(|t| !t.is_empty())
@@ -149,7 +150,21 @@ fn int_of(req: &Req, key: &str, default: usize, max: usize) -> Result<usize, Htt
         return Ok(default);
     }
     let trimmed = js_trim(raw);
-    let n = if trimmed.is_empty() {
+    let prefix = trimmed.get(..2).map(str::to_ascii_lowercase);
+    let radix = match prefix.as_deref() {
+        Some("0x") => Some(16),
+        Some("0b") => Some(2),
+        Some("0o") => Some(8),
+        _ => None,
+    };
+    let n = if let Some(radix) = radix {
+        let digits = &trimmed[2..];
+        if digits.is_empty() || !digits.chars().all(|c| c.is_ascii() && c.is_digit(radix)) {
+            None
+        } else {
+            u64::from_str_radix(digits, radix).ok().map(|n| n as f64)
+        }
+    } else if trimmed.is_empty() {
         Some(0.0)
     } else {
         trimmed.parse::<f64>().ok()
@@ -197,4 +212,25 @@ pub async fn feedback(cx: &mut Cx<'_>, req: &Req) -> HResult {
         })
         .collect();
     Resp::ok(json!({"total":all.len(),"items":items,"summary":summary}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integer_query_accepts_javascript_radix_prefixes() {
+        for (raw, expected) in [
+            ("0x10", Some(16)),
+            ("0b101", Some(5)),
+            ("0o17", Some(15)),
+            ("0x", None),
+        ] {
+            let req = Req {
+                query: vec![("limit".into(), raw.into())],
+                ..Req::default()
+            };
+            assert_eq!(int_of(&req, "limit", 50, 200).ok(), expected);
+        }
+    }
 }

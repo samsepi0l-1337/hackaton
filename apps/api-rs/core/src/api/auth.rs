@@ -13,6 +13,10 @@ use crate::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde_json::{json, Value};
+use std::sync::LazyLock;
+
+static EMAIL_PATTERN: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(EMAIL_RE).expect("valid EMAIL_RE constant"));
 
 fn text<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or("")
@@ -21,7 +25,7 @@ fn email(v: &Value) -> String {
     js_trim(text(v, "email")).to_lowercase()
 }
 fn valid_email(s: &str) -> bool {
-    regex::Regex::new(EMAIL_RE).is_ok_and(|r| r.is_match(s))
+    EMAIL_PATTERN.is_match(s)
 }
 fn body(req: &Req) -> Result<Value, HttpError> {
     Ok(Value::Object(req.json_object()?))
@@ -78,14 +82,14 @@ async fn send_verification(cx: &mut Cx<'_>, req: &Req, user: &Value) -> Result<b
         % 1_000_000;
     let code = format!("{n:06}");
     let id = text(user, "id");
-    Store::new(cx.kv,cx.now).set_verification(id,json!({"tokenHash":sha256_hex(&token),"codeHash":sha256_hex(&format!("{id}:{code}")),"expiresAt":iso(cx.now+86400000),"sentAt":iso(cx.now),"attempts":0})).map_err(internal)?;
-    let origin = cx.env("APP_ORIGIN").map(str::to_owned).unwrap_or_else(|| {
-        let (scheme, rest) = req.url.split_once("://").unwrap_or(("https", "localhost"));
-        format!(
-            "{scheme}://{}",
-            rest.split('/').next().unwrap_or("localhost")
-        )
-    });
+    Store::new(cx.kv,cx.now).set_verification(id,json!({"tokenHash":sha256_hex(&token),"codeHash":sha256_hex(&format!("{id}:{code}")),"expiresAt":iso(cx.now+i64::from(VERIFY_TTL_HOURS)*3_600_000),"sentAt":iso(cx.now),"attempts":0})).map_err(internal)?;
+    let origin = match cx.env("APP_ORIGIN") {
+        Some(origin) => origin.to_owned(),
+        None => url::Url::parse(&req.url)
+            .map_err(|e| internal(e.to_string()))?
+            .origin()
+            .ascii_serialization(),
+    };
     let link = format!("{}/verify?token={token}", origin.trim_end_matches('/'));
     Ok(mail::send(
         cx.env,
@@ -139,7 +143,7 @@ pub async fn signup(cx: &mut Cx<'_>, req: &Req) -> HResult {
     Store::new(cx.kv, cx.now)
         .add_user(user.clone())
         .map_err(internal)?;
-    let sent = if limited(cx, "verify", &e, 60) {
+    let sent = if limited(cx, "verify", &e, i64::from(VERIFY_RESEND_SECONDS)) {
         false
     } else {
         send_verification(cx, req, &user).await?
@@ -211,11 +215,11 @@ pub async fn verify_resend(cx: &mut Cx<'_>, req: &Req) -> HResult {
     if !valid_email(&e) {
         return Resp::ok(json!({"ok":true}));
     }
-    if limited(cx, "verify", &e, 60) {
+    if limited(cx, "verify", &e, i64::from(VERIFY_RESEND_SECONDS)) {
         return Err(HttpError::new(
             429,
             "too_many",
-            "인증 메일은 60초에 한 번만 보낼 수 있어요",
+            &format!("인증 메일은 {VERIFY_RESEND_SECONDS}초에 한 번만 보낼 수 있어요"),
         ));
     }
     if let Some(u) = Store::new(cx.kv, cx.now).find_user_by_email(&e) {
@@ -252,7 +256,7 @@ pub async fn login(cx: &mut Cx<'_>, req: &Req) -> HResult {
             return Err(fail());
         }
         r["used"] = json!(true);
-        r["expiresAt"] = json!(iso(cx.now + 1800000));
+        r["expiresAt"] = json!(iso(cx.now + i64::from(RECOVERY_TTL_MINUTES) * 60_000));
         Store::new(cx.kv, cx.now)
             .set_recovery(&id, r)
             .map_err(internal)?;
@@ -277,7 +281,7 @@ pub async fn me(cx: &mut Cx<'_>, _: &Req) -> HResult {
 pub async fn forgot(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let e = email(&body(req)?);
     let reply = || Resp::ok(json!({"ok":true,"message":FORGOT_PASSWORD_NOTICE}));
-    if !valid_email(&e) || limited(cx, "forgot", &e, 600) {
+    if !valid_email(&e) || limited(cx, "forgot", &e, i64::from(RECOVERY_REQUEST_MINUTES) * 60) {
         return reply();
     }
     let u = Store::new(cx.kv, cx.now).find_user_by_email(&e);
@@ -306,7 +310,7 @@ pub async fn forgot(cx: &mut Cx<'_>, req: &Req) -> HResult {
         }
     };
     let hash = pw.hash(&password).map_err(internal)?;
-    Store::new(cx.kv,cx.now).set_recovery(text(&u,"id"),json!({"hash":hash,"used":false,"createdAt":iso(cx.now),"expiresAt":iso(cx.now+1800000)})).map_err(internal)?;
+    Store::new(cx.kv,cx.now).set_recovery(text(&u,"id"),json!({"hash":hash,"used":false,"createdAt":iso(cx.now),"expiresAt":iso(cx.now+i64::from(RECOVERY_TTL_MINUTES)*60_000)})).map_err(internal)?;
     let _ = mail::send(cx.env, cx.ports, &mail::recovery_mail(&e, &password)).await;
     reply()
 }
