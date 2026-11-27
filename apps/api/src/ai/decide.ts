@@ -30,21 +30,22 @@ export function createDecide(env: Partial<Bindings> = {}, deps: AiDeps = {}): De
       const list = candidates.slice(0, DECIDE_MAX_CHOICES);
       if (!enabled || list.length < 2) return null;
       const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), AI_TIMEOUT_MS);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => { ctl.abort(); rej(new Error('timeout')); }, AI_TIMEOUT_MS); });
       try {
         const criteria = Object.fromEntries(list.map((p) => [p.id, clip(`${p.title} / ${p.category} / ${p.content}`, 200)]));
         const headers: Record<string, string> = { 'content-type': 'application/json', authorization: `Bearer ${env.UPSTAGE_API_KEY}` };
         if (env.CF_AIG_TOKEN) headers['cf-aig-authorization'] = `Bearer ${env.CF_AIG_TOKEN}`;
-        const res = await doFetch(`${base}/systemone`, {
+        const res = await Promise.race([timeout, doFetch(`${base}/systemone`, {
           method: 'POST', headers, signal: ctl.signal,
           body: JSON.stringify({
             model: DECIDE_MODEL,
             state: clip(stateText, 2000),
             questions: { fit: { type: 'choice', instructions: '예비 창업자의 아이디어와 가장 관련이 큰 지원사업을 고르세요.', criteria } },
           }),
-        });
+        })]);
         if (!res.ok) throw new Error(`http ${res.status}`);
-        const probs = ((await res.json()) as any)?.answers?.fit?.probabilities;
+        const probs = ((await Promise.race([timeout, res.json()])) as any)?.answers?.fit?.probabilities;
         if (!probs || typeof probs !== 'object') throw new Error('no probabilities');
         const clean: Record<string, number> = {};
         for (const p of list) { const v = probs[p.id]; if (typeof v === 'number' && Number.isFinite(v)) clean[p.id] = v; }
