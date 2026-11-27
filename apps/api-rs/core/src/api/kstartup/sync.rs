@@ -7,6 +7,12 @@ use crate::shared::{date::kst_date, kstartup_resource::kstartup_to_resource};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
+/// HTTP 경로는 이미 요청 전체에 대한 KV 잠금을 보유한 상태로 호출한다.
+pub async fn run_sync(kv: &mut MemKv, env: &Env, ports: &dyn Ports, now: i64) -> Value {
+    let result = fetch(env, ports).await;
+    apply(kv, now, result)
+}
+
 fn is_open(v: &Value, today: &str) -> bool {
     v.get("recruitStatus").and_then(Value::as_str) != Some("closed")
         && !v
@@ -48,17 +54,17 @@ fn fail(
     json!({"ok": false, "fetchedAt": time, "added": 0, "updated": 0, "closed": 0, "total": total, "error": error})
 }
 
-/// TS runSync: 매일 cron 이 부른다.
-pub async fn run_sync(kv: &mut MemKv, env: &Env, ports: &dyn Ports, now: i64) -> Value {
+/// 네트워크 조회는 저장소 잠금 없이 수행한다.
+pub async fn fetch(env: &Env, ports: &dyn Ports) -> Result<(Vec<Value>, bool), String> {
+    client::fetch_announcements(env.get("KSTARTUP_SERVICE_KEY").map(String::as_str), ports).await
+}
+
+/// 조회 결과를 현재 저장소에 반영한다.
+pub fn apply(kv: &mut MemKv, now: i64, result: Result<(Vec<Value>, bool), String>) -> Value {
     let today = kst_date(now);
     let prev = store::meta(kv);
     let had = store::resources(kv);
-    let (items, complete) = match client::fetch_announcements(
-        env.get("KSTARTUP_SERVICE_KEY").map(String::as_str),
-        ports,
-    )
-    .await
-    {
+    let (items, complete) = match result {
         Ok(v) => v,
         Err(e) => return fail(kv, prev, &had, &today, now, &e),
     };
