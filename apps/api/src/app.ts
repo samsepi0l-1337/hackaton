@@ -16,7 +16,10 @@ import { createAiTasks } from './ai/tasks';
 import { readAnnouncementForm, type DocWorkerClient } from './docs/pipeline';
 import { HttpError, type AppEnv } from './http';
 import { exploreStats, mountExplore } from './explore/routes';
-import { createStore, emptyMentor, type MentorState, type Store, type UserRecord } from './store';
+import { mergeResources, RESOURCES } from '@gil/shared';
+import { mountKStartup } from './kstartup/routes';
+import { createKStartupStore, type KStartupStore } from './kstartup/store';
+import { createStore, emptyMentor, memoryKv, type MentorState, type Store, type UserRecord } from './store';
 
 export interface AppOptions {
   now?: () => Date;
@@ -30,6 +33,8 @@ export interface AppOptions {
   docWorkerFor?: (env: Bindings) => DocWorkerClient | null;
   /** 저장소. 기본은 메모리. Workers 에서는 Durable Object KV. */
   store?: () => Promise<Store>;
+  /** 실제 지원사업(K-Startup) 저장소. 기본은 메모리. Workers 에서는 Durable Object KV. */
+  kstartup?: KStartupStore;
   /** 탐색 AI 호출 한도 (행위자당 시간당). 기본 40. */
   exploreAiLimit?: number;
   /** 테스트용: 상담 횟수 제한 덮어쓰기 (기본 CONSULT_LIMIT: 7일 3회). */
@@ -591,7 +596,9 @@ export function createApp(opts: AppOptions = {}) {
     return c.json({ ...stats, explore: exploreStats(store) });
   });
 
-  mountExplore(app, { clock, aiLimit: opts.exploreAiLimit, consultLimit: opts.consultLimit, env: opts.env });
+  const kstartup = opts.kstartup ?? createKStartupStore(memoryKv());
+  mountKStartup(app, { store: kstartup, env: opts.env, fetch: opts.fetch });
+  mountExplore(app, { clock, aiLimit: opts.exploreAiLimit, consultLimit: opts.consultLimit, env: opts.env, resources: () => mergeResources(RESOURCES, kstartup.resources()) });
 
   return app;
 }
