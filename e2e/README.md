@@ -11,4 +11,6 @@ e2e/run.sh e2e/specs/10-explore.mjs
 - spec 은 prelude(`e2e/lib/prelude.mjs`) 도우미를 쓴다: `step`, `assert`, `eq`, `go`, `seeText`, `api`, `resetOrigin`, `newAccount`.
 - 상태 정리는 `Storage.clearDataForOrigin`(이 출처만)으로 한다. 프로필 전체를 지우는 CDP 명령은 쓰지 않는다.
 - 상담은 계정당 7일 3회라서, 상담하는 spec 은 `newAccount()` 로 새 계정을 만든다.
+- `/bufs` 관리자 비밀번호는 `ADMIN_PASSWORD`(E2E 전용), 팀 계정은 시드 `team@test.local` / `team1234!`.
+- 없는 spec 파일을 넘기면 FAIL 이다.
 - 결과와 로그, 실패 스크린숏은 `e2e/.out/` 에 남는다.
