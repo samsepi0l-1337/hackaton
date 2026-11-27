@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   DEMO_PROFILE, addYears, dDay, dDayLabel, homeSummary, judge, kstDate, listPrograms, parseAgeRanges,
   pickMentorQuestions, recommend, scoreTypeTest, seedPrograms, TYPE_QUESTIONS, validateProfile,
-  validateProfileSection, buildPlan, fromKStartup, type Program,
+  validateProfileSection, buildPlan, fromKStartup, relevanceCandidates, type Program,
 } from '../src';
 
 // 2026-11-27 10:00 KST
@@ -91,6 +91,13 @@ describe('F5 Top3', () => {
     expect(top.every((r) => r.reason.length > 0)).toBe(true);
     const again = recommend({ programs, profile: DEMO_PROFILE, now: NOW, excludeIds: [top[0]!.program.id] });
     expect(again.map((r) => r.program.id)).not.toContain(top[0]!.program.id);
+  });
+  test('AI 관련도 확률이 있으면 순위에 반영', () => {
+    const boost = recommend({ programs, profile: DEMO_PROFILE, now: NOW, relevance: { 'T-0005': 1 } });
+    const base = recommend({ programs, profile: DEMO_PROFILE, now: NOW, relevance: { 'T-0005': 0 } });
+    expect(boost.find((r) => r.program.id === 'T-0005')).toBeDefined();
+    expect(base.find((r) => r.program.id === 'T-0005')).toBeUndefined();
+    expect(relevanceCandidates(programs, DEMO_PROFILE, NOW).every((p) => judge(p, DEMO_PROFILE, NOW).verdict !== 'ineligible')).toBe(true);
   });
   test('7일 계획 첫 항목은 마감이 가장 가까운 사업', () => {
     const top = recommend({ programs, profile: DEMO_PROFILE, now: NOW });

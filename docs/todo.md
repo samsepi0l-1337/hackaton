@@ -12,8 +12,8 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | 공통 패키지(타입·계약·규칙·테스트 데이터) | 완료 (#5) |
 | API (메모리 저장소) | 완료 (#6) |
 | 목업 웹 | 완료 (#8) |
-| Cloudflare AI Gateway 동적 라우팅 | 진행 중 |
-| Cloudflare Containers 문서 처리기(doc-worker) | 진행 중 |
+| 국내 AI (Upstage Solar·Decide·Document Parse) + AI Gateway | 진행 중 |
+| Cloudflare Containers doc-worker | 진행 중 |
 | 배포 | 시작 전 (아래 5절 선행 조건) |
 
 ## 1. 공통·기반
@@ -30,18 +30,18 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 |---|---|---|---|
 | [x] | F0 | 회원가입·로그인 | PBKDF2, HttpOnly 쿠키 (#6, #8) |
 | [x] | F1 | 사전 상담 폼 | 섹션 검사·자동 저장 (#6, #8) |
-| [~] | F2 | AI 멘토 되묻기 | 규칙 질문 완료. AI 문장은 AI Gateway로 (3절) |
-| [~] | F3 | 아이디어 요약 | 규칙 요약 완료. AI 요약은 3절 |
+| [~] | F2 | AI 멘토 되묻기 | 규칙 질문 완료. AI 문장은 Solar Mini (3절) |
+| [~] | F3 | 아이디어 요약 | 규칙 요약 완료. AI 요약은 Solar Pro (3절) |
 | [x] | F4 | 자격 판정 (규칙) | 경계값 테스트 (#5) |
-| [x] | F5 | Top3 | 규칙 점수 (#5) |
-| [~] | F6 | 추천 이유 | 규칙 문장 완료. AI 문장 + 사실 검사는 3절 |
+| [~] | F5 | Top3 | 규칙 점수 (#5). 관련도는 Solar Decide (3절) |
+| [~] | F6 | 추천 이유 | 규칙 문장 완료. Solar Mini 문장 + 사실 검사 (3절) |
 | [x] | F7 | 마감 정리 | 조회 시 계산. 새벽 배치는 F8과 함께 |
-| [ ] | F8 | 새 공고 반영 | K-Startup API 키 **입력 필요**, Cron + doc-worker로 첨부 조건 추출 |
+| [ ] | F8 | 새 공고 반영 | K-Startup API 키 **입력 필요**, Cron + doc-worker 내려받기 + Document Parse로 첨부 조건 추출 |
 | [x] | F9 | 대화 기억 | 계정별 세션 (메모리) |
 | [x] | F10 | 추천 평가 | (#6, #8) |
 | [x] | F11 | 찾아갈 기관 | 주소는 팀 확인 **입력 필요** |
 | [x] | F12 | 7일 계획 | 규칙 계획. AI 준비 안내는 3절 |
-| [~] | F13 | 지원서 초안 | 모의 양식 항목. 실제 양식 항목은 doc-worker `/extract` |
+| [~] | F13 | 지원서 초안 | 모의 양식 항목. 실제 양식 항목은 Document Parse (3·4절) |
 | [x] | F14 | 팀 통계 | (#6, #8) |
 | [ ] | F15 | 대학생 지원 확장 | P2 |
 | [~] | F16 | 자동 제출 | 모의 제출만. 양식 채우기는 doc-worker `/fill`, 외부 사이트 실제 제출은 약관 확인 **입력 필요** |
@@ -51,32 +51,40 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | [x] | F20 | 메인 | (#8) |
 | [ ] | F21 | 부산시·구·대학 자체 공고 | 팀 수동 데이터 **입력 필요** |
 
-## 3. Cloudflare AI Gateway 동적 라우팅
+## 3. 국내 AI: Upstage (Solar · Solar Decide · Document Parse) + AI Gateway
 
-설계: AI는 문장만 만든다. 질문 수(3개), 자격 판정, Top3 선정은 코드가 한다. AI가 실패하거나 시간을 넘기거나 공고에 없는 사업명·금액·마감일을 쓰면 규칙 문장을 쓴다.
+설계: AI는 문장·확률만 만든다. 질문 수(3개), 자격 판정, Top3 선정은 코드가 한다. AI가 실패하거나 시간을 넘기거나 공고에 없는 사업명·금액·마감일을 쓰면 규칙 결과를 쓴다. 기본 `AI_MODE=off` (과금 0).
 
-- [x] 라우트 정의 `infra/ai-gateway/route.json` (`dynamic/gil`): 사용자별 시간당 40회 → 하루 비용 한도 → `metadata.task`가 summary·extract면 큰 모델, 아니면 작은 모델 → 실패 시 작은 모델
-- [ ] `apps/api/src/ai/`: AI 클라이언트(`env.AI.run('dynamic/gil', …, { gateway: { id, metadata } })`), 시간 초과, 규칙 폴백
-- [ ] 출력 사실 검사: 공고 데이터에 없는 금액·날짜·사업명이 있으면 버림
-- [ ] 작업별 연결: F2 질문 문장, F3 요약, F6 이유, F12 준비 안내
-- [ ] 테스트: 가짜 AI 클라이언트로 성공·실패·시간 초과·사실 검사
-- [ ] 기본값 `AI_ENABLED` 없음 = AI 호출 안 함 (로컬 dev도 원격 호출이라 사용량이 잡힘)
-- [ ] 게이트웨이 생성(인증 켜기), 라우트 업로드(REST API), 라우트 버전 배포
-- [ ] 모델 노드의 provider 값(`workers-ai`)과 모델 이름을 대시보드에서 확인
-- [ ] 국산 모델(Solar / HyperCLOVA X) 비교: BYOK 키 **입력 필요**, 라우트의 퍼센트 노드로 A/B
-- [ ] 대시보드에서 하루 사용량 확인 (무료 10,000 Neurons/일, 넘으면 $0.011/1,000 Neurons)
+| 용도 | 모델 | 가격(할인가) |
+|---|---|---|
+| 공고 첨부·신청 양식 읽기 (F8·F13·F16·F21) | Document Parse | 쪽당 $0.005, 동기 100쪽·100MB |
+| F2 되묻기, F6 이유 (빠른 응답) | Solar Mini 4.5 Preview `solar-mini-4-5-preview` | 12-03까지 90% 할인 |
+| F3 요약, F12 7일 계획, F13 초안, 조건 정리 | Solar Pro 4 `solar-pro-4` | 입력 $0.15 / 출력 $0.60 (100만 토큰) |
+| F5 관련도 점수 | Solar Decide `solar-decide` (베타, `/v1/systemone`) | 입력 $0.1/100만 토큰, 출력 무료 |
 
-## 4. Cloudflare Containers 문서 처리기 (doc-worker)
+- [x] 계약: `packages/shared/src/cloudflare.ts` (작업별 모델, AI 모드, Decide·Document Parse 상수, doc-worker 계약)
+- [x] `recommend()`가 AI 관련도 확률(0..1)을 받음, 후보 26개 이하로 줄이는 `relevanceCandidates()`
+- [x] 라우트 정의 `infra/ai-gateway/route.json` (`dynamic/gil`): 사용자별 시간당 40회 → 하루 비용 한도 → mentor·reason은 Solar Mini, 나머지는 Solar Pro → 실패 시 Mini → Workers AI
+- [ ] `apps/api/src/ai/`: Solar 클라이언트(upstage 직접 / route), 시간 초과, 규칙 폴백, 사실 검사
+- [ ] 작업별 연결: F2 질문 문장, F3 요약, F6 이유, F12 계획, F13 초안
+- [ ] Solar Decide 관련도 → Top3 점수 (jev와 같은 형식이라 base URL만 바꿔 비교 가능)
+- [ ] `apps/api/src/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기
+- [ ] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답·Document Parse 응답
+- [ ] Upstage API 키 **입력 필요** (`wrangler secret put UPSTAGE_API_KEY`, 로컬은 `.dev.vars`)
+- [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요**
+- [ ] AI Gateway 생성(인증 켜기), 커스텀 프로바이더 `upstage` (base `https://api.upstage.ai`) 등록, 라우트 업로드·배포
+- [ ] 라우트 모델 노드의 provider 값(`custom-upstage`?, `workers-ai`?)을 대시보드에서 확인
+- [ ] Upstage 콘솔·AI Gateway 대시보드에서 하루 사용량 확인
 
-역할: 공고 상세 페이지의 첨부(HWPX·DOCX·PDF)를 내려받아 텍스트와 양식 항목을 뽑고(F8·F21 조건 추출, F13·F16 양식 항목), 승인된 값으로 양식을 채운다(F16).
+## 4. Cloudflare Containers: doc-worker
 
-- [ ] `apps/doc-worker/`: 컨테이너 이미지(linux/amd64), `/health` `/discover` `/extract` `/fill`
-- [ ] 팀 모의 양식(DOCX·HWPX)으로 extract → fill 끝까지 동작
-- [ ] PDF 텍스트 추출
-- [ ] HWP 바이너리: 미지원 경고만. 변환 도구는 나중에
+역할: 공고 상세 페이지에서 첨부를 찾아 내려받고(정부 사이트의 세션·리다이렉트 처리), 승인된 값으로 신청 양식(DOCX·HWPX)을 채운다. 문서 해석은 Document Parse가 한다.
+
+- [ ] `apps/doc-worker/`: 컨테이너 이미지(linux/amd64), `/health` `/discover` `/download` `/fill`
+- [ ] 팀 모의 양식(DOCX·HWPX)으로 fill 동작
 - [ ] 로컬 Docker로 실행 테스트
 - [ ] API 연결: `DocWorker` Durable Object(`ctx.container`), `lite` 인스턴스, 비활성 2분 후 종료, `enableInternet: true`
-- [ ] 지원서 생성 시 공고 첨부에서 항목을 뽑고, 실패하면 모의 양식
+- [ ] 흐름: 지원서 생성 → `/discover` → `/download` → Document Parse → 양식 항목. 실패하면 모의 양식
 - [ ] `wrangler dev`로 Worker → DO → 컨테이너 통합 실행
 - [ ] 실제 공고 1건에서 내려받기 → 항목 추출 (F16 완료 조건)
 

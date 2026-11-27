@@ -24,9 +24,12 @@ export interface ScoreParts {
   keywords: string[];
 }
 
-export function scoreProgram(p: Program, profile: ConsultProfile, now: Date, verdict: string, summary?: IdeaSummary | null): ScoreParts {
+/** aiRelevance: 0..1 확률 (Solar Decide·jev). 없으면 키워드 규칙 점수. */
+export function scoreProgram(p: Program, profile: ConsultProfile, now: Date, verdict: string, summary?: IdeaSummary | null, aiRelevance?: number): ScoreParts {
   const keywords = relevanceKeywords(p, profile, summary);
-  const relevance = Math.min(SCORE.relevanceMax, keywords.length * SCORE.relevancePerKeyword);
+  const relevance = aiRelevance !== undefined && Number.isFinite(aiRelevance)
+    ? Math.round(Math.min(1, Math.max(0, aiRelevance)) * SCORE.relevanceMax)
+    : Math.min(SCORE.relevanceMax, keywords.length * SCORE.relevancePerKeyword);
   const industry = profile.industry && p.tags.includes(profile.industry) ? SCORE.industryMatch : 0;
   const offered = CATEGORY_TO_NEEDS[p.category] ?? [];
   const matchedNeeds = (profile.needs ?? []).filter((n) => offered.includes(n));
@@ -54,17 +57,19 @@ export interface RecommendInput {
   now: Date;
   summary?: IdeaSummary | null;
   excludeIds?: Iterable<string>; // F10 '관련 없음'
+  /** 공고 id → 0..1 관련도 확률 (Solar Decide). 없는 공고는 규칙 점수. */
+  relevance?: Record<string, number>;
   feedback?: Record<string, boolean>;
   limit?: number;
 }
 
-export function recommend({ programs, profile, now, summary, excludeIds, feedback = {}, limit = TOP_N }: RecommendInput): Recommendation[] {
+export function recommend({ programs, profile, now, summary, excludeIds, relevance = {}, feedback = {}, limit = TOP_N }: RecommendInput): Recommendation[] {
   const excluded = new Set(excludeIds ?? []);
   return programs
     .filter((p) => !excluded.has(p.id))
     .map((p) => {
       const eligibility = judge(p, profile, now);
-      const parts = scoreProgram(p, profile, now, eligibility.verdict, summary);
+      const parts = scoreProgram(p, profile, now, eligibility.verdict, summary, relevance[p.id]);
       const score = parts.relevance + parts.industry + parts.need + parts.due + parts.penalty;
       return { p, eligibility, parts, score };
     })
@@ -106,4 +111,13 @@ export function buildPlan(top: Recommendation[], now: Date): PlanItem[] {
     { day: 7, task: '지원서 최종 확인 후 제출하기' },
   ];
   return items.map((i) => ({ ...i, done: false }));
+}
+
+/** 관련도 모델(Solar Decide, 선택지 최대 26개)에 보낼 후보: 불가·제외를 뺀 공고. */
+export function relevanceCandidates(programs: Program[], profile: ConsultProfile, now: Date, excludeIds?: Iterable<string>, max = 26): Program[] {
+  const excluded = new Set(excludeIds ?? []);
+  return programs
+    .filter((p) => !excluded.has(p.id) && judge(p, profile, now).verdict !== 'ineligible')
+    .sort((a, b) => (a.endDate ?? '9999').localeCompare(b.endDate ?? '9999') || a.id.localeCompare(b.id))
+    .slice(0, max);
 }
