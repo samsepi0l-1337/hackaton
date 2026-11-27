@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { READINESS_OPTIONS, RESOURCE_SORTS, RESOURCE_SORT_LABEL, RESOURCE_TYPES, dDay, dDayLabel } from '@gil/shared';
 import type { ReadinessStage, ResourceCard, ResourceSort, ResourceType } from '@gil/shared';
@@ -30,14 +30,19 @@ export function Programs() {
   }, [user, sort, likedCount]);
   const setLiked = (id: string, liked: boolean) => setItems((xs) => xs.map((x) => (x.resource.id === id ? { ...x, liked } : x)));
 
+  const requestId = useRef(0);
   const load = useCallback(() => {
+    const id = ++requestId.current;
     setState('loading');
     api.resources({ type, stage, q: q || undefined, sort }).then(
-      (r) => { setItems(r.items); setState('ready'); },
-      (e) => { setErr(e); setState('error'); },
+      (r) => { if (id === requestId.current) { setItems(r.items); setState('ready'); } },
+      (e) => { if (id === requestId.current) { setErr(e); setState('error'); } },
     );
   }, [type, stage, q, sort, user?.id]);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    return () => { requestId.current++; };
+  }, [load]);
   useEffect(() => setQText(q), [q]);
 
   function update(patch: Record<string, string | undefined>) {
