@@ -6,7 +6,7 @@ import { createStore, memoryKv, VIEW_WINDOW_MS } from '../src/store';
 import { NOW, demo, setup } from './helpers';
 
 const item = (n: number, o: Partial<KStartupItem> = {}): KStartupItem => ({
-  pbanc_sn: n, biz_pbanc_nm: `공고 ${n}`, pbanc_ntrp_nm: '부산테크노파크', supt_biz_clsfc: '교육', supt_regin: '부산',
+  pbanc_sn: n, biz_pbanc_nm: `공고 ${n}`, pbanc_ntrp_nm: '부산테크노파크', supt_biz_clsfc: '사업화', supt_regin: '부산',
   pbanc_rcpt_bgng_dt: '20261101', pbanc_rcpt_end_dt: '20261231', rcrt_prgs_yn: 'Y', biz_enyy: '예비창업자', aply_trgt: '일반인', support_ctnt: '지원',
   detl_pg_url: `https://www.k-startup.go.kr/${n}`, ...o,
 });
@@ -96,5 +96,28 @@ describe('조회 수', () => {
     expect(kv.get('views:r1')).toBe(3);
     expect([...store.viewCounts()].sort()).toEqual([['r1', 3], ['r2', 1]]);
     expect(JSON.stringify([...kv.data])).not.toContain('127.0.0.1');
+  });
+});
+
+describe('유형 분류', () => {
+  const cls = (n: number, c: string) => item(n, { supt_biz_clsfc: c });
+  test('분류 → 유형 매핑과 유형 필터(capabilityTags 포함)', async () => {
+    const list = [cls(175366, '시설ㆍ공간ㆍ보육'), cls(2, '멘토링ㆍ컨설팅ㆍ교육'), cls(3, '교육'), cls(4, '사업화'), cls(5, '행사ㆍ네트워크'), cls(6, undefined as any)];
+    const types = Object.fromEntries(real(list).map((r) => [r.id, r.type]));
+    expect(types).toEqual({ 'ks-175366': '공간', 'ks-2': '상담', 'ks-3': '교육', 'ks-4': '지원사업', 'ks-5': '지원사업', 'ks-6': '지원사업' });
+    const c = world(list).client();
+    const of = async (t: string) => (await c.get(`/api/resources?type=${t}`)).body.items.map((x: any) => x.resource.id).filter((i: string) => i.startsWith('ks-')).sort();
+    expect(await of('공간')).toEqual(['ks-175366']);
+    expect(await of('상담')).toEqual(['ks-2']);
+    expect(await of('교육')).toEqual(['ks-2', 'ks-3']);
+    expect(await of('지원사업')).toEqual(['ks-4', 'ks-5', 'ks-6']);
+  });
+  test('예전 유형으로 저장된 공고는 읽을 때와 동기화 때 새 유형이 된다', async () => {
+    const old = { ...real([cls(7, '시설ㆍ공간ㆍ보육')])[0]!, type: '지원사업' as const };
+    const kstartup = createKStartupStore(memoryKv());
+    kstartup.save([old]);
+    const c = setup({ kstartup }).client();
+    expect((await c.get('/api/resources/ks-7')).body.resource.type).toBe('공간');
+    expect((await c.get('/api/resources?type=공간')).body.items.some((x: any) => x.resource.id === 'ks-7')).toBe(true);
   });
 });

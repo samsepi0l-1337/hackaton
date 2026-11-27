@@ -6,7 +6,7 @@ import { memoryKv } from '../src/store';
 import { NOW, demo, setup } from './helpers';
 
 const item = (n: number, o: Partial<KStartupItem> = {}): KStartupItem => ({
-  pbanc_sn: n, biz_pbanc_nm: `실제 공고 ${n}`, pbanc_ntrp_nm: '부산테크노파크', supt_biz_clsfc: '멘토링ㆍ컨설팅ㆍ교육', supt_regin: '부산',
+  pbanc_sn: n, biz_pbanc_nm: `실제 공고 ${n}`, pbanc_ntrp_nm: '부산테크노파크', supt_biz_clsfc: '사업화', supt_regin: '부산',
   pbanc_rcpt_end_dt: '20261231', rcrt_prgs_yn: 'Y', biz_enyy: '예비창업자', biz_trgt_age: '만 20세 이상 ~ 만 39세 이하', aply_trgt: '일반인',
   support_ctnt: '멘토링 제공', detl_pg_url: `https://www.k-startup.go.kr/${n}`, ...o,
 });

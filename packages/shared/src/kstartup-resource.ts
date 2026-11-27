@@ -1,5 +1,5 @@
 // K-Startup 공고(KStartupItem) → Resource(지원사업). 순수 함수. 원문에 없는 값은 지어내지 않고 null·빈 배열로 둔다.
-import { INDUSTRY_TAGS, type IndustryTag, type ReadinessStage, type RecruitStatus, type Resource, type ReviewRegion } from './explore';
+import { INDUSTRY_TAGS, type IndustryTag, type ReadinessStage, type RecruitStatus, type Resource, type ResourceType, type ReviewRegion } from './explore';
 import { parseAgeRanges } from './eligibility';
 import { kstDate } from './date';
 import { toIso, type KStartupItem } from './kstartup';
@@ -56,6 +56,14 @@ export function capabilitiesOf(raw: string | null | undefined): string[] {
   return out;
 }
 
+/** 도움 종류 태그 → 자료 유형. 공간 > 상담 > 교육 순으로 본다. 그 밖(자금·네트워킹·분류 없음)은 지원사업. */
+export function typeOfCapabilities(tags: readonly string[]): ResourceType {
+  if (tags.includes('공간')) return '공간';
+  if (tags.includes('상담')) return '상담';
+  if (tags.includes('교육')) return '교육';
+  return '지원사업';
+}
+
 /** 본문에 태그 이름이 그대로 있을 때만 산업 태그를 단다. */
 export function industryTagsOf(body: string): IndustryTag[] {
   return INDUSTRY_TAGS.filter((tag) => (tag === 'AI' ? /(?<![A-Za-z])AI(?![A-Za-z])/.test(body) : body.includes(tag)));
@@ -107,10 +115,11 @@ export function kstartupToResource(item: KStartupItem, now: Date): Resource | nu
   const body = text(item.support_ctnt) ?? text(item.pbanc_ctnt);
   const detail = text(item.pbanc_ctnt);
   const url = text(item.detl_pg_url);
+  const capabilityTags = capabilitiesOf(text(item.supt_biz_clsfc));
   const target = text(item.aply_trgt_ctnt) ?? text(item.aply_trgt);
   return {
     id: `ks-${sn}`,
-    type: '지원사업',
+    type: typeOfCapabilities(capabilityTags),
     title,
     agency: text(item.pbanc_ntrp_nm) ?? text(item.sprv_inst) ?? '',
     url: url && /^https?:\/\//.test(url) ? url : null,
@@ -128,7 +137,7 @@ export function kstartupToResource(item: KStartupItem, now: Date): Resource | nu
     checkedAt: today,
     sourceExcerpt: detail ? clip(detail, 120) : body ? clip(body, 120) : null,
     industryTags: industryTagsOf([title, detail ?? '', body ?? ''].join(' ')),
-    capabilityTags: capabilitiesOf(text(item.supt_biz_clsfc)),
+    capabilityTags,
     contextIds: [],
     conditions: conditionsOf(item),
     test: false,
@@ -138,7 +147,8 @@ export function kstartupToResource(item: KStartupItem, now: Date): Resource | nu
 /** 팀 검수 자료와 실제 공고를 합친다. 실제 지원사업이 하나라도 있으면 테스트 지원사업은 뺀다. */
 export function mergeResources(team: readonly Resource[], real: readonly Resource[]): Resource[] {
   const keepTestSupport = real.length === 0;
-  return [...team.filter((r) => keepTestSupport || r.type !== '지원사업'), ...real];
+  // 예전에 저장된 공고는 유형이 모두 '지원사업'이므로 읽을 때 도움 종류 태그로 다시 정한다.
+  return [...team.filter((r) => keepTestSupport || r.type !== '지원사업'), ...real.map((r) => (r.id.startsWith('ks-') ? { ...r, type: typeOfCapabilities(r.capabilityTags) } : r))];
 }
 
 /** 현재 모집 중일 수 있는 자료 (종료·마감 지난 자료 제외). 지역 자료 범위 안내에 센다. */

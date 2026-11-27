@@ -589,7 +589,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     const s = a ? c.get('store').explore(a.id) : undefined;
     const counts = c.get('store').viewCounts();
     const cards = resourcesNow()
-      .filter((r) => (!type || r.type === type) && (!stage || r.stages.includes(stage as ReadinessStage))
+      .filter((r) => (!type || r.type === type || r.capabilityTags.includes(type)) && (!stage || r.stages.includes(stage as ReadinessStage))
         && (!q || [r.title, r.agency, r.content, ...r.capabilityTags].some((x) => x.toLowerCase().includes(q))))
       .map((r) => ({ ...cardFor(r, s, c.get('now'), defaultsOf(c)), views: counts.get(r.id) ?? 0 }));
     return c.json({ items: sortCards(cards, sort, c.get('now')) });
