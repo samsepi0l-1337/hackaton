@@ -134,14 +134,18 @@ pub fn describe_type(code: &str, axis_scores: Option<&Value>) -> Option<Value> {
             }
             Value::Object(m)
         });
-    let mut out = json!({"code":code,"name":format!("{}형 {}",a.0,d.0),"oneLine":format!("{}, {} 움직이는 {} 창업가",if c[0]=='A' {"먼저 해 보고"} else {"먼저 계획하고"},if c[1]=='S' {"혼자 빠르게"} else {"함께 크게"},if c[3]=='C' {"도전형"} else {"안정형"}),"strengths":[a.1,d.1],"industries":unique(d.2,b.2),"categories":unique(a.3,k.3),"axisScores":scores});
-    if let Some(caution) = match c[0] {
+    let caution = match c[0] {
         'A' => Some("계획 없이 달리다 서류 마감을 놓칠 수 있어요"),
         'P' => Some("준비만 하다 시작이 늦어질 수 있어요"),
         _ => None,
-    } {
+    };
+    let mut out = json!({"code":code,"name":format!("{}형 {}",a.0,d.0),"oneLine":format!("{}, {} 움직이는 {} 창업가",if c[0]=='A' {"먼저 해 보고"} else {"먼저 계획하고"},if c[1]=='S' {"혼자 빠르게"} else {"함께 크게"},if c[3]=='C' {"도전형"} else {"안정형"}),"strengths":[a.1,d.1]});
+    if let Some(caution) = caution {
         out["caution"] = json!(caution);
     }
+    out["industries"] = json!(unique(d.2, b.2));
+    out["categories"] = json!(unique(a.3, k.3));
+    out["axisScores"] = scores;
     Some(out)
 }
 /// `scoreTypeTest(answers: Record<number, string>): TypeResult`
@@ -186,5 +190,32 @@ pub fn golden(f: &str, args: &[Value]) -> Option<Value> {
         "describeType" => describe_type(args.first()?.as_str()?, args.get(1)),
         "scoreTypeTest" => score_type_test(args.first()?),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn result_key_order_matches_typescript() {
+        let result = describe_type("ASDC", None);
+        let keys: Vec<String> = result
+            .as_ref()
+            .and_then(Value::as_object)
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default();
+        assert_eq!(
+            keys,
+            [
+                "code",
+                "name",
+                "oneLine",
+                "strengths",
+                "caution",
+                "industries",
+                "categories",
+                "axisScores"
+            ]
+        );
     }
 }
