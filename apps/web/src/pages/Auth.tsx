@@ -68,7 +68,7 @@ export function Signup() {
         <div className={`field${errors.consent ? ' has-error' : ''}`}>
           <label className="check">
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-            <span>(필수) 입력한 정보는 추천과 승인한 지원서 제출에만 쓰고 행사 후 삭제하는 데 동의해요.</span>
+            <span>(필수) 입력한 정보는 창업 준비 안내와 추천에만 쓰고 행사 후 삭제하는 데 동의해요.</span>
           </label>
           {errors.consent && <p className="error-text">{errors.consent}</p>}
         </div>
