@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ConsultQuota, ExploreOptionsResponse, ExploreSession, ExploreStep, ProblemCard, StartProfile, SummaryV2 } from '@gil/shared';
 import { api } from '../api/client';
 import { CardSkeletons, ErrorState } from '../components/States';
 import { errMessage } from '../lib/format';
-import { ChatStep } from '../mentor/ChatStep';
 import { ITEM_LABEL, ProvBadge, getItem } from '../mentor/Common';
-import { ResultStep } from '../mentor/ResultStep';
-import { StartStep } from '../mentor/StartStep';
-import { SummaryStep } from '../mentor/SummaryStep';
 import { adoptServer, hasLocalProgress, patchStore, readStore } from '../mentor/storage';
 import type { Store } from '../mentor/storage';
+
+const ChatStep = lazy(() => import('../mentor/ChatStep').then((m) => ({ default: m.ChatStep })));
+const ResultStep = lazy(() => import('../mentor/ResultStep').then((m) => ({ default: m.ResultStep })));
+const StartStep = lazy(() => import('../mentor/StartStep').then((m) => ({ default: m.StartStep })));
+const SummaryStep = lazy(() => import('../mentor/SummaryStep').then((m) => ({ default: m.SummaryStep })));
 
 const EMPTY: ExploreSession = { step: 'start', start: {}, exploration: null, messages: [], questionIndex: 0, maxQuestions: 3, summary: null, regional: null, updatedAt: null };
 

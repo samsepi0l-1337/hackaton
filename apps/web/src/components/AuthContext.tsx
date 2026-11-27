@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '@gil/shared';
 import { api, AUTH_GATE_EVENT } from '../api/client';
@@ -16,9 +16,14 @@ export const useAuth = () => useContext(Ctx);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const initialRequest = useRef<ReturnType<typeof api.me> | null>(null);
 
   useEffect(() => {
-    api.me().then((r) => setUserState(r.user)).catch(() => setUserState(null)).finally(() => setLoading(false));
+    const request = initialRequest.current ?? api.me();
+    initialRequest.current = request;
+    let active = true;
+    request.then((r) => { if (active) setUserState(r.user); }).catch(() => { if (active) setUserState(null); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   // 창업 준비 호출이 401/403 을 받으면 화면 상태를 서버와 맞춘다 (인증 안내·비밀번호 변경 안내로 이동).
@@ -44,5 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(null);
   }, []);
 
-  return <Ctx.Provider value={{ user, loading, setUser, logout }}>{children}</Ctx.Provider>;
+  const value = useMemo(() => ({ user, loading, setUser, logout }), [user, loading, setUser, logout]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
