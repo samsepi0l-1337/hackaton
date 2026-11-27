@@ -1,0 +1,14 @@
+{
+  "name": "@gil/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/server.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@gil/shared": "workspace:*",
+    "hono": "^4.6.12"
+  }
+}

@@ -20,6 +20,10 @@ node_modules/
 dist/
 build/
 .next/
+.wrangler/
+.dev.vars
+*.log
+!bun.lock
 
 # Local agent instructions
 CLAUDE.md
