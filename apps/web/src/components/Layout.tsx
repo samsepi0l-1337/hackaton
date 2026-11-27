@@ -1,5 +1,6 @@
 import { Suspense, useState } from 'react';
 import { CardSkeletons } from './States';
+import { RouteErrorBoundary } from './RouteErrorBoundary';
 import { loadMentor } from '../lazyPages';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
@@ -41,7 +42,7 @@ export function Layout() {
           </nav>
         )}
       </header>
-      <main className="main"><Suspense fallback={<div className="container"><CardSkeletons /></div>}><Outlet /></Suspense></main>
+      <main className="main"><Suspense fallback={<div className="container"><CardSkeletons /></div>}><RouteErrorBoundary key={loc.pathname}><Outlet /></RouteErrorBoundary></Suspense></main>
       <footer className="footer">
         <div className="container stack">
           <p>입력한 정보는 창업 구상 정리와 준비 안내에만 사용해요. 로그인 없이 쓸 수 있고, 초기화하면 지울 수 있어요.</p>
