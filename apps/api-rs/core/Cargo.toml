@@ -1,0 +1,23 @@
+[package]
+name = "gil-core"
+version = "0.1.0"
+edition = "2021"
+description = "부산 창업 길잡이 API — 플랫폼 독립 로직 (TS apps/api 와 같은 동작)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+regex.workspace = true
+fancy-regex.workspace = true
+bcrypt.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+pbkdf2.workspace = true
+base64.workspace = true
+hex.workspace = true
+chrono.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+futures.workspace = true

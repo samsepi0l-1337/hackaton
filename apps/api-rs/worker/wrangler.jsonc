@@ -1,0 +1,60 @@
+// Rust(workers-rs) 백엔드 운영 설정. apps/api/wrangler.jsonc 와 같은 이름·바인딩·DO(GilApp, DocWorker)를 쓴다.
+// 전환할 때 이 설정으로 배포한다 (DO 저장소를 그대로 이어 쓴다).
+{
+  // Cloudflare Workers 설정. 배포 전 docs/todo.md 5절(배포 선행 조건)을 확인한다.
+  "$schema": "../../api/node_modules/wrangler/config-schema.json",
+  "name": "gil-api",
+  "main": "js/entry.ts",
+  "build": { "command": "worker-build --release" },
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Upstage 호출은 모두 AI Gateway(gil-gateway, 커스텀 provider custom-upstage)를 지난다. 키는 게이트웨이 BYOK, Worker 는 secret CF_AIG_TOKEN(Run)만 가진다.
+  "vars": {
+    "AI_MODE": "upstage",
+    "AI_GATEWAY_ID": "gil-gateway",
+    "DECIDE_ENABLED": "1",
+    "MAIL_FROM": "noreply@dreamp.org",
+    "APP_ORIGIN": "https://gil-api.samsepi0l1337.workers.dev",
+    "UPSTAGE_BASE_URL": "https://gateway.ai.cloudflare.com/v1/01d6807196c93a4774c1bb50ee8f4ebb/gil-gateway/custom-upstage"
+  },
+
+  // AI_MODE=route 일 때 AI Gateway 동적 라우트 dynamic/gil 호출. 로컬 dev에서도 원격 호출이다.
+  "ai": { "binding": "AI" },
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+
+  // 인증·복구 메일 (Cloudflare Email Service, dreamp.org 등록 완료). 발신 주소는 noreply@dreamp.org 만 허용
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["noreply@dreamp.org"] }],
+
+  // K-Startup 실제 공고 수집: 매일 03:00 KST (18:00 UTC). secret KSTARTUP_SERVICE_KEY
+  "triggers": { "crons": ["0 18 * * *"] },
+
+  // doc-worker 컨테이너 (공고 첨부 찾기·내려받기·양식 채우기)
+  "containers": [
+    {
+      "class_name": "DocWorker",
+      "scheduling_policy": "durable_object",
+      "images": { "base": { "dockerfile": "../../doc-worker/Dockerfile" } }
+    }
+  ],
+  // GilApp: API 와 DB(SQLite KV, Zod 검사). DocWorker: 컨테이너.
+  "durable_objects": {
+    "bindings": [
+      { "name": "APP", "class_name": "GilApp" },
+      { "name": "DOC_WORKER", "class_name": "DocWorker" }
+    ]
+  },
+  "exports": {
+    "GilApp": { "type": "durable-object", "storage": "sqlite" },
+    "DocWorker": { "type": "durable-object", "storage": "sqlite" }
+  },
+
+  // 웹(목업) 빌드 결과. /api/* 만 Worker 가 먼저 받는다.
+  "assets": {
+    "directory": "../../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  }
+}
