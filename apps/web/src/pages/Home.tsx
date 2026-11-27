@@ -38,7 +38,7 @@ export function Home() {
               </div>
               <Link to="/mentor">AI 창업멘토</Link>
             </form>
-            <p>아이디어 한 줄이나 키워드로 부산 창업 지원사업을 찾아보세요.</p>
+            <p>기관·제목·지원 내용 키워드로 부산 창업 지원사업을 찾아보세요.</p>
           </div>
           <section className="pane shortcuts">
             <div className="pane-title">
@@ -59,7 +59,7 @@ export function Home() {
           </section>
         </div>
         <section className="pane account-panel">
-          <h2>내 조건에 맞는 공고를<br />한눈에 확인하세요.</h2>
+          <h2>내 조건에 맞는 순으로<br />공고를 확인하세요.</h2>
           <div className="account-grid">
             {ACCOUNT_LINKS.map((a) => (
               <Link key={a.label} to={a.to}><span><PortalIcon name={a.icon} size={19} /></span>{a.label}</Link>
@@ -93,13 +93,13 @@ export function Home() {
             <ol className="process-list">
               <li><PortalIcon name="doc" /><b>사업 정보 입력</b><small>아이디어와 고객</small></li>
               <li><PortalIcon name="chat" /><b>AI 멘토 상담</b><small>질문으로 구체화</small></li>
-              <li><PortalIcon name="flag" /><b>지원사업 Top3</b><small>추천과 공고 원문</small></li>
+              <li><PortalIcon name="flag" /><b>경로 최대 3개</b><small>추천과 공고 원문</small></li>
             </ol>
             <Link className="start-link" to="/mentor">상담 이어서 하기<PortalIcon name="next" size={16} /></Link>
           </section>
           <section className="pane fields-panel">
             <div className="pane-title">
-              <h2>분야별 지원사업</h2>
+              <h2>유형·키워드로 찾기</h2>
             </div>
             <div className="field-links">
               {FIELD_LINKS.map((f) => <Link key={f.label} to={f.to}>{f.label}</Link>)}
@@ -109,12 +109,12 @@ export function Home() {
         <div className="right-stack">
           <section className="pane deadline-panel">
             <div className="pane-title">
-              <h2>마감 임박 공고</h2>
+              <h2>마감일이 가까운 공고</h2>
             </div>
             <div className="live-stats">
               <span>모집 중 <b>{sum ? sum.openCount : '–'}</b>건</span>
               <i></i>
-              <span>이번 주 마감 <b>{sum ? sum.closingThisWeek : '–'}</b>건</span>
+              <span>7일 이내 마감 <b>{sum ? sum.closingThisWeek : '–'}</b>건</span>
             </div>
             {res.loading && (
               <ul className="deadline-list" aria-busy="true" aria-label="불러오는 중">
@@ -127,7 +127,7 @@ export function Home() {
                 <button className="btn small" onClick={res.reload}>다시 시도</button>
               </div>
             )}
-            {sum && sum.closingSoon.length === 0 && <p className="muted" style={{ marginTop: 12 }}>지금 마감이 임박한 공고가 없어요. 위의 전체 지원공고에서 다른 공고를 찾아보세요.</p>}
+            {sum && sum.closingSoon.length === 0 && <p className="muted" style={{ margin: '12px 0 0', minHeight: 108 }}>마감일이 정해진 열린 공고가 없어요. 전체 지원공고에서 다른 공고를 찾아보세요.</p>}
             {sum && sum.closingSoon.length > 0 && (
               <ul className="deadline-list">
                 {sum.closingSoon.slice(0, 2).map(({ program: p, dDay }) => (

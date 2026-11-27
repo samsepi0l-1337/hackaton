@@ -7,10 +7,10 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { PortalIcon } from './PortalIcons';
 
 const NAV_GROUPS: { label: string; links: [string, string][] }[] = [
-  { label: '지원사업', links: [['전체 공고', '/programs'], ['마감 빠른 순 공고', '/programs?sort=deadline']] },
+  { label: '지원사업', links: [['전체 공고', '/programs'], ['최근 공모', '/programs?sort=recent']] },
   { label: 'AI 창업 상담', links: [['멘토 상담', '/mentor'], ['이번 주 상담 횟수', '/me']] },
   { label: '창업 가이드', links: [['창업 유형 테스트', '/test'], ['서비스 이용 방법', '/#how-to']] },
-  { label: '내 활동', links: [['내 정보', '/me'], ['이번 주 상담 횟수', '/me']] },
+  { label: '내 활동', links: [['내 정보', '/me'], ['내 정보 조건', '/me#profile']] },
 ];
 
 function preloadMentor() { void loadMentor().catch(() => {}); }
@@ -23,9 +23,11 @@ export function Layout() {
   const [pinned, setPinned] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [focusIn, setFocusIn] = useState<number | null>(null);
+  // 직접 닫은 메뉴. 다음 포인터 진입이나 버튼 누름 전까지 호버·포커스보다 우선한다.
+  const [dismissed, setDismissed] = useState<number | null>(null);
   const headerRef = useRef<HTMLElement>(null);
 
-  const closeAll = () => { setNavOpen(false); setPinned(null); setHover(null); setFocusIn(null); };
+  const closeAll = () => { setNavOpen(false); setPinned(null); setHover(null); setFocusIn(null); setDismissed(null); };
 
   useEffect(() => {
     setNavOpen(false);
@@ -47,8 +49,10 @@ export function Layout() {
       if (e.key !== 'Escape') return;
       const active = document.activeElement;
       const group = active instanceof Element ? active.closest('.nav-group') : null;
-      // 포커스가 메뉴 안에 있을 때만 그 메뉴의 버튼으로 돌려놓는다. 검색창 등의 포커스는 건드리지 않는다.
-      if (group && headerRef.current?.contains(group)) group.querySelector<HTMLButtonElement>(':scope > button')?.focus();
+      const toggle = headerRef.current?.querySelector<HTMLButtonElement>('.mobile-menu');
+      // 포커스가 헤더 메뉴 안에 있을 때만 옮긴다. 검색창 등의 포커스는 건드리지 않는다.
+      if (toggle?.getAttribute('aria-expanded') === 'true' && active instanceof Element && headerRef.current?.contains(active)) toggle.focus();
+      else if (group && headerRef.current?.contains(group)) group.querySelector<HTMLButtonElement>(':scope > button')?.focus();
       setNavOpen(false);
       setPinned(null);
       setHover(null);
@@ -62,10 +66,17 @@ export function Layout() {
     };
   }, []);
 
+  // 경로와 쿼리를 함께 비교한다. 기본 정렬(sort=deadline)은 없는 것과 같다. 해시 링크는 현재 쪽으로 세지 않는다.
+  const norm = (path: string, search: string) => {
+    const p = new URLSearchParams(search);
+    if (p.get('sort') === 'deadline') p.delete('sort');
+    p.sort();
+    return path + '?' + p.toString();
+  };
   const isCur = (to: string) => {
-    const [path, rest = ''] = to.split('#')[0].split('?');
-    if (to.includes('#') || path !== loc.pathname) return false;
-    return rest ? loc.search === '?' + rest : !loc.search.includes('sort=');
+    if (to.includes('#')) return false;
+    const [path, rest = ''] = to.split('?');
+    return norm(path, rest) === norm(loc.pathname, loc.search);
   };
   const cur = (to: string) => (isCur(to) ? ({ 'aria-current': 'page' } as const) : {});
 
@@ -103,24 +114,26 @@ export function Layout() {
               <Link to="/admin" {...cur('/admin')}><PortalIcon name="bars" /> 팀 통계</Link>
             </div>
           </div>
-          <button type="button" className="mobile-menu" aria-label={navOpen ? '메뉴 닫기' : '메뉴 열기'} aria-controls="portal-nav" aria-expanded={navOpen} onClick={() => { setNavOpen(!navOpen); setPinned(null); setHover(null); setFocusIn(null); }}>
+          <button type="button" className="mobile-menu" aria-label={navOpen ? '메뉴 닫기' : '메뉴 열기'} aria-controls="portal-nav" aria-expanded={navOpen} onClick={() => { setNavOpen(!navOpen); setPinned(null); setHover(null); setFocusIn(null); setDismissed(null); }}>
             <PortalIcon name={navOpen ? 'close' : 'menu'} />
           </button>
         </div>
         <nav id="portal-nav" aria-label="주 메뉴" className={'portal-nav' + (navOpen ? ' is-open' : '')}>
           <div className="portal-width nav-items">
             {NAV_GROUPS.map((g, i) => {
-              const open = pinned === i || hover === i || focusIn === i;
+              const open = dismissed !== i && (pinned === i || hover === i || focusIn === i);
               return (
                 <div
                   className="nav-group"
                   key={g.label}
-                  onMouseEnter={() => setHover(i)}
+                  onMouseEnter={() => { setHover(i); setDismissed((c) => (c === i ? null : c)); }}
                   onMouseLeave={() => setHover((c) => (c === i ? null : c))}
                   onFocus={(e) => { if ((e.target as Element).closest('.menu-panel')) setFocusIn(i); }}
                   onBlur={onGroupBlur(i)}
                 >
-                  <button type="button" aria-expanded={open} onClick={() => setPinned(pinned === i ? null : i)}>
+                  <button type="button" aria-expanded={open} onClick={() => {
+                    if (open) { setDismissed(i); setPinned(null); setFocusIn(null); } else { setDismissed(null); setPinned(i); }
+                  }}>
                     {g.label}
                     <PortalIcon name="down" size={16} />
                   </button>
@@ -141,7 +154,7 @@ export function Layout() {
       <footer className="footer">
         <div className="portal-width footer-inner">
           <strong>해보까</strong>
-          <p>입력한 내용은 서버에 저장되고, 문장 정리를 위해 외부 AI(Upstage)로 전송될 수 있어요. 상담 화면에서 처음부터 시작하거나 내 정보에서 계정을 지우면 함께 지워져요.</p>
+          <p>입력한 내용은 서버에 저장되고, 문장 정리를 위해 외부 AI(Upstage)로 전송될 수 있어요. 상담을 처음부터 시작하면 탐색 기록만 지워지고, 계정을 지우면 서버 데이터가 지워져요. 이 브라우저에 저장된 상담 요약과 유형 테스트 결과는 따로 지워야 해요.</p>
           <p>공고 출처 · 공공데이터포털 K-Startup　|　<Link to="/licenses">오픈소스 라이선스</Link></p>
         </div>
       </footer>

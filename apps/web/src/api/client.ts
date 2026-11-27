@@ -108,12 +108,20 @@ export const api = {
   track: (type: ExploreEventType, resourceId?: string) => { post<{ ok: true }>(ROUTES.events, { type, resourceId }).catch(() => {}); },
 
   home: async () => {
-    const d = await get<unknown>(ROUTES.home) as Partial<HomeResponse> | null;
-    const ok = !!d && typeof d === 'object' && typeof d.openCount === 'number' && typeof d.closingThisWeek === 'number'
-      && Array.isArray(d.closingSoon)
-      && d.closingSoon.every((c) => !!c && typeof c === 'object' && !!(c as { program?: unknown }).program && typeof (c as { program: { id?: unknown } }).program.id === 'string');
+    const d = await get<unknown>(ROUTES.home);
+    const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
+    const str = (v: unknown) => typeof v === 'string';
+    const strOrNull = (v: unknown) => v === null || v === undefined || typeof v === 'string';
+    const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+    const rowOk = (c: unknown) => {
+      if (!obj(c) || !obj(c.program)) return false;
+      const p = c.program;
+      return str(p.id) && str(p.title) && str(p.agency) && str(p.url) && strOrNull(p.category) && strOrNull(p.region)
+        && (c.dDay === null || num(c.dDay));
+    };
+    const ok = obj(d) && num(d.openCount) && num(d.closingThisWeek) && Array.isArray(d.closingSoon) && d.closingSoon.every(rowOk);
     if (!ok) throw new ApiClientError(0, 'network', '서버 응답을 읽지 못했어요. 잠시 후 다시 시도해 주세요.');
-    return d as HomeResponse;
+    return d as unknown as HomeResponse;
   },
   resources: (q: ResourceQuery) => get<{ items: ResourceCard[] }>(ROUTES.resources + qs({ ...q })),
   resource: (id: string) => get<ResourceCard>(ROUTES.resource(id)),
