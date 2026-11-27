@@ -19,3 +19,16 @@ describe('F21 테스트 자료', () => {
     expect(PROBLEMS.filter((p) => p.industryTags.includes('자동차'))).toHaveLength(0);
   });
 });
+
+describe('서비스 데이터 (data/*.json)', () => {
+  test('[테스트] 자료가 없다 — 검수된 자료(공식 URL·확인일)만 둔다', async () => {
+    for (const n of ['problems', 'contexts', 'resources']) {
+      const items = (await import(`../data/${n}.json`)).default as { test?: boolean; title?: string; checkedAt?: string | null }[];
+      for (const x of items) {
+        expect(x.test).toBe(false);
+        expect(x.title?.startsWith('[테스트]') ?? false).toBe(false);
+        expect(x.checkedAt).toBeTruthy();
+      }
+    }
+  });
+});
