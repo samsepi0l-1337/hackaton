@@ -128,7 +128,7 @@ export interface Exploration {
 
 /** F1 입력 (비회원). 기존 ConsultProfile 은 F4 조건용으로 남는다. */
 export interface StartProfile {
-  focusResourceId?: string;
+  focusResourceId?: string | null;
   readiness?: ReadinessStage;
   idea?: string; // has_idea·preparing
   interests?: string[]; // INDUSTRY_TAGS + INTEREST_EXTRA, 복수

@@ -205,6 +205,7 @@ fn explore() -> Spec {
         opt("interestNote", st(0, 200)),
         opt("district", st(0, 20)),
         opt("reviewRegion", en(&e::REVIEW_REGIONS)),
+        opt("focusResourceId", st(1, 120)),
         opt("conditions", conditions),
     ]);
     let exploration = obj(vec![
