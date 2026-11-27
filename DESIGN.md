@@ -57,6 +57,8 @@ Shadow: `--shadow` 0 1px 3px rgba(16,24,40,.1) for cards. Pane 0 3px 9px #183e65
 - Live stats `.live-stats`: grey-blue bar, bold blue numbers 17px, divider `<i>`.
 - List row `.deadline-list li`: title (strong 15px, one line with ellipsis) and badge on the first line; small meta (12px) and "원문" link on the second. 1px divider #e7edf3.
 - Banner `.type-banner`: min height 169, radius 16, photo `/images/busan.jpg` with a green-white gradient from the left, white pill label, 24px title, 14px note.
+- RegionPicker (`apps/web/src/components/RegionPicker.tsx`, classes `.region-picker`, `.region-trigger`, `.region-panel`, `.region-top`, `.region-chips`): a 당근-style region select. A trigger button (`.input`) opens a panel. Pressing 부산, 울산 or 경남 expands its district chips (구·군, 시·군 for 경남) right below. Top item clears the choice (label via `allLabel`), `extras` add items after the regions, `allowAreaOnly` shows "{지역} 전체". Closes on Escape and outside click. Used on `/programs`, 내 정보 residence, the consult start and 내 조건 확인. On `/programs` an area-wide item gets a "○○ 전역" `.tag`.
+- Step chips `.first-steps` (home, under the search pill): label "처음이라면" then an ordered list of three links with a numbered mark (창업 유형 테스트, AI 창업 상담, 맞춤형 공고) and a 이용 방법 link. Same chip look as `.field-links a`.
 - Buttons `.btn`, `.btn.primary`, `.btn.danger`, `.btn.ghost`, `.btn.small`, `.btn.block`. Cards `.card`. Forms `.field`, `.input`. States `.state`, `.skeleton`.
 
 ## States
