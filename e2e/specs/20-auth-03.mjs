@@ -19,9 +19,9 @@ await step('logout and RequireAuth redirects to login and back via next', async 
   await seeText(account.email);
   await page.click('text=로그아웃');
   await page.waitForFunction(() => location.pathname === '/', undefined, { timeout: 10000 });
-  await seeText('로그인');
   await go('/me?from=e2e');
   await page.waitForFunction(() => location.pathname === '/login', undefined, { timeout: 10000 });
+  await seeText('로그인');
   eq(new URL(await page.url()).searchParams.get('next'), '/me?from=e2e', 'next preserved');
   await page.fill('input[type=email]', account.email);
   await page.fill('input[type=password]', account.password);

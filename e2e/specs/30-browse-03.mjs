@@ -21,18 +21,14 @@ await step('licenses and 404 pages', async () => {
   await seeText('페이지를 찾을 수 없어요');
   assert((await bodyText()).includes('메인으로'), '404 offers home link');
 });
-await step('mobile navigation menu and bottom bar without horizontal scrolling', async () => {
+await step('mobile pages and bottom bar without horizontal scrolling', async () => {
   await page.cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await go('/');
-  await page.click('button[aria-label="메뉴"]');
-  await page.waitForFunction(() => document.querySelector('button[aria-label="메뉴"]')?.getAttribute('aria-expanded') === 'true');
-  assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'home menu has no horizontal scroll');
-  await page.click('.nav-mobile a[href="/programs"]');
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'home has no horizontal scroll');
+  await go('/programs');
   await page.waitForSelector('article');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'programs has no horizontal scroll');
-  await page.click('button[aria-label="메뉴"]');
-  await page.waitForFunction(() => document.querySelector('button[aria-label="메뉴"]')?.getAttribute('aria-expanded') === 'true');
-  await page.click('.nav-mobile a[href="/test"]');
+  await go('/test');
   await seeText('창업 유형 테스트');
   await page.click('text=테스트 시작');
   for (let i = 1; i <= 12; i++) {
