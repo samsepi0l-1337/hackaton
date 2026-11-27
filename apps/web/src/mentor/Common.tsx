@@ -1,6 +1,7 @@
 import { PROVENANCE_LABEL } from '@gil/shared';
 import type { EvidenceLevel, Provenance, SummaryItem, SummaryV2 } from '@gil/shared';
 import type { ProblemInfo } from './storage';
+import { safeHref } from '../lib/format';
 
 export const STEP_LABELS = ['관심·상황', '구상 정리', '준비 안내'];
 
@@ -32,7 +33,7 @@ export function ProblemLine({ p }: { p: ProblemInfo }) {
     <div className="stack">
       <strong>{p.title}</strong>
       <div className="row"><EvidenceBadge level={p.evidenceLevel} /><span className="muted">{p.industry} · {p.region}</span></div>
-      <div className="muted">출처: {p.source ? <a href={p.source} target="_blank" rel="noreferrer">원문 (새 창)</a> : '확인 필요'} · 자료 시점 {p.sourceDate ?? '확인 필요'}</div>
+      <div className="muted">출처: {safeHref(p.source) ? <a href={safeHref(p.source)} target="_blank" rel="noreferrer">원문 (새 창)</a> : '확인 필요'} · 자료 시점 {p.sourceDate ?? '확인 필요'}</div>
     </div>
   );
 }

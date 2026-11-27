@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { PortalIcon } from '../components/PortalIcons';
 import { ACCOUNT_LINKS, FIELD_LINKS, SHORTCUTS, SHORTCUTS_COLLAPSED, STAGE_TABS } from './homeLinks';
+import { safeHref } from '../lib/format';
 
 const ddayLabel = (d: number | null) => (d === null ? '상시' : d < 0 ? '마감' : d === 0 ? 'D-DAY' : `D-${d}`);
 const ddayClass = (d: number | null) => (d === null ? 'dday-always' : d < 0 ? 'dday-closed' : d <= 7 ? 'dday-soon' : '');
@@ -141,13 +142,13 @@ export function Home() {
               <ul className="deadline-list">
                 {sum.closingSoon.slice(0, 2).map(({ program: p, dDay }) => (
                   <li key={p.id}>
-                    <a title={p.title} href={p.url} target="_blank" rel="noreferrer">
+                    <a title={p.title} href={safeHref(p.url)} target="_blank" rel="noreferrer">
                       <strong>{p.title}</strong>
                       <span className={'badge ' + ddayClass(dDay)}>{ddayLabel(dDay)}</span>
                     </a>
                     <div>
                       <small>{[p.agency, p.region, p.category].filter(Boolean).join(' · ')}</small>
-                      <a href={p.url} target="_blank" rel="noreferrer" aria-label={p.title + ' 원문 보기'}>원문 <PortalIcon name="external" size={12} /></a>
+                      <a href={safeHref(p.url)} target="_blank" rel="noreferrer" aria-label={p.title + ' 원문 보기'}>원문 <PortalIcon name="external" size={12} /></a>
                     </div>
                   </li>
                 ))}

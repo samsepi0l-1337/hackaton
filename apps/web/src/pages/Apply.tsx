@@ -4,7 +4,7 @@ import { APPLICATION_STATUS_LABEL } from '@gil/shared';
 import type { ApplicationView, FieldError } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
-import { errMessage } from '../lib/format';
+import { errMessage, safeHref } from '../lib/format';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import '../styles/pages-programs.css';
 import '../styles/pages-apply.css';
@@ -60,7 +60,7 @@ export function Apply() {
       <p className="muted">{p.agency}</p>
       <p className="banner" role="note">
         연습용 초안이고 제출도 모의로 처리돼요. 실제 신청은 공식 사이트에서 해야 해요.
-        {p.url && <> <a href={p.url} target="_blank" rel="noreferrer">공식 안내에서 신청하기</a></>}
+        {safeHref(p.url) && <> <a href={safeHref(p.url)} target="_blank" rel="noreferrer">공식 안내에서 신청하기</a></>}
       </p>
 
       {editable && (
@@ -116,7 +116,7 @@ export function Apply() {
           <h2 style={{ margin: 0 }}>모의 제출을 마쳤어요</h2>
           <p className="apply-receipt" style={{ margin: 0 }}>{app.receiptNo}</p>
           <p className="muted" style={{ margin: 0 }}>연습용 접수번호예요. 실제로 접수된 것이 아니에요.</p>
-          {p.url && <div><a className="btn primary" href={p.url} target="_blank" rel="noreferrer">공식 안내에서 신청하기</a></div>}
+          {safeHref(p.url) && <div><a className="btn primary" href={safeHref(p.url)} target="_blank" rel="noreferrer">공식 안내에서 신청하기</a></div>}
         </section>
       )}
 

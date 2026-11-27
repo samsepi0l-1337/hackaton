@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ResourceResultCard } from '../components/ResourceView';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import { Field } from '../components/TextField';
-import { errMessage } from '../lib/format';
+import { errMessage, safeHref } from '../lib/format';
 import { RegionPicker } from '../components/RegionPicker';
 import { joinRegionText, profileToConditions, splitRegionText } from '../lib/profile';
 import { ITEM_LABEL, Progress, ProvBadge, getItem } from './Common';
@@ -367,7 +367,7 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
                   {res.contexts.map((c) => (
                     <li key={c.id}>
                       <div>{c.background}</div>
-                      <div className="muted">출처: {c.url ? <a href={c.url} target="_blank" rel="noreferrer">원문 (새 창)</a> : '원문 확인 필요'} · 확인일 {c.checkedAt ?? '확인 필요'}{c.test && ' · 팀 검수 전 테스트 자료'}</div>
+                      <div className="muted">출처: {safeHref(c.url) ? <a href={safeHref(c.url)} target="_blank" rel="noreferrer">원문 (새 창)</a> : '원문 확인 필요'} · 확인일 {c.checkedAt ?? '확인 필요'}{c.test && ' · 팀 검수 전 테스트 자료'}</div>
                     </li>
                   ))}
                 </ul>

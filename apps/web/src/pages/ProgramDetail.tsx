@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { errMessage } from '../lib/format';
+import { errMessage, safeHref } from '../lib/format';
 import { CONDITION_NOTE } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
@@ -99,7 +99,7 @@ export function ProgramDetail() {
         <div className="row"><RecruitBadge status={r.recruitStatus} /></div>
         <SourceLine r={r} />
         {r.sourceExcerpt && <blockquote className="quote">{r.sourceExcerpt}</blockquote>}
-        {r.url && <a className="btn primary" href={r.url} target="_blank" rel="noreferrer">공식 안내 확인</a>}
+        {safeHref(r.url) && <a className="btn primary" href={safeHref(r.url)} target="_blank" rel="noreferrer">공식 안내 확인</a>}
       </section>
       {r.recruitStatus !== 'closed' && <ApplyCard resourceId={r.id} />}
       <Link className="btn" to={`/mentor?focus=${encodeURIComponent(r.id)}`}>내 구상에 맞는 준비 안내 받기</Link>

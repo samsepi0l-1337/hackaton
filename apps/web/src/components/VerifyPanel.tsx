@@ -14,6 +14,7 @@ export function VerifyPanel({ email, initialCooldown = 0, onDone, lead }: { emai
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (cool <= 0) return;
@@ -37,7 +38,8 @@ export function VerifyPanel({ email, initialCooldown = 0, onDone, lead }: { emai
   }
 
   async function resend() {
-    setErr(''); setInfo('');
+    if (sending) return;
+    setErr(''); setInfo(''); setSending(true);
     try {
       await api.resendVerification(email);
       setInfo('인증 메일을 다시 보냈어요. 스팸함도 확인해 주세요.');
@@ -45,7 +47,7 @@ export function VerifyPanel({ email, initialCooldown = 0, onDone, lead }: { emai
     } catch (x) {
       if (x instanceof ApiClientError && x.code === 'too_many') { setCool(VERIFY_RESEND_SECONDS); setErr('너무 자주 요청했어요. 잠시 뒤에 다시 보내 주세요.'); }
       else setErr(errMessage(x));
-    }
+    } finally { setSending(false); }
   }
 
   return (
@@ -56,7 +58,7 @@ export function VerifyPanel({ email, initialCooldown = 0, onDone, lead }: { emai
       {info && <p className="muted" role="status">{info}</p>}
       <div className="row">
         <button className="btn primary" disabled={busy}>{busy ? '확인 중...' : '인증하기'}</button>
-        <button type="button" className="btn" disabled={cool > 0} onClick={resend}>{cool > 0 ? `다시 보내기 (${cool}초 뒤)` : '인증 메일 다시 보내기'}</button>
+        <button type="button" className="btn" disabled={cool > 0 || sending} onClick={resend}>{cool > 0 ? `다시 보내기 (${cool}초 뒤)` : '인증 메일 다시 보내기'}</button>
       </div>
     </form>
   );
