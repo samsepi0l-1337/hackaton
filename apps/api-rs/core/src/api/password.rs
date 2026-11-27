@@ -126,6 +126,7 @@ mod tests {
     struct TestPorts;
     #[async_trait(?Send)]
     impl Ports for TestPorts {
+        async fn sleep(&self, _ms: u64) {}
         async fn fetch(&self, _: HttpReq) -> Result<HttpResp, String> {
             Err("unused".into())
         }
