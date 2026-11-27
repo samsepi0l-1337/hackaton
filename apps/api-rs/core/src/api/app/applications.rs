@@ -401,7 +401,7 @@ pub async fn polish(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     let body = req.json_or_empty();
     let mut fields = a["fields"].as_array().cloned().unwrap_or_default();
     for field in &mut fields {
-        if let Some(value) = field["key"].as_str().and_then(|k| body["values"].get(k)).and_then(Value::as_str) { field["value"] = json!(value); }
+        if let Some(value) = field["key"].as_str().and_then(|k| body["values"].get(k)).and_then(Value::as_str) { field["value"] = json!(take16(value, 2000)); }
     }
     let uid = a["userId"].as_str().unwrap_or("");
     let context = draft_context(cx, uid);
@@ -539,6 +539,34 @@ mod tests {
         let req = Req::default();
         assert_eq!(block_on(polish(&mut cx, &req, "a")).unwrap_err().status, 409);
         assert_eq!(block_on(export(&mut cx, &req, "a")).unwrap_err().status, 400);
+    }
+
+    #[test]
+    fn polish_suggests_counts_and_stops_at_five() {
+        let mut kv = MemKv::default();
+        let env = Env::from([("AI_MODE".into(), "upstage".into()), ("UPSTAGE_API_KEY".into(), "k".into())]);
+        let opts = AppOpts::default(); let ports = FakePorts::default(); let now = 1_795_741_200_000;
+        *ports.fetch.borrow_mut() = Some(Box::new(|_req| {
+            let content = r#"{"f1":"홍길동","f2":"동네 직장인의 점심 고민을 해결합니다."}"#;
+            Ok(crate::ports::HttpResp { status: 200, headers: vec![], body: json!({"choices":[{"message":{"content":content}}]}).to_string().into_bytes() })
+        }));
+        let pid = crate::shared::seed::seed_programs(now)[0]["id"].as_str().unwrap().to_owned();
+        let fields = json!([{"key":"f1","label":"성명","maxLength":20,"required":true,"identity":true,"value":""},{"key":"f2","label":"사업 개요","maxLength":200,"required":true,"value":"점심 도시락"}]);
+        Store::new(&mut kv, now).save_application(json!({"id":"a","userId":"u","programId":pid,"status":"drafting","channel":"mock","formFileName":"form","fields":fields,"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[],"createdAt":iso(now),"updatedAt":iso(now)})).unwrap();
+        let mut cx = Cx { env: &env, kv: &mut kv, ports: &ports, opts: &opts, now, user: Some(json!({"id":"u"})) };
+        let req = Req { body: Some(r#"{"values":{"f2":"점심 도시락 배달"}}"#.into()), ..Req::default() };
+        for i in 0..5 {
+            let r = block_on(polish(&mut cx, &req, "a")).unwrap();
+            let v: Value = serde_json::from_str(&r.body).unwrap();
+            let keys: Vec<_> = v["suggestions"].as_array().unwrap().iter().map(|x| x["key"].as_str().unwrap().to_owned()).collect();
+            assert_eq!(keys, vec!["f2"], "identity field is never suggested");
+            assert_eq!(v["suggestions"][0]["before"], "점심 도시락 배달", "unsaved edit is the input");
+            assert_eq!(v["remaining"], 4 - i);
+        }
+        let stored = Store::new(cx.kv, now).get_application("a").unwrap();
+        assert_eq!(stored["polishCount"], 5, "count survives the stored-record check");
+        assert_eq!(stored["fields"][1]["value"], "점심 도시락", "polish does not save values");
+        assert_eq!(block_on(polish(&mut cx, &req, "a")).unwrap_err().status, 429);
     }
 
     #[test]
