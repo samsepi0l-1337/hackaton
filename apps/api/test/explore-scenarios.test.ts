@@ -3,11 +3,11 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { CONTEXTS, RESOURCES, type RegionalContext, type Resource } from '@gil/shared';
 import { createApp } from '../src/app';
 import { memoryKv, createStore } from '../src/store';
-import { NOW, setup, team } from './helpers';
+import { NOW, lazyClient, register, setup, team } from './helpers';
 
 /** 호출할 때마다 10초씩 흐르는 시계 (연속 같은 답이 재전송으로 취급되지 않게). */
 const ticking = () => { let t = NOW.getTime(); return () => new Date((t += 10_000)); };
-const fresh = (opts: Parameters<typeof setup>[0] = {}) => { const t = setup({ now: ticking(), ...opts }); return { t, c: t.client() }; };
+const fresh = (opts: Parameters<typeof setup>[0] = {}) => { const t = setup({ now: ticking(), ...opts }); return { t, c: lazyClient(t) }; };
 const START_NO_IDEA = { readiness: 'no_idea', interests: ['조선·해양'], reviewRegion: '부산' };
 
 // 데이터를 임시로 바꾸는 테스트가 서로 영향을 주지 않게 되돌린다.
@@ -19,33 +19,32 @@ afterEach(() => {
 });
 const res = (id: string) => RESOURCES.find((r) => r.id === id)!;
 
-type Client = ReturnType<ReturnType<typeof setup>['client']>;
+type Client = ReturnType<typeof lazyClient>;
 const begin = async (c: Client, start: Record<string, unknown>) => { const r = await c.put('/api/explore/start', { start }); expect(r.status).toBe(200); return r.body; };
 const skipAll = async (c: Client) => { await c.post('/api/explore/chat'); let r: any; for (let i = 0; i < 3; i++) r = await c.post('/api/explore/chat', { skip: true }); return r; };
 
-describe('비회원 세션 (F9)', () => {
-  test('읽기는 쿠키를 만들지 않고, 첫 쓰기가 게스트 sid 를 만든다', async () => {
+describe('로그인 필요 (F9)', () => {
+  test('공개는 options·problems·resources 만. 나머지는 로그인 전 401', async () => {
     const { t } = fresh();
-    const raw = await t.app.request('/api/explore/session');
-    expect(raw.status).toBe(200);
-    expect(raw.headers.get('set-cookie')).toBeNull();
-    const w = await t.app.request('/api/explore/start', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ start: START_NO_IDEA }) });
-    const cookie = w.headers.get('set-cookie')!;
-    expect(cookie).toMatch(/^sid=g-/);
-    expect(cookie.toLowerCase()).toContain('httponly');
+    for (const p of ['/api/explore/options', '/api/explore/problems', '/api/resources']) expect((await t.client().get(p)).status).toBe(200);
+    const anon = t.client();
+    expect((await anon.get('/api/explore/session')).body.error.code).toBe('unauthorized');
+    const w = await anon.put('/api/explore/start', { start: START_NO_IDEA });
+    expect(w.status).toBe(401);
+    expect(w.headers.get('set-cookie')).toBeNull(); // 게스트 쿠키를 만들지 않는다
+    expect((await anon.post('/api/explore/chat')).status).toBe(401);
   });
 
   test('로그인 사용자는 user id 로 저장하고 로그인 쿠키를 지우지 않는다', async () => {
     const t = setup({ now: ticking() });
-    const c = t.client();
-    await c.post('/api/auth/signup', { email: 'z@x.com', password: 'password1', consent: true });
+    const c = await register(t, 'z@x.com');
     await begin(c, START_NO_IDEA);
     expect((await c.del('/api/explore/session')).status).toBe(200);
     expect(c.state.cookie).toMatch(/^sid=[^=]+/); // 로그인 쿠키 유지
     expect((await c.get('/api/auth/me')).body.user).not.toBeNull();
   });
 
-  test('통계는 게스트를 가입자로 세지 않고 회원과 따로 센다', async () => {
+  test('통계는 회원 세션으로만 센다 (비회원 없음)', async () => {
     const { t, c } = fresh();
     const admin = await team(t);
     const baseline = (await admin.get('/api/admin/stats')).body.users;
@@ -54,14 +53,15 @@ describe('비회원 세션 (F9)', () => {
     await c.get('/api/explore/result');
     await c.post('/api/explore/feedback', { helpful: true });
     const s = (await admin.get('/api/admin/stats')).body;
-    expect(s.users).toBe(baseline); // 게스트는 가입자로 세지 않는다
-    expect(s.explore.guests).toMatchObject({ sessions: 1, chatDone: 1, resultReached: 1, feedback: 1, helpfulRate: 1 });
-    expect(s.explore.accounts.sessions).toBe(0);
+    expect(s.users).toBe(baseline + 1);
+    expect(s.accounts).toEqual({ verified: 3, unverified: 0 }); // demo, new + 방금 가입 (team 제외)
+    expect(s.explore.guests.sessions).toBe(0);
+    expect(s.explore.accounts).toMatchObject({ sessions: 1, chatDone: 1, resultReached: 1, feedback: 1, helpfulRate: 1 });
   });
 
   test('재전송: 같은 답을 바로 다시 보내도 메시지가 늘지 않는다', async () => {
     const t = setup(); // 시계 고정
-    const c = t.client();
+    const c = lazyClient(t);
     await begin(c, { readiness: 'has_idea', idea: '동네 빵집 재고 알림' });
     await c.post('/api/explore/chat');
     const a = await c.post('/api/explore/chat', { message: '아침에 빵이 남는 걸 봤어요' });
@@ -337,7 +337,7 @@ describe('§5 수용 시나리오', () => {
     expect(after.exploration).toEqual(before.exploration);
   });
 
-  test('16. 새로고침·초기화: 같은 쿠키로 복구되고 초기화하면 서버 기록과 쿠키가 지워진다', async () => {
+  test('16. 새로고침·초기화: 같은 로그인으로 복구되고 초기화하면 탐색 기록만 지워진다', async () => {
     const { t, c } = fresh();
     await begin(c, START_NO_IDEA);
     await c.put('/api/explore/exploration', { problemId: 'pb-ship-1' });
@@ -348,9 +348,10 @@ describe('§5 수용 시나리오', () => {
     expect(ses.exploration.problemId).toBe('pb-ship-1');
     const del = await reloaded.del('/api/explore/session');
     expect(del.body.ok).toBe(true);
-    expect(del.headers.get('set-cookie')).toContain('sid=;');
-    expect((await t.client(cookie).get('/api/explore/session')).body.step).toBe('start'); // 옛 쿠키로도 기록이 없다
-    expect((await t.client(cookie).get('/api/explore/session')).body.exploration).toBeNull();
+    expect(del.headers.get('set-cookie')).toBeNull(); // 로그인 쿠키는 그대로
+    const again = (await t.client(cookie).get('/api/explore/session')).body;
+    expect(again.step).toBe('start');
+    expect(again.exploration).toBeNull();
   });
 });
 
@@ -401,10 +402,11 @@ describe('저장소 견고성', () => {
     try {
       const app = createApp({ now: () => NOW, store: () => createStore(NOW, kv) });
       expect((await app.request('/api/health')).status).toBe(200);
-      expect((await app.request('/api/explore/session')).status).toBe(200);
+      expect((await app.request('/api/explore/options')).status).toBe(200);
       const login = await app.request('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'demo@test.local', password: 'demo1234!' }) });
       expect(login.status).toBe(200);
-      const put = await app.request('/api/explore/start', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ start: START_NO_IDEA }) });
+      const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+      const put = await app.request('/api/explore/start', { method: 'PUT', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ start: START_NO_IDEA }) });
       expect(put.status).toBe(200);
       expect((await app.request('/api/programs')).status).toBe(200);
     } finally { console.warn = warn; }

@@ -22,6 +22,18 @@ export interface Bindings {
   DOC_WORKER_INTERNET?: string;
   /** 상담 횟수 제한에서 접속 IP 를 해시할 때 붙이는 솔트 (secret). 없으면 고정 문자열. 원본 IP 는 저장하지 않는다. */
   IP_HASH_SALT?: string;
+  /** K-Startup 사업공고 조회 서비스 인증키 (secret). 없으면 수집을 건너뛰고 마지막 자료를 쓴다. */
+  KSTARTUP_SERVICE_KEY?: string;
   /** 배포 버전 정보 (wrangler version_metadata). */
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
+  /** Cloudflare Email Service 바인딩 (send_email). 없으면 개발용 메일러(메모리·로그)를 쓴다. */
+  EMAIL?: { send(m: { to: string; from: string; subject: string; text: string; html: string }): Promise<{ messageId: string }> };
+  /** 보내는 주소 (예: noreply@도메인). EMAIL 바인딩과 함께 필요하다. */
+  MAIL_FROM?: string;
+  /** 메일 링크의 주소 (예: https://gil.example.com). 없으면 요청의 origin. */
+  APP_ORIGIN?: string;
+  /** 비밀번호 pepper (secret). 없으면 개발용 상수(경고 로그). */
+  PASSWORD_PEPPER?: string;
+  /** /bufs 관리자 비밀번호의 bcrypt+pepper 해시 (secret). scripts/hash-admin-password.ts 로 만든다. */
+  ADMIN_PASSWORD_HASH?: string;
 }

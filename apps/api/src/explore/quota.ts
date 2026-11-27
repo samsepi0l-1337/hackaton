@@ -1,33 +1,15 @@
 // 상담 횟수 제한 (1인당 7일 3회). 상담 1회 = 첫 질문을 받는 순간.
-// 사람 단위: 회원은 user id, 비회원은 쿠키 id 와 접속 IP 해시를 함께 센다. 어느 한쪽이 한도에 닿으면 막는다.
-// 원본 IP 는 저장하지 않는다 (SHA-256(ip + salt) 만 키에 쓴다).
-import type { Context } from 'hono';
+// 계정 id 로만 센다 (2026-11-27: 행사장에서는 여러 사람이 같은 IP 를 쓰므로 쿠키·IP 키는 쓰지 않는다).
 import { CONSULT_LIMIT, type ConsultQuota } from '@gil/shared';
-import type { AppEnv } from '../http';
 import type { Store } from '../store';
 
 const DAY_MS = 86_400_000;
-const DEFAULT_SALT = 'gil-quota-v1';
 
 export interface QuotaConfig { count: number; windowDays: number }
 export const quotaConfig = (o?: { count?: number; windowDays?: number }): QuotaConfig => ({ count: o?.count ?? CONSULT_LIMIT.count, windowDays: o?.windowDays ?? CONSULT_LIMIT.windowDays });
 
-async function sha256(text: string): Promise<string> {
-  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export const clientIp = (c: Context<AppEnv>): string =>
-  c.req.header('cf-connecting-ip')?.trim() || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
-
-/** 이 요청의 사람을 가리키는 키들. 회원 = user id 하나, 비회원 = 쿠키 id(있으면) + IP 해시. */
-export async function quotaKeys(c: Context<AppEnv>, actor: { id: string; kind: 'guest' | 'user' } | null, env?: { IP_HASH_SALT?: string }): Promise<string[]> {
-  if (actor?.kind === 'user') return [`u:${actor.id}`];
-  const salt = env?.IP_HASH_SALT || DEFAULT_SALT;
-  const keys = [`ip:${await sha256(`${clientIp(c)}${salt}`)}`];
-  if (actor) keys.unshift(`c:${actor.id}`);
-  return keys;
-}
+/** 이 사람을 가리키는 키: 계정 id 하나. */
+export const quotaKeys = (actor: { id: string } | null): string[] => (actor ? [`u:${actor.id}`] : []);
 
 const live = (times: string[], now: Date, cfg: QuotaConfig) => times.filter((t) => now.getTime() - Date.parse(t) < cfg.windowDays * DAY_MS).sort();
 

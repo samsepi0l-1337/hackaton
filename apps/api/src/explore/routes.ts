@@ -1,14 +1,16 @@
-// 개정 기획(PR #7) 비회원 탐색 API. /api/explore/* 와 /api/resources.
-// 로그인 없이 쓴다. 첫 쓰기 요청에서 게스트 id + HttpOnly 쿠키 sid 를 만들고, 상태는 KV `explore:<actorId>` 한 곳에 둔다.
+// 탐색 API. /api/explore/* 와 /api/resources.
+// 2026-11-27 변경: options·problems·resources 만 공개. 나머지는 로그인 + 이메일 인증이 필요하다. 상태는 KV `explore:<userId>` 한 곳에 둔다.
+// (예전 비회원 기록 `explore:g-*` 는 읽기만 하고 쓰지 않는다.)
 import type { Context, Hono } from 'hono';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
-  CONDITION_NOTE, CONTEXTS, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, LOCAL_AI_HEADER, LOCAL_AI_TASKS, buildFieldQuestions, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
-  REVIEW_REGIONS, SESSION_COOKIE, applySummaryEdit, buildPrep, buildRegional, buildSummary, checkConditions, coverageByRegion, coverageNote,
+  CONDITION_NOTE, CONTEXTS, activeResources, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, LOCAL_AI_HEADER, LOCAL_AI_TASKS, buildFieldQuestions, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
+  REVIEW_REGIONS, applySummaryEdit, buildPrep, buildRegional, buildSummary, checkConditions, coverageByRegion, coverageNote,
   problemOf, problemsFor, reasonFor, recommendResources, validateStart,
   type Exploration, type ExploreResultResponse, type FieldQuestion, type LocalAiTask, type ExploreSession, type PrepItem, type ReadinessStage,
   type RegionalContextCard, type Resource, type ResourceCard, type StartProfile, type SummaryEdit, type SummaryV2, type UserConditions,
 } from '@gil/shared';
+import { conditionsFromProfile } from '../auth';
+import { maskEmail } from '../bufs';
 import { createLimiter, exploreAi, problemContext } from './ai';
 import { CLOSING, MAX_QUESTIONS, OPENING, QUESTIONS, planQuestions, ruleSuggestions } from './chat';
 import type { ExploreState } from '../db/schema';
@@ -19,7 +21,6 @@ import { exemptQuota, limitMessage, quotaConfig, quotaKeys, quotaStatus, recordC
 type Ctx = Context<AppEnv>;
 const bad = (m: string, fields?: { field: string; message: string }[]) =>
   fields ? new HttpError(400, 'validation', m, fields as never) : new HttpError(400, 'bad_request', m);
-const GUEST_RE = /^g-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const EVENT_TYPES = ['start', 'chat_done', 'result', 'resource_link', 'regional_expand', 'feedback'] as const;
 /** 사람(기기)당 한 번만 세는 이벤트 */
 const ONCE_EVENTS = new Set(['start', 'chat_done', 'result']);
@@ -89,12 +90,12 @@ function aiContext(s: ExploreState): string {
 }
 
 // ---- 결과 계산 (규칙 기반, 저장된 AI 이유가 서명과 맞으면 사용) ----
-function computeResult(s: ExploreState, now: Date): ExploreResultResponse {
+function computeResult(s: ExploreState, now: Date, resources: Resource[], defaults?: UserConditions): ExploreResultResponse {
   const ex = s.exploration as Exploration | null;
   const summary = asSummary(s.summary) ?? buildSummary({ start: s.start as StartProfile, exploration: ex, answers: s.answers });
-  const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: s.start.conditions as UserConditions | undefined, now });
+  const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: (s.start.conditions as UserConditions | undefined) ?? defaults, now, resources });
   const sig = aiSig(s);
-  const resources: ResourceCard[] = rec.items.map((r) => {
+  const cards: ResourceCard[] = rec.items.map((r) => {
     const rule = reasonFor(r.resource, s.start.readiness, r.linked);
     const aiText = s.ai?.sig === sig ? s.ai.reasons[r.resource.id] : undefined;
     return {
@@ -110,16 +111,16 @@ function computeResult(s: ExploreState, now: Date): ExploreResultResponse {
   return {
     summary, regional, contexts,
     prep: { primary: mark(prep.primary), followUps: prep.followUps.map(mark) },
-    resources, noMatchReason: rec.noMatchReason,
-    coverageNote: coverageNote(s.start.reviewRegion),
+    resources: cards, noMatchReason: rec.noMatchReason,
+    coverageNote: coverageNote(s.start.reviewRegion, PROBLEMS, activeResources(resources, now), CONTEXTS),
     conditionNote: CONDITION_NOTE,
     // 저장된 AI 문장은 문제·방향 서명이 같을 때만 쓴다. 문제가 바뀌면 규칙 질문으로 다시 만든다.
     fieldQuestions: s.fieldQ?.sig === fieldSig(s) ? s.fieldQ.items as FieldQuestion[] : ruleFieldQuestions(s, summary),
   };
 }
 
-function cardFor(r: Resource, s: ExploreState | undefined, now: Date): ResourceCard {
-  const cond = checkConditions(r, s?.start.conditions as UserConditions | undefined, now);
+function cardFor(r: Resource, s: ExploreState | undefined, now: Date, defaults?: UserConditions): ResourceCard {
+  const cond = checkConditions(r, (s?.start.conditions as UserConditions | undefined) ?? defaults, now);
   const reg = s?.start.reviewRegion;
   return {
     resource: r, reason: `${r.content}${r.target ? ` (대상: ${r.target})` : ''}`, reasonProvenance: 'rule',
@@ -146,23 +147,38 @@ export function exploreStats(store: Store) {
   return { unit: '비회원은 기기(쿠키) 세션 1개, 회원은 계정 1개. 실제 사람 수가 아니에요.', guests: tally('guest'), accounts: tally('user'), limitHits: store.limitHits() };
 }
 
-export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLimit?: number; consultLimit?: { count?: number; windowDays?: number }; env?: { IP_HASH_SALT?: string } }) {
+export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resources?: () => Resource[]; aiLimit?: number; consultLimit?: { count?: number; windowDays?: number } }) {
   const allow = createLimiter(opts.aiLimit ?? 40);
   const cfg: QuotaConfig = quotaConfig(opts.consultLimit);
+  /** 팀 검수 자료 + 수집한 실제 지원사업. */
+  const resourcesNow = (): Resource[] => opts.resources?.() ?? RESOURCES;
 
-  // ---- 행위자 ----
-  const readActor = (c: Ctx): { id: string; kind: 'guest' | 'user' } | null => {
+  // ---- 로그인 필요 ----
+  // options·problems 는 공개. 나머지 /api/explore/* 는 로그인(401) + 이메일 인증(403 email_unverified).
+  // (복구 비밀번호 세션의 403 password_change_required 는 app.ts 공통 미들웨어가 먼저 막는다.)
+  const PUBLIC_PATHS = new Set(['/api/explore/options', '/api/explore/problems']);
+  app.use('/api/explore/*', async (c, next) => {
+    if (c.req.method === 'OPTIONS' || PUBLIC_PATHS.has(c.req.path)) return next();
     const u = c.get('user');
-    if (u) return { id: u.id, kind: 'user' };
-    const t = getCookie(c, SESSION_COOKIE);
-    return t && GUEST_RE.test(t) ? { id: t, kind: 'guest' } : null;
+    if (!u) throw new HttpError(401, 'unauthorized', '로그인이 필요해요');
+    if (!u.emailVerified) throw new HttpError(403, 'email_unverified', '이메일 인증을 마치면 창업 준비를 시작할 수 있어요');
+    return next();
+  });
+  type Actor = { id: string; kind: 'guest' | 'user' };
+  /** 로그인한 사용자 (공개 경로에서는 null). */
+  const readActor = (c: Ctx): Actor | null => {
+    const u = c.get('user');
+    return u ? { id: u.id, kind: 'user' } : null;
   };
-  const writeActor = (c: Ctx) => {
+  /** 내 정보의 기본값 → 직접 입력한 조건이 없을 때 쓰는 기본 조건. */
+  const defaultsOf = (c: Ctx): UserConditions | undefined => {
+    const u = c.get('user');
+    return u ? conditionsFromProfile(c.get('store').basicProfile(u.id)) : undefined;
+  };
+  const writeActor = (c: Ctx): Actor => {
     const a = readActor(c);
-    if (a) return a;
-    const id = `g-${crypto.randomUUID()}`;
-    setCookie(c, SESSION_COOKIE, id, { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: 60 * 60 * 24 * 14, secure: new URL(c.req.url).protocol === 'https:' });
-    return { id, kind: 'guest' as const };
+    if (!a) throw new HttpError(401, 'unauthorized', '로그인이 필요해요');
+    return a;
   };
   /** 읽기: 기록이 없으면 저장하지 않는 빈 상태. */
   const peek = (c: Ctx): ExploreState => {
@@ -178,9 +194,8 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     s.updatedAt = c.get('now').toISOString();
     return { actor: a, s };
   };
-  // ---- 상담 횟수 ----
-  const saltOf = (c: Ctx) => ({ IP_HASH_SALT: (c.env as { IP_HASH_SALT?: string } | undefined)?.IP_HASH_SALT ?? opts.env?.IP_HASH_SALT });
-  const keysOf = (c: Ctx, a: { id: string; kind: 'guest' | 'user' } | null) => quotaKeys(c, a, saltOf(c));
+  // ---- 상담 횟수 (계정 id 로만 센다) ----
+  const keysOf = (_c: Ctx, a: Actor | null) => quotaKeys(a);
   const isExempt = (c: Ctx) => c.get('user')?.isTeam === true;
   const quotaOf = async (c: Ctx, a: { id: string; kind: 'guest' | 'user' } | null) =>
     isExempt(c) ? exemptQuota(cfg) : (({ blocked: _b, ...q }) => q)(quotaStatus(c.get('store'), await keysOf(c, a), c.get('now'), cfg));
@@ -199,9 +214,9 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     readiness: READINESS_OPTIONS,
     interests: [...INDUSTRY_TAGS, ...INTEREST_EXTRA],
     regions: REVIEW_REGIONS,
-    coverage: coverageByRegion(),
+    coverage: coverageByRegion(PROBLEMS, activeResources(resourcesNow(), c.get('now')), CONTEXTS),
     dataVersion: EXPLORE_DATA_VERSION,
-    privacy: '입력한 내용은 이 서비스 서버에 저장되고, 문장 정리를 위해 외부 AI(Upstage Solar)로 전송될 수 있어요. 이 기기의 쿠키로만 이어지며 기기·브라우저가 바뀌면 이어지지 않아요. "처음부터 다시"를 누르면 서버에 저장된 내 기록과 쿠키가 지워지고, 익명 집계(횟수)만 남아요.',
+    privacy: '입력한 내용은 이 서비스 서버에 저장되고, 문장 정리를 위해 외부 AI(Upstage Solar)로 전송될 수 있어요. 내 계정에 저장되어 다른 기기에서도 이어져요. "처음부터 다시"를 누르면 서버에 저장된 내 탐색 기록이 지워지고, 익명 집계(횟수)만 남아요.',
   }));
 
   app.get('/api/explore/problems', (c) => {
@@ -216,9 +231,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
   app.delete('/api/explore/session', async (c) => {
     const a = readActor(c);
     if (a) c.get('store').deleteExplore(a.id);
-    // 회원의 로그인 쿠키는 지우지 않는다 (탐색 기록만 삭제).
-    if (a?.kind !== 'user' && getCookie(c, SESSION_COOKIE)) deleteCookie(c, SESSION_COOKIE, { path: '/' });
-    // 이미 쓴 상담 횟수는 돌려주지 않는다 (횟수는 쿠키·IP 키에 따로 있다).
+    // 로그인 쿠키는 지우지 않는다 (탐색 기록만 삭제). 이미 쓴 상담 횟수는 돌려주지 않는다 (횟수는 계정 id 키에 따로 있다).
     return c.json({ ok: true, session: await view(c, emptyState(c.get('now'), a?.kind ?? 'guest'), a) });
   });
 
@@ -422,7 +435,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     s.summary = summary;
     s.regional = reg?.card ?? null;
     // 추천 이유는 규칙 결과에 대해서만 AI 문장으로 다듬는다.
-    const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: s.start.conditions as UserConditions | undefined, now });
+    const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: (s.start.conditions as UserConditions | undefined) ?? defaultsOf(c), now, resources: resourcesNow() });
     const reasons: Record<string, string> = {};
     await Promise.all(rec.items.map(async (r) => {
       const t = await ai.reason(r.resource, reasonFor(r.resource, s.start.readiness, r.linked), ctx);
@@ -470,7 +483,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     const s = (a && c.get('store').explore(a.id)) || emptyState(c.get('now'), a?.kind ?? 'guest');
     const saved = !!a && !!c.get('store').explore(a.id);
     if (saved) { bump(s, 'result'); s.step = 'result'; touch(s, c); }
-    const result = computeResult(s, c.get('now'));
+    const result = computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c));
     // 현장 질문 문장 다듬기 (선택). 로컬 AI 가 'field' 를 맡으면 Solar 를 부르지 않는다. 저장된 문장이 서명과 맞으면 다시 부르지 않는다.
     if (saved && a && s.fieldQ?.sig !== fieldSig(s) && !localTasks(c).has('field')) {
       const now = c.get('now');
@@ -490,19 +503,19 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     if (cond) s.start = { ...s.start, conditions: cond }; else { const { conditions: _x, ...rest } = s.start; s.start = rest; }
     s.regional = null;
     touch(s, c);
-    return c.json(computeResult(s, c.get('now')));
+    return c.json(computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c)));
   });
 
   app.put('/api/explore/prep', async (c) => {
     const b = await body(c);
     if (typeof b.id !== 'string' || typeof b.done !== 'boolean') throw bad('id와 done이 필요해요');
     const { s } = open(c);
-    const prep = computeResult(s, c.get('now')).prep;
+    const prep = computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c)).prep;
     const ids = [prep.primary, ...prep.followUps].map((p) => p.id);
     if (!ids.includes(b.id)) throw new HttpError(404, 'not_found', '지금 준비 안내에 없는 항목이에요');
     s.prepDone[b.id] = b.done; // '준비 완료 표시'일 뿐 실제 수행의 증거가 아니다
     touch(s, c);
-    return c.json({ prep: computeResult(s, c.get('now')).prep });
+    return c.json({ prep: computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c)).prep });
   });
 
   // ---- 피드백·이벤트 ----
@@ -528,6 +541,16 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     };
     bump(s, 'feedback');
     touch(s, c);
+    // /bufs 관리자용: 제출 한 건씩 따로 남긴다 (제출 시점의 값, 이메일은 가림, 원문 대화 없음).
+    const f = s.feedback;
+    const me = c.get('user');
+    c.get('store').addFeedback({
+      id: `fb-${crypto.randomUUID()}`, createdAt: f.at, user: me ? maskEmail(me.email) : '',
+      readiness: s.start.readiness ?? null, problemId: s.exploration?.problemId ?? null, reviewRegion: s.start.reviewRegion ?? null,
+      helpful: f.helpful ?? null, reason: f.reason ?? null, directionClear: f.directionClear ?? null, wantToExplore: f.wantToExplore ?? null,
+      knowWhatToPrepare: f.knowWhatToPrepare ?? null, regionIntent: f.regionIntent ?? null,
+      foundRegionalPath: f.foundRegionalPath ?? null, pathName: f.pathName ?? null,
+    });
     return c.json({ ok: true });
   });
 
@@ -547,18 +570,18 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; aiLim
     if (stage && !READINESS_OPTIONS.some((o) => o.value === stage)) throw bad('stage 값이 올바르지 않아요');
     const a = readActor(c);
     const s = a ? c.get('store').explore(a.id) : undefined;
-    const items = RESOURCES
+    const items = resourcesNow()
       .filter((r) => (!type || r.type === type) && (!stage || r.stages.includes(stage as ReadinessStage))
         && (!q || [r.title, r.agency, r.content, ...r.capabilityTags].some((x) => x.toLowerCase().includes(q))))
-      .map((r) => cardFor(r, s, c.get('now')));
+      .map((r) => cardFor(r, s, c.get('now'), defaultsOf(c)));
     return c.json({ items });
   });
 
   app.get('/api/resources/:id', (c) => {
-    const r = RESOURCES.find((x) => x.id === c.req.param('id'));
+    const r = resourcesNow().find((x) => x.id === c.req.param('id'));
     if (!r) throw new HttpError(404, 'not_found', '경로를 찾을 수 없어요');
     const a = readActor(c);
-    return c.json(cardFor(r, a ? c.get('store').explore(a.id) : undefined, c.get('now')));
+    return c.json(cardFor(r, a ? c.get('store').explore(a.id) : undefined, c.get('now'), defaultsOf(c)));
   });
 }
 

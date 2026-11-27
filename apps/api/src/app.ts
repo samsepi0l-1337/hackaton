@@ -1,8 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { getCookie } from 'hono/cookie';
 import {
-  MENTOR_PROGRAM_DEFLECT, MENTOR_QUESTION_COUNT, MOCK_FORM_FIELDS, PASSWORD_MIN, SESSION_COOKIE, STAGES,
+  MENTOR_PROGRAM_DEFLECT, MENTOR_QUESTION_COUNT, MOCK_FORM_FIELDS, SESSION_COOKIE, STAGES,
   asksAboutPrograms, buildPlan, draftSummary, homeSummary, isClosed, isProfileComplete, listPrograms,
   mentorOpening, parseVerdict, pickAgencies, pickMentorQuestions, recommend, relevanceCandidates, scoreTypeTest, toCard,
   validateProfile, PROGRAM_CATEGORIES, TYPE_QUESTIONS,
@@ -10,13 +10,19 @@ import {
   type ConsultProfile, type ErrorCode, type FieldError, type FormField, type IdeaSummary, type MentorSession,
   type Program, type ProgramListQuery, type Stats, type User,
 } from '@gil/shared';
-import { hashPassword, randomToken, verifyPassword } from './password';
+import { mountAuth, publicUser } from './auth';
+import { mountBufs } from './bufs';
+import { createDevMailer, pickMailer, type Mailer } from './mail';
+import { createPasswords } from './password';
 import type { Bindings } from './env';
 import { createAiTasks } from './ai/tasks';
 import { readAnnouncementForm, type DocWorkerClient } from './docs/pipeline';
 import { HttpError, type AppEnv } from './http';
 import { exploreStats, mountExplore } from './explore/routes';
-import { createStore, emptyMentor, type MentorState, type Store, type UserRecord } from './store';
+import { mergeResources, RESOURCES } from '@gil/shared';
+import { mountKStartup } from './kstartup/routes';
+import { createKStartupStore, type KStartupStore } from './kstartup/store';
+import { createStore, emptyMentor, memoryKv, type MentorState, type Store, type UserRecord } from './store';
 
 export interface AppOptions {
   now?: () => Date;
@@ -30,10 +36,14 @@ export interface AppOptions {
   docWorkerFor?: (env: Bindings) => DocWorkerClient | null;
   /** 저장소. 기본은 메모리. Workers 에서는 Durable Object KV. */
   store?: () => Promise<Store>;
+  /** 실제 지원사업(K-Startup) 저장소. 기본은 메모리. Workers 에서는 Durable Object KV. */
+  kstartup?: KStartupStore;
   /** 탐색 AI 호출 한도 (행위자당 시간당). 기본 40. */
   exploreAiLimit?: number;
   /** 테스트용: 상담 횟수 제한 덮어쓰기 (기본 CONSULT_LIMIT: 7일 3회). */
   consultLimit?: { count?: number; windowDays?: number };
+  /** 메일 보내기. 없으면 env.EMAIL 바인딩, 그것도 없으면 개발용 메일러. */
+  mailer?: Mailer;
 }
 
 type Env = AppEnv;
@@ -42,14 +52,15 @@ type Ctx = Context<Env>;
 const bad = (m: string) => new HttpError(400, 'bad_request', m);
 const notFound = (m = '찾을 수 없어요') => new HttpError(404, 'not_found', m);
 
+/** 복구 비밀번호 세션에서도 쓸 수 있는 경로 (나머지는 403 password_change_required). */
+const MUST_CHANGE_ALLOWED = new Set(['/api/auth/me', '/api/auth/password', '/api/auth/logout']);
+
 const FORM_TIMEOUT_MS = 30_000;
 /** 신원 정보 항목: AI가 채우지 않는다. */
 const IDENTITY_RE = /(성명|이름|대표자|연락처|전화|휴대|이메일|e-?mail|주소|생년월일)/i;
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))]);
 }
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function json(c: Ctx): Promise<Record<string, unknown>> {
   try {
@@ -61,8 +72,6 @@ async function json(c: Ctx): Promise<Record<string, unknown>> {
 async function jsonOrEmpty(c: Ctx): Promise<Record<string, unknown>> {
   try { return await json(c); } catch { return {}; }
 }
-
-const publicUser = (u: UserRecord): User => ({ id: u.id, email: u.email, isTeam: u.isTeam, createdAt: u.createdAt });
 
 // ---- 프로필 정리 ----
 const ARRAY_FIELDS = new Set(['revenue', 'customerAges', 'needs']);
@@ -106,7 +115,13 @@ export function createApp(opts: AppOptions = {}) {
     c.set('ai', createAiTasks({ ...opts.env, ...(c.env ?? {}) }, { fetch: opts.fetch }));
     const token = getCookie(c, SESSION_COOKIE);
     const uid = token ? store.userIdOfSession(token) : undefined;
-    c.set('user', (uid && store.findUser(uid)) || null);
+    const found = uid ? store.findUser(uid) : undefined;
+    // 복구 비밀번호로 연 세션은 비밀번호를 바꿀 때까지 mustChangePassword (세션 단위).
+    const user = found ? { ...found, mustChangePassword: token ? store.sessionMustChange(token) : false } : null;
+    c.set('user', user);
+    if (user?.mustChangePassword && !MUST_CHANGE_ALLOWED.has(c.req.path)) {
+      throw new HttpError(403, 'password_change_required', '복구 비밀번호로 로그인했어요. 먼저 새 비밀번호를 정해 주세요');
+    }
     try {
       await next();
     } finally {
@@ -182,56 +197,15 @@ export function createApp(opts: AppOptions = {}) {
     return c.json({ program: p, dDay: card.dDay, eligibility: card.eligibility });
   });
 
-  // ---- 인증 ----
-  const startSession = (c: Ctx, userId: string) => {
-    const token = randomToken();
-    c.get('store').createSession(token, userId);
-    setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: 60 * 60 * 24 * 14, secure: new URL(c.req.url).protocol === 'https:' });
-  };
-
-  app.post('/api/auth/signup', async (c) => {
-    const b = await json(c);
-    const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
-    const password = typeof b.password === 'string' ? b.password : '';
-    if (!EMAIL_RE.test(email)) throw bad('이메일 형식이 올바르지 않아요');
-    if (password.length < PASSWORD_MIN) throw bad(`비밀번호는 ${PASSWORD_MIN}자 이상이어야 해요`);
-    if (b.consent !== true) throw bad('개인정보 수집·이용에 동의해 주세요');
-    const store = c.get('store');
-    if (store.findUserByEmail(email)) throw new HttpError(409, 'conflict', '이미 가입한 이메일이에요');
-    const user: UserRecord = { id: `u-${crypto.randomUUID()}`, email, isTeam: false, createdAt: c.get('now').toISOString(), passwordHash: await hashPassword(password) };
-    store.addUser(user);
-    startSession(c, user.id);
-    return c.json({ user: publicUser(user) }, 201);
+  // ---- 계정 (auth.ts) ----
+  const devMailer = createDevMailer();
+  const envOf = (c: Ctx): Bindings => ({ ...opts.env, ...(c.env ?? {}) });
+  mountAuth(app, {
+    mailerFor: (e) => opts.mailer ?? pickMailer({ ...opts.env, ...e }, devMailer),
+    requireUser,
+    passwordsFor: (c) => createPasswords(envOf(c).PASSWORD_PEPPER),
   });
-
-  app.post('/api/auth/login', async (c) => {
-    const b = await json(c);
-    const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
-    const password = typeof b.password === 'string' ? b.password : '';
-    const user = c.get('store').findUserByEmail(email);
-    if (!user || !(await verifyPassword(password, user.passwordHash))) throw new HttpError(401, 'unauthorized', '이메일 또는 비밀번호가 맞지 않아요');
-    startSession(c, user.id);
-    return c.json({ user: publicUser(user) });
-  });
-
-  app.post('/api/auth/logout', (c) => {
-    const token = getCookie(c, SESSION_COOKIE);
-    if (token) c.get('store').deleteSession(token);
-    deleteCookie(c, SESSION_COOKIE, { path: '/' });
-    return c.json({ ok: true });
-  });
-
-  app.get('/api/auth/me', (c) => {
-    const u = c.get('user');
-    return c.json({ user: u ? publicUser(u) : null });
-  });
-
-  app.delete('/api/me', (c) => {
-    const u = requireUser(c);
-    c.get('store').deleteUser(u.id);
-    deleteCookie(c, SESSION_COOKIE, { path: '/' });
-    return c.json({ ok: true });
-  });
+  mountBufs(app, { passwordsFor: (c) => createPasswords(envOf(c).PASSWORD_PEPPER), envOf });
 
   // ---- 창업 유형 테스트 ----
   app.post('/api/type-test', async (c) => {
@@ -588,10 +562,14 @@ export function createApp(opts: AppOptions = {}) {
       submitSuccessRate: rate(done, done + failed),
       testToConsultRate: rate(withType.filter((x) => store.mentor(x.id).messages.length > 0).length, withType.length),
     };
-    return c.json({ ...stats, explore: exploreStats(store) });
+    const members = store.allUsers().filter((x) => !x.isTeam);
+    const accounts = { verified: members.filter((x) => x.emailVerified).length, unverified: members.filter((x) => !x.emailVerified).length };
+    return c.json({ ...stats, accounts, explore: exploreStats(store) });
   });
 
-  mountExplore(app, { clock, aiLimit: opts.exploreAiLimit, consultLimit: opts.consultLimit, env: opts.env });
+  const kstartup = opts.kstartup ?? createKStartupStore(memoryKv());
+  mountKStartup(app, { store: kstartup, env: opts.env, fetch: opts.fetch });
+  mountExplore(app, { clock, aiLimit: opts.exploreAiLimit, consultLimit: opts.consultLimit, resources: () => mergeResources(RESOURCES, kstartup.resources()) });
 
   return app;
 }

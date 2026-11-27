@@ -7,6 +7,7 @@ export * from './profile';
 export * from './mentor';
 export * from './typeTest';
 export * from './kstartup';
+export * from './kstartup-resource';
 export * from './query';
 export * from './seed';
 export * from './api';
