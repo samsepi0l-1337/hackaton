@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { ReactNode } from 'react';
 import type { User } from '@gil/shared';
 import { api } from '../api/client';
-import { loadLocalTest, clearLocalTest } from '../lib/typeTestStorage';
 
 interface AuthValue {
   user: User | null;
@@ -22,12 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.me().then((r) => setUserState(r.user)).catch(() => setUserState(null)).finally(() => setLoading(false));
   }, []);
 
-  // 로그인 전에 한 테스트 결과는 로그인 뒤 계정에 저장한다 (F19).
-  const setUser = useCallback((u: User | null) => {
-    setUserState(u);
-    const local = u ? loadLocalTest() : null;
-    if (local) api.typeTest({ answers: local.answers }).then(clearLocalTest).catch(() => {});
-  }, []);
+  const setUser = useCallback((u: User | null) => setUserState(u), []);
 
   const logout = useCallback(async () => {
     await api.logout().catch(() => {});

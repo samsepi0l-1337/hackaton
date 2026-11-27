@@ -210,7 +210,11 @@ describe('지역 검토 카드', () => {
   });
   test('경로가 있으면 근거 있음, 종료된 경로는 연결하지 않는다', () => {
     const r1 = res({ id: 'r1', regions: ['울산'], contextIds: ['c1'] });
-    const ok = buildRegional({ start: { reviewRegion: '울산', interests: ['자동차'] }, exploration: null, now: NOW, contexts: [ctx], resources: [r1] });
+    // 테스트 자료(공식 URL·확인일 없음)는 근거 있음이 아니다
+    const unverified = buildRegional({ start: { reviewRegion: '울산', interests: ['자동차'] }, exploration: null, now: NOW, contexts: [ctx], resources: [r1] });
+    expect(unverified!.card).toMatchObject({ status: 'needs_check', resourceIds: ['r1'] });
+    const verifiedCtx = { ...ctx, test: false, url: 'https://example.go.kr/x', checkedAt: '2026-11-27' };
+    const ok = buildRegional({ start: { reviewRegion: '울산', interests: ['자동차'] }, exploration: null, now: NOW, contexts: [verifiedCtx], resources: [r1] });
     expect(ok!.card).toMatchObject({ status: 'has_basis', resourceIds: ['r1'] });
     const closed = buildRegional({ start: { reviewRegion: '울산', interests: ['자동차'] }, exploration: null, now: NOW, contexts: [ctx], resources: [{ ...r1, recruitStatus: 'closed' }] });
     expect(closed!.card.resourceIds).toEqual([]);

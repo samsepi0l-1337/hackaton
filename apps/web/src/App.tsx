@@ -6,9 +6,7 @@ import { Home } from './pages/Home';
 import { Programs } from './pages/Programs';
 import { ProgramDetail } from './pages/ProgramDetail';
 import { Mentor } from './pages/Mentor';
-import { TypeTest } from './pages/TypeTest';
 import { Login, Signup } from './pages/Auth';
-import { Apply } from './pages/Apply';
 import { Me } from './pages/Me';
 import { Admin } from './pages/Admin';
 import { Licenses, NotFound } from './pages/Misc';
@@ -28,11 +26,9 @@ export function App() {
           <Route path="/" element={<Home />} />
           <Route path="/programs" element={<Programs />} />
           <Route path="/programs/:id" element={<ProgramDetail />} />
-          <Route path="/mentor" element={<RequireAuth><Mentor /></RequireAuth>} />
-          <Route path="/test" element={<TypeTest />} />
+          <Route path="/mentor" element={<Mentor />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/apply/:programId" element={<RequireAuth><Apply /></RequireAuth>} />
           <Route path="/me" element={<RequireAuth><Me /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
           <Route path="/licenses" element={<Licenses />} />

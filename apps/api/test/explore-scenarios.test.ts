@@ -278,7 +278,7 @@ describe('§5 수용 시나리오', () => {
     await c.put('/api/explore/exploration', { problemId: 'pb-ship-1' });
     await c.post('/api/explore/summary');
     const busan = (await c.get('/api/explore/result')).body.regional;
-    expect(busan.status).toBe('has_basis');
+    expect(busan.status).toBe('needs_check'); // 지금 자료는 모두 테스트 자료라 '검토할 근거 있음'이 될 수 없다
     expect(busan.sourceIds).toEqual(['ctx-busan-ship']);
     expect(busan.resourceIds.length).toBeGreaterThan(0);
     await c.put('/api/explore/start', { start: { reviewRegion: '울산' } });

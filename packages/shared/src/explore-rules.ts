@@ -311,7 +311,9 @@ export function buildRegional(input: RegionalInput): { card: RegionalContextCard
     .filter((r) => r.regions.some((x) => x === region || x === '부울경') && (r.contextIds.some((id) => ctxIds.has(id)) || (problem?.resourceIds ?? []).includes(r.id)) && !checkConditions(r, undefined, input.now).closed)
     .map((r) => r.id);
 
-  const status: RegionalStatus = contexts.length > 0 && resourceIds.length > 0 ? 'has_basis' : industries.length === 0 ? 'weak' : 'needs_check';
+  // '검토할 근거 있음'은 공식 URL·확인일이 있는 검수 자료가 있을 때만. 테스트 자료는 '추가 확인 필요'.
+  const verified = contexts.filter((c) => !c.test && !!c.url && !!c.checkedAt);
+  const status: RegionalStatus = verified.length > 0 && resourceIds.length > 0 ? 'has_basis' : industries.length === 0 ? 'weak' : 'needs_check';
   const want = industries.length ? industries.join('·') : '아직 고르지 않은 분야';
   let basis: string;
   if (contexts.length) {
