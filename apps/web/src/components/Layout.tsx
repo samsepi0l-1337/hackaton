@@ -106,7 +106,7 @@ export function Layout() {
         <div className="portal-width masthead">
           <Link className="brand" to="/" aria-label="해보까 홈" {...cur('/')}>
             <img src="/brand.svg" alt="" />
-            <span><b>해보까</b></span>
+            <span className="wordmark"><b className="wm-navy">해보</b><b className="wm-red">까</b><b className="wm-blue">?</b></span>
           </Link>
           <div className="mast-actions">
             <div className="utility">
@@ -169,7 +169,7 @@ export function Layout() {
       <main id="main" className="main"><Suspense fallback={<div className="container"><CardSkeletons /></div>}><RouteErrorBoundary key={loc.pathname}><Outlet /></RouteErrorBoundary></Suspense></main>
       <footer className="footer">
         <div className="portal-width footer-inner">
-          <strong>해보까</strong>
+          <strong className="wordmark"><b className="wm-navy">해보</b><b className="wm-red">까</b><b className="wm-blue">?</b></strong>
           <p>로그인해서 보낸 상담 입력과 내 정보는 서버에 저장되고, 상담 문장은 외부 AI(Upstage)로 전송될 수 있어요. 상담 결과 화면의 초기화는 서버에 저장된 탐색 기록과 이 브라우저의 상담·테스트 저장분을 지워요. 계정을 지우면 서버 데이터가 지워지고, 브라우저 저장분은 따로 지워야 해요.</p>
           <p>공고 출처 · 공공데이터포털 K-Startup　|　<Link to="/licenses">오픈소스 라이선스</Link></p>
         </div>

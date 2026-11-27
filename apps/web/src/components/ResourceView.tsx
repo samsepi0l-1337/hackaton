@@ -1,18 +1,18 @@
 import { Link } from 'react-router-dom';
-import { CONDITION_NOTE, CONDITION_STATUS_LABEL, RECRUIT_STATUS_LABEL } from '@gil/shared';
+import { CONDITION_NOTE } from '@gil/shared';
 import { LOCAL_AI_NOTE } from '../lib/localAi';
 import { HeartButton } from './HeartButton';
 import type { ConditionStatus, RecruitStatus, Resource, ResourceCard } from '@gil/shared';
 
-const RECRUIT_MARK: Record<RecruitStatus, string> = { open: '●', closed: '■', always: '◆', unknown: '?' };
-const COND_MARK: Record<ConditionStatus, string> = { match: '✓', check: '?', mismatch: '✗' };
+// 화면에 쓰는 짧은 이름. 공유 라벨(API·Rust 와 맞물림)은 바꾸지 않는다.
+const RECRUIT_TEXT: Record<RecruitStatus, string> = { open: '모집 중', closed: '마감', always: '상시', unknown: '마감일 미정' };
+const COND_TEXT: Record<ConditionStatus, string> = { match: '조건 맞음', check: '확인 필요', mismatch: '조건 다름' };
 
-/** 색만으로 구분하지 않도록 기호와 글자를 함께 쓴다. */
 export function RecruitBadge({ status }: { status: RecruitStatus }) {
-  return <span className={`badge recruit-${status}`}><span aria-hidden="true">{RECRUIT_MARK[status]} </span>{RECRUIT_STATUS_LABEL[status]}</span>;
+  return <span className={`badge recruit-${status}`}><span className="status-dot" aria-hidden="true" />{RECRUIT_TEXT[status]}</span>;
 }
 export function ConditionBadge({ status }: { status: ConditionStatus }) {
-  return <span className={`badge cond-${status}`}><span aria-hidden="true">{COND_MARK[status]} </span>{CONDITION_STATUS_LABEL[status]}</span>;
+  return <span className={`badge cond-${status}`}><span className="status-dot" aria-hidden="true" />{COND_TEXT[status]}</span>;
 }
 
 export function SourceLine({ r, onLink, label = '공식 안내 확인' }: { r: Resource; onLink?: () => void; label?: string }) {
