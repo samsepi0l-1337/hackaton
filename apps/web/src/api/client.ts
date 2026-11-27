@@ -16,14 +16,18 @@ export const AUTH_GATE_EVENT = 'gil:auth-gate';
 export interface FocusInfo { id: string; title: string; agency: string; type: string; endDate: string | null; recruitStatus: string; url: string | null }
 export type StartWithFocus = StartProfile & { focusResourceId?: string | null };
 export type FocusSession = ExploreSession & { focus?: FocusInfo | null };
+export interface PolishSuggestion { key: string; before: string; after: string }
+export interface PolishResponse { suggestions: PolishSuggestion[]; remaining: number }
+export type ExportFormat = 'docx' | 'hwpx';
+export interface ExportResponse { fileName: string; mimeType: string; fileBase64: string; source: 'form' | 'standard' }
 export interface ApplicationQuota { used: number; limit: number | null; remaining: number | null; resetAt: string | null; blocked: boolean }
 
 export class ApiClientError extends Error {
-  code: ErrorCode | 'network' | 'application_limit';
+  code: ErrorCode | 'network' | 'application_limit' | 'polish_limit' | 'ai_unavailable';
   fields: FieldError[];
   status: number;
   quota?: ConsultQuota;
-  constructor(status: number, code: ErrorCode | 'network' | 'application_limit', message: string, fields: FieldError[] = [], quota?: ConsultQuota) {
+  constructor(status: number, code: ErrorCode | 'network' | 'application_limit' | 'polish_limit' | 'ai_unavailable', message: string, fields: FieldError[] = [], quota?: ConsultQuota) {
     super(message);
     this.status = status;
     this.code = code;
@@ -141,4 +145,6 @@ export const api = {
   updateApplication: (id: string, b: UpdateApplicationRequest) => put<ApplicationView>(ROUTES.application(id), b),
   approveApplication: (id: string) => post<ApplicationView>(ROUTES.approve(id), { confirm: true } satisfies ApproveRequest),
   retryApplication: (id: string) => post<ApplicationView>(ROUTES.retry(id)),
+  polishApplication: (id: string, values: Record<string, string>) => post<PolishResponse>(`${ROUTES.application(id)}/polish`, { values }),
+  exportApplication: (id: string, format: ExportFormat) => get<ExportResponse>(`${ROUTES.application(id)}/export?format=${format}`),
 };

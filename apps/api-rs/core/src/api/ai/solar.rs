@@ -56,9 +56,10 @@ impl TextAi<'_> {
             return None;
         }
         let metadata = json!({"app":"gil", "task":task, "user_id":user_id.unwrap_or("anon")});
+        let lookup_task = if task == "polish" { "draft" } else { task };
         let timeout = AI_TIMEOUT_BY_TASK
             .iter()
-            .find(|(k, _)| *k == task)
+            .find(|(k, _)| *k == lookup_task)
             .map(|(_, n)| *n)
             .unwrap_or(AI_TIMEOUT_MS);
         let result = if self.mode == "route" {
@@ -89,7 +90,7 @@ impl TextAi<'_> {
             extra.insert("cf-aig-metadata".into(), metadata.to_string());
             let model = SOLAR_MODELS
                 .iter()
-                .find(|(k, _)| *k == task)
+                .find(|(k, _)| *k == lookup_task)
                 .map(|(_, v)| *v)
                 .unwrap_or("");
             let req = HttpReq {

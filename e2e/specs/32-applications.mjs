@@ -29,7 +29,7 @@ await step('first non-closed program starts 지원서 작성 and opens applicati
 
 await step('practice notice is visible and required fields reach 제출 전 확인', async () => {
   await page.waitForSelector('.apply-page [role="note"]');
-  assert(await page.evaluate(() => document.querySelector('.apply-page [role="note"]').innerText.includes('모의로 처리돼요')), 'practice notice');
+  assert(await page.evaluate(() => document.querySelector('.apply-page [role="note"]').innerText.includes('대신 제출하지 않아요')), 'no auto-submit notice');
   await page.waitForSelector('.apply-page form');
   const fields = await page.evaluate(() => [...document.querySelectorAll('.apply-page form .apply-field')]
     .filter(field => field.querySelector('[aria-label="필수"]'))
@@ -45,11 +45,11 @@ await step('practice notice is visible and required fields reach 제출 전 확�
   assert((await bodyText()).includes('작성한 내용을 확인했어요'), 'confirmation checkbox label');
 });
 
-await step('모의 제출 shows MOCK- receipt', async () => {
+await step('작성 완료 shows the download guide', async () => {
   await page.click('.apply-page label.check input[type="checkbox"]');
-  await page.click('.apply-page button:has-text("모의 제출")');
-  await page.waitForSelector('.apply-receipt');
-  assert(await page.evaluate(() => document.querySelector('.apply-receipt').innerText.includes('MOCK-')), 'mock receipt');
+  await page.click('.apply-page button:has-text("작성 완료")');
+  await seeText('지원서를 완성했어요');
+  assert(!(await bodyText()).includes('MOCK-'), 'no mock receipt shown');
 });
 
 await step('내 지원서 lists the program with 완료 status', async () => {

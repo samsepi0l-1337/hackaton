@@ -37,7 +37,7 @@ function ApplyCard({ resourceId }: { resourceId: string }) {
   return (
     <section className="card stack">
       <h2 style={{ margin: 0 }}>지원서 작성</h2>
-      <p className="muted" style={{ margin: 0 }}>공고 양식에 맞춰 AI가 초안을 써 줘요. 연습용 모의 제출이라, 실제 신청은 공식 사이트에서 해야 해요.</p>
+      <p className="muted" style={{ margin: 0 }}>공고 양식에 맞춰 AI가 초안을 써 주고, 다듬은 지원서를 한글·워드·PDF 파일로 내려받을 수 있어요. 신청은 공식 사이트에서 직접 해요.</p>
       {!user
         ? <div><Link className="btn" to={`/login?next=${encodeURIComponent(`/programs/${resourceId}`)}`}>로그인하고 지원서 쓰기</Link></div>
         : mine.loading ? <p className="muted">확인하는 중이에요.</p>

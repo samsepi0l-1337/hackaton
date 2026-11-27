@@ -111,6 +111,8 @@ pub async fn dispatch(cx: &mut Cx<'_>, req: &Req) -> HResult {
         ("PUT", ["api", "applications", id]) => {
             crate::api::app::applications::update(cx, req, id).await
         }
+        ("POST", ["api", "applications", id, "polish"]) => crate::api::app::applications::polish(cx, req, id).await,
+        ("GET", ["api", "applications", id, "export"]) => crate::api::app::applications::export(cx, req, id).await,
         ("POST", ["api", "applications", id, "approve"]) => {
             crate::api::app::applications::approve(cx, req, id).await
         }

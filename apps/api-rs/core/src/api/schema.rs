@@ -180,6 +180,9 @@ fn application() -> Spec {
         req("receiptImageUrl", nullable(s())),
         req("failReason", nullable(s())),
         req("retries", nonneg()),
+        opt("polishCount", nonneg()),
+        opt("formUrl", s()),
+        opt("formKind", s()),
         req(
             "history",
             arr(

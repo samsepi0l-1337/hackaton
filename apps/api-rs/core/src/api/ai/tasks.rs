@@ -304,6 +304,25 @@ impl AiTasks<'_> {
             }
         })
     }
+    pub async fn polish(&self, fields: &[Value], context: &Value, program: &Value, user_id: Option<&str>) -> Option<Vec<Value>> {
+        if self.mode == "off" { return None; }
+        let descriptors: Vec<Value> = fields.iter().filter(|f| f["identity"] != true).map(|f| json!({"key":f["key"],"label":f["label"],"maxLength":f["maxLength"],"current":f["value"]})).collect();
+        let p = json!({"title":program["title"],"agency":program["agency"],"target":program["target"],"content":program["content"]});
+        let out = self.raw.generate("polish", &messages("polish", format!("프로필: {context}\n공고: {p}\n항목: {}", json!(descriptors))), user_id).await;
+        let parsed = parse_json(out.as_deref());
+        let obj = parsed.as_object()?;
+        let mut suggestions = Vec::new();
+        for field in fields.iter().filter(|f| f["identity"] != true) {
+            let key = s(field, "key");
+            let before = s(field, "value");
+            let Some(candidate) = obj.get(key).and_then(nonblank) else { continue };
+            let max = field["maxLength"].as_u64().unwrap_or(1000) as usize;
+            let Some(after) = guard_text(Some(candidate), &json!({"allowedText":[context.to_string(),before,p.to_string()],"maxLength":max})) else { continue };
+            let after = jsstr::take16(&after, max);
+            if after.trim() != before.trim() { suggestions.push(json!({"key":key,"before":before,"after":after})); }
+        }
+        Some(suggestions)
+    }
     /// `draft(fields: FormField[], profile: ConsultProfile, program: Program, userId?: string): Promise<FormField[]>`
     pub async fn draft(
         &self,
