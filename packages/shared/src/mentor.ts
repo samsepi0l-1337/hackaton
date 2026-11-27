@@ -32,12 +32,12 @@ export function asksAboutPrograms(text: string): boolean {
 
 /** F3 요약 목업. 폼과 답변에서 문장을 모은다. */
 export function draftSummary(p: ConsultProfile, messages: ChatMessage[]): IdeaSummary {
-  const answers = messages.filter((m) => m.role === 'user' && !m.skipped).map((m) => m.text);
+  const answerTo = (i: number) => messages.find((m) => m.role === 'user' && m.questionIndex === i && !m.skipped)?.text;
   return {
     problem: p.problem ?? '',
     customer: [p.customerType, p.customerAges?.join('·'), p.customerDesc].filter(Boolean).join(' / '),
     solution: [p.idea, p.bizForm && `(${p.bizForm})`].filter(Boolean).join(' '),
     revenue: p.revenue?.length ? p.revenue.join(', ') : '아직 정하지 않음',
-    busan: answers[2] ?? (p.district ? `${p.district}에서 시작` : '부산에서 시작'),
+    busan: answerTo(2) ?? (p.district ? `${p.district}에서 시작` : '부산에서 시작'),
   };
 }

@@ -102,6 +102,7 @@ export interface MentorSession {
 export interface ProfileUpdateRequest { profile: Partial<ConsultProfile> }
 export interface ProfileUpdateResponse { profile: ConsultProfile; errors: FieldError[]; savedAt: string }
 export interface ChatRequest { message?: string; skip?: boolean } // 빈 요청 = 첫 메시지 받기
+/** messages = 지금까지의 전체 대화(누적). 웹은 이 목록으로 화면을 바꾼다. */
 export interface ChatResponse { messages: ChatMessage[]; questionIndex: number; done: boolean }
 export interface MentorResultResponse {
   top: Recommendation[]; // 최대 3개, 3개 미만이면 공고 모음으로 안내
