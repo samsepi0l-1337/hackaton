@@ -60,7 +60,12 @@ describe('kstartupToResource', () => {
     expect(cond('만 40세 이상')).toEqual({ ageMin: 40 });
     expect(cond('만 39세 이하')).toEqual({ ageMax: 39 });
     expect(cond('만 20세 미만')).toEqual({ ageMax: 19 });
-    expect(cond('제한없음')).toBeNull();
+    expect(cond('제한없음')).toEqual({ ageAny: true });
+    // 모든 나이를 빈틈 없이 나열하면 제한 없음
+    expect(cond('만 20세 미만,만 20세 이상 ~ 만 39세 이하,만 40세 이상')).toEqual({ ageAny: true });
+    // 중간 나이가 비면 하나의 범위로 줄이지 않는다
+    expect(cond('만 20세 미만,만 40세 이상')).toBeNull();
+    expect(cond('만 20세 이상 ~ 만 39세 이하,만 40세 이상')).toEqual({ ageMin: 20 });
     expect(cond('청년 우대')).toBeNull();
     expect(cond(undefined)).toBeNull();
   });

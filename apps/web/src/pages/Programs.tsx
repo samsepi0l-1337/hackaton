@@ -4,6 +4,8 @@ import { READINESS_OPTIONS, RESOURCE_SORTS, RESOURCE_SORT_LABEL, RESOURCE_TYPES,
 import type { ReadinessStage, ResourceCard, ResourceSort, ResourceType } from '@gil/shared';
 import { api } from '../api/client';
 import { RecruitBadge } from '../components/ResourceView';
+import { HeartButton } from '../components/HeartButton';
+import { useAuth } from '../components/AuthContext';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 
 const PAGE_SIZE = 10;
@@ -19,6 +21,14 @@ export function Programs() {
   const [items, setItems] = useState<ResourceCard[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [err, setErr] = useState<unknown>(null);
+  const { user } = useAuth();
+  const [topics, setTopics] = useState<string[]>([]);
+  const likedCount = items.filter((x) => x.liked).length;
+  useEffect(() => {
+    if (!user || sort !== 'fit') { setTopics([]); return; }
+    api.likes().then((r) => setTopics(r.topics), () => setTopics([]));
+  }, [user, sort, likedCount]);
+  const setLiked = (id: string, liked: boolean) => setItems((xs) => xs.map((x) => (x.resource.id === id ? { ...x, liked } : x)));
 
   const load = useCallback(() => {
     setState('loading');
@@ -26,7 +36,7 @@ export function Programs() {
       (r) => { setItems(r.items); setState('ready'); },
       (e) => { setErr(e); setState('error'); },
     );
-  }, [type, stage, q, sort]);
+  }, [type, stage, q, sort, user?.id]);
   useEffect(load, [load]);
   useEffect(() => setQText(q), [q]);
 
@@ -76,6 +86,14 @@ export function Programs() {
           <button key={s} type="button" className={`btn small${s === sort ? ' primary' : ''}`} aria-pressed={s === sort} onClick={() => update({ sort: s === 'deadline' ? undefined : s })}>{RESOURCE_SORT_LABEL[s]}</button>
         ))}
       </div>
+      {sort === 'fit' && (
+        <p className="muted" role="note">
+          {!user ? '로그인하고 하트(♡)를 누르면, 누른 공고와 비슷한 공고와 내 정보 조건에 맞는 공고가 앞에 나와요.'
+            : topics.length ? `하트 누른 공고에서 읽은 관심: ${topics.join(' · ')}. 내 정보 조건과 창업 준비 단계도 함께 봐요.`
+            : '마음에 드는 공고에 하트(♡)를 누르면 비슷한 공고가 앞에 나와요. 지금은 내 정보 조건과 창업 준비 단계로만 정렬해요.'}
+          {user && <> <Link to="/me">내 정보 고치기</Link></>}
+        </p>
+      )}
       {filtered && <button className="btn small ghost" onClick={() => setSp(sort === 'deadline' ? new URLSearchParams() : new URLSearchParams({ sort }))}>조건 모두 지우기</button>}
 
       {state === 'loading' && <CardSkeletons count={3} />}
@@ -85,11 +103,11 @@ export function Programs() {
       )}
       {state === 'ready' && (
         <div className="grid cols-2">
-          {pageItems.map(({ resource: r, views }) => {
+          {pageItems.map(({ resource: r, views, liked }) => {
             const d = r.recruitStatus === 'closed' ? -1 : dDay(r.endDate, now);
             return (
             <article key={r.id} className="card stack">
-              <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /></div>
+              <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /><HeartButton id={r.id} title={r.title} liked={!!liked} onChange={(v) => setLiked(r.id, v)} /></div>
               <h3 style={{ margin: 0 }}><Link to={`/programs/${encodeURIComponent(r.id)}`}>{r.title}</Link></h3>
               <p className="muted">{r.agency}</p>
               <p>{r.content}</p>

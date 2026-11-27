@@ -17,3 +17,4 @@ export * from './data';
 export * from './guard';
 export * from './account';
 export * from './explore-rules';
+export * from './likes';

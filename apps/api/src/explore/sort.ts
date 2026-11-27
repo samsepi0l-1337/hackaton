@@ -41,5 +41,10 @@ export function sortCards(cards: ResourceCard[], sort: ResourceSort, now: Date):
     });
   }
   if (sort === 'popular') return out.sort((a, b) => views(b) - views(a) || byDeadline(a, b, now));
+  if (sort === 'fit') {
+    // 마감·종료는 점수와 상관없이 뒤. 같은 점수면 마감 임박 순.
+    const closed = (c: ResourceCard) => Number(deadlineGroup(c, now) === 2);
+    return out.sort((a, b) => closed(a) - closed(b) || (b.fit ?? 0) - (a.fit ?? 0) || byDeadline(a, b, now));
+  }
   return out.sort((a, b) => byDeadline(a, b, now));
 }

@@ -4,8 +4,8 @@
 import type { Context, Hono } from 'hono';
 import {
   CONDITION_NOTE, CONTEXTS, RESOURCE_SORTS, type ResourceSort, activeResources, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, LOCAL_AI_HEADER, LOCAL_AI_TASKS, buildFieldQuestions, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
-  REVIEW_REGIONS, applySummaryEdit, buildPrep, buildRegional, buildSummary, checkConditions, coverageByRegion, coverageNote,
-  problemOf, problemsFor, reasonFor, recommendResources, validateStart,
+  REVIEW_REGIONS, applySummaryEdit, buildPrep, mergeConditions, buildRegional, buildSummary, checkConditions, coverageByRegion, coverageNote,
+  problemOf, problemsFor, reasonFor, recommendResources, validateStart, LIKES_MAX, likeProfile, likeSimilarity, likeTopics, type LikeProfile, type LikesResponse,
   type Exploration, type ExploreResultResponse, type FieldQuestion, type LocalAiTask, type ExploreSession, type PrepItem, type ReadinessStage,
   type RegionalContextCard, type Resource, type ResourceCard, type StartProfile, type SummaryEdit, type SummaryV2, type UserConditions,
 } from '@gil/shared';
@@ -91,10 +91,10 @@ function aiContext(s: ExploreState): string {
 }
 
 // ---- 결과 계산 (규칙 기반, 저장된 AI 이유가 서명과 맞으면 사용) ----
-function computeResult(s: ExploreState, now: Date, resources: Resource[], defaults?: UserConditions): ExploreResultResponse {
+function computeResult(s: ExploreState, now: Date, resources: Resource[], defaults?: UserConditions, likes?: LikeProfile | null): ExploreResultResponse {
   const ex = s.exploration as Exploration | null;
   const summary = asSummary(s.summary) ?? buildSummary({ start: s.start as StartProfile, exploration: ex, answers: s.answers });
-  const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: (s.start.conditions as UserConditions | undefined) ?? defaults, now, resources });
+  const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: mergeConditions(s.start.conditions as UserConditions | undefined, defaults), now, resources, likes });
   const sig = aiSig(s);
   const cards: ResourceCard[] = rec.items.map((r) => {
     const rule = reasonFor(r.resource, s.start.readiness, r.linked);
@@ -102,6 +102,7 @@ function computeResult(s: ExploreState, now: Date, resources: Resource[], defaul
     return {
       resource: r.resource, reason: aiText ?? rule, reasonProvenance: aiText ? 'ai' : 'rule',
       condition: { status: r.condition.status, checks: r.condition.checks }, regionMatch: r.regionMatch,
+      liked: likes?.ids.has(r.resource.id) ?? false,
     };
   });
   const built = s.regional ? null : buildRegional({ start: s.start as StartProfile, exploration: ex, now });
@@ -121,7 +122,7 @@ function computeResult(s: ExploreState, now: Date, resources: Resource[], defaul
 }
 
 function cardFor(r: Resource, s: ExploreState | undefined, now: Date, defaults?: UserConditions): ResourceCard {
-  const cond = checkConditions(r, (s?.start.conditions as UserConditions | undefined) ?? defaults, now);
+  const cond = checkConditions(r, mergeConditions(s?.start.conditions as UserConditions | undefined, defaults), now);
   const reg = s?.start.reviewRegion;
   return {
     resource: r, reason: `${r.content}${r.target ? ` (대상: ${r.target})` : ''}`, reasonProvenance: 'rule',
@@ -175,6 +176,12 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
   const defaultsOf = (c: Ctx): UserConditions | undefined => {
     const u = c.get('user');
     return u ? conditionsFromProfile(c.get('store').basicProfile(u.id)) : undefined;
+  };
+  /** 하트 누른 자료 (지금 목록에 있는 것만). 로그인하지 않았으면 null. */
+  const likedIds = (c: Ctx): string[] => { const u = c.get('user'); return u ? c.get('store').likes(u.id) : []; };
+  const likesOf = (c: Ctx): LikeProfile | null => {
+    const ids = new Set(likedIds(c));
+    return ids.size ? likeProfile(resourcesNow().filter((r) => ids.has(r.id))) : null;
   };
   const writeActor = (c: Ctx): Actor => {
     const a = readActor(c);
@@ -436,7 +443,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     s.summary = summary;
     s.regional = reg?.card ?? null;
     // 추천 이유는 규칙 결과에 대해서만 AI 문장으로 다듬는다.
-    const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: (s.start.conditions as UserConditions | undefined) ?? defaultsOf(c), now, resources: resourcesNow() });
+    const rec = recommendResources({ readiness: s.start.readiness, problemId: ex?.problemId, direction: ex?.direction, reviewRegion: s.start.reviewRegion, conditions: mergeConditions(s.start.conditions as UserConditions | undefined, defaultsOf(c)), now, resources: resourcesNow(), likes: likesOf(c) });
     const reasons: Record<string, string> = {};
     await Promise.all(rec.items.map(async (r) => {
       const t = await ai.reason(r.resource, reasonFor(r.resource, s.start.readiness, r.linked), ctx);
@@ -484,7 +491,7 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     const s = (a && c.get('store').explore(a.id)) || emptyState(c.get('now'), a?.kind ?? 'guest');
     const saved = !!a && !!c.get('store').explore(a.id);
     if (saved) { bump(s, 'result'); s.step = 'result'; touch(s, c); }
-    const result = computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c));
+    const result = computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c), likesOf(c));
     // 현장 질문 문장 다듬기 (선택). 로컬 AI 가 'field' 를 맡으면 Solar 를 부르지 않는다. 저장된 문장이 서명과 맞으면 다시 부르지 않는다.
     if (saved && a && s.fieldQ?.sig !== fieldSig(s) && !localTasks(c).has('field')) {
       const now = c.get('now');
@@ -504,19 +511,19 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     if (cond) s.start = { ...s.start, conditions: cond }; else { const { conditions: _x, ...rest } = s.start; s.start = rest; }
     s.regional = null;
     touch(s, c);
-    return c.json(computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c)));
+    return c.json(computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c), likesOf(c)));
   });
 
   app.put('/api/explore/prep', async (c) => {
     const b = await body(c);
     if (typeof b.id !== 'string' || typeof b.done !== 'boolean') throw bad('id와 done이 필요해요');
     const { s } = open(c);
-    const prep = computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c)).prep;
+    const prep = computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c), likesOf(c)).prep;
     const ids = [prep.primary, ...prep.followUps].map((p) => p.id);
     if (!ids.includes(b.id)) throw new HttpError(404, 'not_found', '지금 준비 안내에 없는 항목이에요');
     s.prepDone[b.id] = b.done; // '준비 완료 표시'일 뿐 실제 수행의 증거가 아니다
     touch(s, c);
-    return c.json({ prep: computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c)).prep });
+    return c.json({ prep: computeResult(s, c.get('now'), resourcesNow(), defaultsOf(c), likesOf(c)).prep });
   });
 
   // ---- 피드백·이벤트 ----
@@ -588,10 +595,16 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     const a = readActor(c);
     const s = a ? c.get('store').explore(a.id) : undefined;
     const counts = c.get('store').viewCounts();
+    const liked = new Set(likedIds(c));
+    const prefs = likesOf(c);
+    const defaults = defaultsOf(c);
     const cards = resourcesNow()
       .filter((r) => (!type || r.type === type || r.capabilityTags.includes(type)) && (!stage || r.stages.includes(stage as ReadinessStage))
         && (!q || [r.title, r.agency, r.content, ...r.capabilityTags].some((x) => x.toLowerCase().includes(q))))
-      .map((r) => ({ ...cardFor(r, s, c.get('now'), defaultsOf(c)), views: counts.get(r.id) ?? 0 }));
+      .map((r) => {
+        const card = cardFor(r, s, c.get('now'), defaults);
+        return { ...card, views: counts.get(r.id) ?? 0, liked: liked.has(r.id), fit: fitScore(card, prefs, s?.start.readiness) };
+      });
     return c.json({ items: sortCards(cards, sort, c.get('now')) });
   });
 
@@ -600,8 +613,35 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     if (!r) throw new HttpError(404, 'not_found', '경로를 찾을 수 없어요');
     await countView(c, r.id);
     const a = readActor(c);
-    return c.json({ ...cardFor(r, a ? c.get('store').explore(a.id) : undefined, c.get('now'), defaultsOf(c)), views: c.get('store').viewCount(r.id) });
+    return c.json({ ...cardFor(r, a ? c.get('store').explore(a.id) : undefined, c.get('now'), defaultsOf(c)), views: c.get('store').viewCount(r.id), liked: likedIds(c).includes(r.id) });
   });
+
+  // ---- 관심 표시(하트): 로그인 필요. 하트 누른 자료의 특징으로 '나에게 맞는 순'과 창업 준비 추천 순서를 조정한다 ----
+  const likesBody = (c: Ctx): LikesResponse => ({ ids: likedIds(c), topics: likeTopics(likesOf(c)) });
+  app.get('/api/likes', (c) => { writeActor(c); return c.json(likesBody(c)); });
+  app.put('/api/likes/:id', async (c) => {
+    const a = writeActor(c);
+    const id = c.req.param('id');
+    if (!resourcesNow().some((x) => x.id === id)) throw new HttpError(404, 'not_found', '경로를 찾을 수 없어요');
+    const b = await c.req.json().catch(() => ({})) as { liked?: unknown };
+    if (typeof b.liked !== 'boolean') throw bad('liked 값이 올바르지 않아요');
+    const store = c.get('store');
+    const ids = store.likes(a.id).filter((x) => x !== id);
+    if (b.liked) ids.push(id);
+    store.setLikes(a.id, ids.slice(-LIKES_MAX));
+    return c.json(likesBody(c));
+  });
+}
+
+/**
+ * '나에게 맞는 순' 점수. 하트 비슷함(0..1) × 3 + 내 정보 조건 부합 칸마다 0.5 + 준비 단계 맞으면 1.
+ * 명시 조건 불일치는 -3 (목록에서 빼지는 않는다). 마감·종료는 정렬에서 뒤로 보낸다.
+ */
+export function fitScore(card: ResourceCard, prefs: LikeProfile | null, readiness: ReadinessStage | undefined): number {
+  const checks = card.condition.checks.filter((x) => x.key !== 'period');
+  const cond = checks.filter((x) => x.status === 'match').length * 0.5 - (checks.some((x) => x.status === 'mismatch') ? 3 : 0);
+  const stage = readiness && card.resource.stages.includes(readiness) ? 1 : 0;
+  return Math.round((3 * likeSimilarity(card.resource, prefs) + cond + stage) * 1000) / 1000;
 }
 
 function sanitizeConditions(v: unknown): UserConditions | undefined {
