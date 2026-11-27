@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ego lite E2E 러너. API(메모리 저장소, AI 꺼짐)와 웹(Vite)을 전용 포트로 띄우고 spec 을 하나씩 ego-browser 로 돌린다.
 # 사용: e2e/run.sh [spec 파일 ...]   (없으면 e2e/specs/*.mjs 전부)
-# 환경: E2E_API_PORT(18787) E2E_WEB_PORT(15173) E2E_OUT(e2e/.out)
+# 환경: E2E_API_PORT(18787) E2E_WEB_PORT(15173) E2E_OUT(e2e/.out) E2E_PREVIEW(1 이면 운영 빌드를 vite preview 로)
 set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 API_PORT=${E2E_API_PORT:-18787}
@@ -21,7 +21,13 @@ done
 ADMIN_HASH=$(cd "$ROOT/apps/api" && bun -e "import { hashLegacyPassword } from './src/password'; console.log(await hashLegacyPassword('e2e-admin-pass-1234'))")
 (cd "$ROOT/apps/api" && exec env -i PATH="$PATH" HOME="$HOME" PORT="$API_PORT" AI_MODE=off DECIDE_ENABLED=0 PASSWORD_PEPPER=e2e-pepper-not-a-secret ADMIN_PASSWORD_HASH="$ADMIN_HASH" E2E_MAIL_LOG=1 bun src/server.ts >"$API_LOG" 2>&1) &
 API_PID=$!
-(cd "$ROOT/apps/web" && WEB_PORT="$WEB_PORT" API_URL="http://127.0.0.1:$API_PORT" exec bunx vite --host 127.0.0.1 --strictPort >"$OUT/web.log" 2>&1) &
+if [ "${E2E_PREVIEW:-0}" = 1 ]; then
+  # 운영 빌드(코드 분할 청크·에러 경계)를 시험한다: vite build 후 vite preview (server 의 proxy·allowedHosts 를 그대로 쓴다)
+  (cd "$ROOT/apps/web" && bunx vite build >"$OUT/build.log" 2>&1) || { echo "vite build 실패: $OUT/build.log" >&2; exit 2; }
+  (cd "$ROOT/apps/web" && WEB_PORT="$WEB_PORT" API_URL="http://127.0.0.1:$API_PORT" exec bunx vite preview --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$OUT/web.log" 2>&1) &
+else
+  (cd "$ROOT/apps/web" && WEB_PORT="$WEB_PORT" API_URL="http://127.0.0.1:$API_PORT" exec bunx vite --host 127.0.0.1 --strictPort >"$OUT/web.log" 2>&1) &
+fi
 WEB_PID=$!
 cleanup() { kill "$API_PID" "$WEB_PID" 2>/dev/null; wait "$API_PID" "$WEB_PID" 2>/dev/null; }
 trap cleanup EXIT
