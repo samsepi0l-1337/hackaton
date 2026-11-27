@@ -46,6 +46,11 @@ export const ROUTES = {
   resendVerification: '/api/auth/verify/resend', // POST { email } → { ok: true } (1분 1회, 계정 존재를 드러내지 않음)
   forgotPassword: '/api/auth/forgot', // POST { email } → { ok: true, message: FORGOT_PASSWORD_NOTICE } (항상 같은 응답)
   changePassword: '/api/auth/password', // POST ChangePasswordRequest → { ok: true } (다른 세션 종료)
+  myProfile: '/api/me/profile', // GET → { profile: BasicProfile }, PUT { profile: Partial<BasicProfile> } → { profile } (로그인 필요)
+  bufsLogin: '/api/bufs/login', // POST { password } → { ok: true } + 쿠키 BUFS_COOKIE (5회 실패 시 10분 잠금)
+  bufsLogout: '/api/bufs/logout', // POST → { ok: true }
+  bufsMe: '/api/bufs/me', // GET → { admin: boolean }
+  bufsFeedback: '/api/bufs/feedback', // GET ?limit=&offset= → BufsFeedbackResponse (관리자만, 원문 대화 없음)
   kstartupSync: '/api/admin/kstartup/sync', // POST → KStartupSyncResponse (팀 계정, 실제 공고 수집)
 
   session: '/api/mentor/session', // GET → MentorSession, DELETE → 새 상담 시작

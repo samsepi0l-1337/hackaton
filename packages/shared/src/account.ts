@@ -33,3 +33,48 @@ export const RECOVERY_TTL_MINUTES = 30;
 export const RECOVERY_REQUEST_MINUTES = 10;
 /** 계정 존재를 드러내지 않는 같은 안내 문구 */
 export const FORGOT_PASSWORD_NOTICE = '가입된 이메일이면 복구 비밀번호를 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.';
+
+// ---- 비밀번호 저장 (2026-11-27 결정) ----
+/**
+ * bcrypt(cost BCRYPT_COST) + pepper. pepper 는 서버 secret PASSWORD_PEPPER (저장소·DB 에 없음).
+ * 입력 = base64(HMAC-SHA256(pepper, password)) → bcrypt (72바이트 제한 회피). 예전 PBKDF2 해시는 로그인 성공 때 새 방식으로 바꾼다.
+ */
+export const BCRYPT_COST = 10;
+
+// ---- 내 정보: 기본 정보 (F4 조건 확인의 기본값으로 쓴다, 모두 선택) ----
+export const OCCUPATIONS = ['고등학생', '대학생', '대학원생', '직장인', '프리랜서', '자영업', '구직 중', '기타'] as const;
+export const RESIDENCE_OPTIONS = ['부산', '울산', '경남', '그 밖의 지역'] as const;
+export interface BasicProfile {
+  age: number | null; // 만 나이, 모르면 null
+  residence: string | null; // RESIDENCE_OPTIONS 또는 부산 구·군 (BUSAN_DISTRICTS)
+  hasBusiness: boolean | null; // 사업자등록 여부
+  occupation: string | null; // OCCUPATIONS
+  updatedAt: string | null;
+}
+export const EMPTY_BASIC_PROFILE: BasicProfile = { age: null, residence: null, hasBusiness: null, occupation: null, updatedAt: null };
+
+// ---- /bufs 관리자 화면: 의견 남기기 데이터 ----
+/** 관리자 비밀번호는 secret ADMIN_PASSWORD_HASH (bcrypt+pepper 해시)로만 둔다. 세션 쿠키 이름: */
+export const BUFS_COOKIE = 'bufs_sid';
+export const BUFS_SESSION_HOURS = 8;
+export interface BufsFeedbackItem {
+  id: string;
+  createdAt: string;
+  user: string; // 이메일 일부만 (예: ab***@gmail.com)
+  readiness: string | null;
+  problemId: string | null;
+  reviewRegion: string | null;
+  helpful: boolean | null;
+  reason: string | null;
+  directionClear: boolean | null;
+  wantToExplore: string | null;
+  knowWhatToPrepare: { before?: number; after?: number } | null;
+  regionIntent: { before?: number; after?: number } | null;
+  foundRegionalPath: boolean | null;
+  pathName: string | null;
+}
+export interface BufsFeedbackResponse {
+  total: number;
+  items: BufsFeedbackItem[]; // 최신순
+  summary: { helpfulRate: number | null; directionClearRate: number | null; foundPathRate: number | null; regionIntentAvg: { before: number | null; after: number | null } };
+}
