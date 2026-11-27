@@ -60,8 +60,66 @@ pub fn js_trim(s: &str) -> &str {
 /// JS 비유니코드 정규식의 `\d` (ASCII 0-9 만). Rust `\d` 는 유니코드 숫자(전각 등)도 잡는다.
 pub const JS_DIGIT: &str = "[0-9]";
 
+/// JS `String(n)` / 템플릿 리터럴의 숫자 표기. 정수면 소수점 없이 (20.0 -> "20"), |n| >= 1e21 이나 < 1e-6 은 지수 표기.
+pub fn js_number_string(n: f64) -> String {
+    if n.is_nan() {
+        return "NaN".into();
+    }
+    if n.is_infinite() {
+        return if n > 0.0 {
+            "Infinity".into()
+        } else {
+            "-Infinity".into()
+        };
+    }
+    if n == 0.0 {
+        return "0".into();
+    }
+    let a = n.abs();
+    if (1e-6..1e21).contains(&a) {
+        if n.fract() == 0.0 {
+            return format!("{}", n as i64);
+        }
+        return format!("{n}");
+    }
+    // 지수 표기: JS 는 1e+21, 1.5e-7 처럼 쓴다.
+    let s = format!("{n:e}");
+    let (m, e) = s.split_once('e').unwrap_or((&s, "0"));
+    let e: i32 = e.parse().unwrap_or(0);
+    format!("{m}e{}{}", if e >= 0 { "+" } else { "-" }, e.abs())
+}
+/// JSON 값을 JS 템플릿 리터럴처럼 문자열로 (숫자는 js_number_string, 문자열은 그대로, null 은 "null").
+pub fn js_value_string(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Number(n) => n
+            .as_f64()
+            .map(js_number_string)
+            .unwrap_or_else(|| n.to_string()),
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Null => "null".into(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        other => other.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn js_numbers() {
+        use super::js_number_string as f;
+        assert_eq!(
+            (f(20.0), f(1.5), f(-3.0), f(1e21), f(1.5e-7), f(0.000001)),
+            (
+                "20".into(),
+                "1.5".into(),
+                "-3".into(),
+                "1e+21".into(),
+                "1.5e-7".into(),
+                "0.000001".into()
+            )
+        );
+        assert_eq!(super::js_value_string(&serde_json::json!(25.0)), "25");
+    }
     #[test]
     fn js_whitespace() {
         assert_eq!(super::js_trim("\u{FEFF} 부산 \u{3000}"), "부산");
