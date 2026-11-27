@@ -4,12 +4,15 @@ import type { ProblemInfo } from './storage';
 
 export const STEP_LABELS = ['관심·상황', '구상 정리', '준비 안내'];
 
-export function Progress({ current }: { current: 0 | 1 | 2 }) {
+/** onGo가 있으면 지나온 단계만 눌러서 돌아갈 수 있다. */
+export function Progress({ current, onGo }: { current: 0 | 1 | 2; onGo?: (step: number) => void }) {
   return (
     <ol className="progress-steps" aria-label="진행 단계">
       {STEP_LABELS.map((l, i) => (
         <li key={l} className={i === current ? 'current' : i < current ? 'done' : ''} aria-current={i === current ? 'step' : undefined}>
-          {i + 1}. {l}
+          {onGo && i < current
+            ? <button type="button" className="step-link" onClick={() => onGo(i)}>{i + 1}. {l}</button>
+            : <>{i + 1}. {l}</>}
         </li>
       ))}
     </ol>

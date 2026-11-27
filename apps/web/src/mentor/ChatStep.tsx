@@ -165,7 +165,7 @@ export function ChatStep({ session, problem: card, quota, onSession, onQuota, on
 
   return (
     <div className="stack">
-      <Progress current={1} />
+      <Progress current={1} onGo={onBackToStart} />
       {(problem || session.exploration?.customProblem) && (
         <section className="card stack" aria-label="선택한 문제">
           <span className="muted">내가 고른 문제</span>
