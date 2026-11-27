@@ -12,6 +12,11 @@ await step('API 프록시 /api/health', async () => {
 });
 await step('없는 주소는 NotFound', async () => {
   await go('/no-such-page-e2e');
-  await page.waitForTimeout(300);
-  assert(/찾을 수 없|없는 페이지|404/.test(await bodyText()), 'NotFound 문구 없음');
+  // 고정 대기 대신 문구가 나올 때까지 3초까지 다시 읽는다.
+  let found = false;
+  for (let i = 0; i < 30 && !found; i++) {
+    found = /찾을 수 없|없는 페이지|404/.test(await bodyText());
+    if (!found) await page.waitForTimeout(100);
+  }
+  assert(found, 'NotFound 문구 없음');
 });

@@ -47,10 +47,14 @@ async function lastVerifyLink(email) {
 }
 /** E2E 러너(E2E_MAIL_LOG=1)가 API 로그에 남긴 email 의 마지막 메일 본문. 인증 코드·복구 비밀번호를 여기서 읽는다. */
 async function lastMailBody(email) {
-  const lines = (await fs.readFile(API_LOG, 'utf8')).split('\n');
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const m = lines[i].match(/^\[mail:e2e\] to=(\S+) body=(.*)$/);
-    if (m && m[1] === email) return JSON.parse(m[2]);
+  // lastVerifyLink 와 같이 로그가 늦게 나올 수 있어서 3초까지 다시 읽는다.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const lines = (await fs.readFile(API_LOG, 'utf8')).split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const m = lines[i].match(/^\[mail:e2e\] to=(\S+) body=(.*)$/);
+      if (m && m[1] === email) return JSON.parse(m[2]);
+    }
+    await new Promise((r) => setTimeout(r, 100));
   }
   throw new Error('메일 본문을 로그에서 찾지 못함: ' + email);
 }

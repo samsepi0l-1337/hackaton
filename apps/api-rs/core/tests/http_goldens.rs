@@ -264,6 +264,8 @@ fn run(file: &str) {
         }
     }
     eprintln!("{file}: 시나리오 {ran} 재생, {skipped} 건너뜀 (주입된 fetch·doc-worker·저장소)");
+    // 재생한 시나리오가 없으면 이 테스트는 아무것도 검사하지 않는다. 통과로 보이지 않게 실패시킨다.
+    assert!(ran > 0, "{file}: 재생한 시나리오가 없어요 ({skipped}개 모두 건너뜀). #[ignore] 로 표시하세요");
     if !failed.is_empty() {
         panic!(
             "{file}: {}/{ran} 실패\n{}",
@@ -298,10 +300,12 @@ fn cov_02() {
     run("cov-02");
 }
 #[test]
+#[ignore = "모든 시나리오가 주입된 fetch·doc-worker·저장소에 의존해 재생할 수 없음"]
 fn db() {
     run("db");
 }
 #[test]
+#[ignore = "모든 시나리오가 주입된 fetch·doc-worker·저장소에 의존해 재생할 수 없음"]
 fn explore_decide() {
     run("explore-decide");
 }
@@ -310,14 +314,17 @@ fn explore_scenarios() {
     run("explore-scenarios");
 }
 #[test]
+#[ignore = "모든 시나리오가 주입된 fetch·doc-worker·저장소에 의존해 재생할 수 없음"]
 fn kstartup_explore() {
     run("kstartup-explore");
 }
 #[test]
+#[ignore = "모든 시나리오가 주입된 fetch·doc-worker·저장소에 의존해 재생할 수 없음"]
 fn kstartup() {
     run("kstartup");
 }
 #[test]
+#[ignore = "모든 시나리오가 주입된 fetch·doc-worker·저장소에 의존해 재생할 수 없음"]
 fn likes_conditions() {
     run("likes-conditions");
 }
@@ -326,6 +333,7 @@ fn mentor() {
     run("mentor");
 }
 #[test]
+#[ignore = "모든 시나리오가 주입된 fetch·doc-worker·저장소에 의존해 재생할 수 없음"]
 fn programs_sort() {
     run("programs-sort");
 }
@@ -334,6 +342,7 @@ fn programs() {
     run("programs");
 }
 #[test]
+#[ignore = "모든 시나리오가 주입된 fetch·doc-worker·저장소에 의존해 재생할 수 없음"]
 fn purge() {
     run("purge");
 }
