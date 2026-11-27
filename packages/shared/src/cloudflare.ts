@@ -17,7 +17,7 @@ export const SOLAR_MODELS: Record<AiTask, string> = {
   mentor: 'solar-mini-4-5-preview',
   reason: 'solar-mini-4-5-preview',
   summary: 'solar-pro-4',
-  prep: 'solar-pro-4',
+  prep: 'solar-mini-4-5-preview', // 운영에서 Pro 가 15초를 넘겨 Mini 로 바꿈
   draft: 'solar-pro-4',
   extract: 'solar-pro-4',
 };

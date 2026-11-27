@@ -179,13 +179,15 @@ class _LinkParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.title, self.links = "", []
         self._in_title, self._a = False, None
+        # 링크 밖에서 마지막으로 본 파일 이름 (예: K-Startup 은 '파일명.hwpx' 옆에 '다운로드' 링크가 있다)
+        self._last_filename = ""
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if tag == "title":
             self._in_title = True
         elif tag == "a" and a.get("href"):
-            self._a = {"href": a["href"], "text": [], "title": a.get("title") or ""}
+            self._a = {"href": a["href"], "text": [], "title": a.get("title") or "", "near": self._last_filename}
         elif tag == "meta" and not self.title and (a.get("property") == "og:title") and a.get("content"):
             self.title = a["content"].strip()
 
@@ -194,14 +196,21 @@ class _LinkParser(HTMLParser):
             self.title += data
         if self._a is not None:
             self._a["text"].append(data)
+        else:
+            m = re.search(r"([^\n\r\t/\\]*\.(?:hwpx|hwp|docx|pdf))\s*$", data.strip(), re.I)
+            if m:
+                self._last_filename = re.sub(r"\s+", " ", m.group(1)).strip()
 
     def handle_endtag(self, tag):
         if tag == "title":
             self._in_title = False
         elif tag == "a" and self._a is not None:
             self._a["text"] = re.sub(r"\s+", " ", "".join(self._a["text"])).strip()
+            href = self._a["href"].strip().lower()
             self.links.append(self._a)
             self._a = None
+            if not href.startswith(("javascript:", "#")):
+                self._last_filename = ""  # 파일 이름 하나는 실제 링크 하나에만 붙인다 ('바로보기' 같은 스크립트 링크는 건너뜀)
 
 
 def _decode_html(data, headers):
@@ -233,7 +242,7 @@ def find_attachments(html_text, base_url):
         qs = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
         qname = next((v[0] for k, v in qs.items() if k.lower() in ("filename", "file_name", "fname", "atchflnm") and v), "")
         name = None
-        for cand in (path_name, qname, label):
+        for cand in (path_name, qname, label, link.get("near", "")):
             if cand and kind_of(cand) != "unknown":
                 name = cand
                 break

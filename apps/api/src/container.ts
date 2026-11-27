@@ -62,11 +62,14 @@ export class DocWorker extends DurableObject<Bindings> {
   }
 }
 
-/** 하나의 doc-worker 인스턴스로 보낸다. 해커톤 사용량에서는 하나면 충분하다. */
-export function docWorkerClient(ns: DurableObjectNamespace): DocWorkerClient {
+/**
+ * 하나의 doc-worker 인스턴스로 보낸다. 해커톤 사용량에서는 하나면 충분하다.
+ * 배포 버전마다 이름을 바꿔, 새 배포는 새 이미지로 컨테이너를 띄운다 (이전 인스턴스는 2분 뒤 멈춤).
+ */
+export function docWorkerClient(ns: DurableObjectNamespace, version = 'local'): DocWorkerClient {
   return {
     fetch: (path, body) =>
-      ns.get(ns.idFromName('doc-worker')).fetch(`http://doc-worker${path}`, {
+      ns.get(ns.idFromName(`doc-worker-${version}`)).fetch(`http://doc-worker${path}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),

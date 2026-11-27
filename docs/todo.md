@@ -15,7 +15,7 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | 국내 AI (Upstage Solar·Decide·Document Parse) + AI Gateway | 구현 완료 (#11, #12), 실제 키 확인 남음 |
 | Cloudflare Containers doc-worker | 구현·로컬 통합 완료, 실제 공고 확인은 배포 후 |
 | DB (Durable Object SQLite + Zod) | 완료 |
-| 배포 | 진행 중 |
+| 배포 | 완료: https://gil-api.samsepi0l1337.workers.dev |
 
 ## 1. 공통·기반
 
@@ -75,7 +75,6 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] `apps/api/src/docs/`: Document Parse 클라이언트, 결과에서 양식 항목(글자 수·필수) 뽑기, discover→download→parse 파이프라인
 - [x] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답·Document Parse 응답
 - [x] Upstage API 키 `gil-hackathon` 발급, 로컬 `apps/api/.dev.vars` (git 제외)
-- [ ] 배포 환경 secret `UPSTAGE_API_KEY`
 - [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요** — 지금은 동의 없이도 호출됨
 - [ ] AI Gateway 생성(인증 켜기), 커스텀 프로바이더 `upstage` (base `https://api.upstage.ai`) 등록, 라우트 업로드·배포
 - [ ] 라우트 모델 노드의 provider 값(`custom-upstage`?, `workers-ai`?)을 대시보드에서 확인
@@ -91,15 +90,21 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] API 연결: `DocWorker` Durable Object(`ctx.container`), `lite` 인스턴스, 비활성 2분 후 종료, `enableInternet` (로컬은 `DOC_WORKER_INTERNET=0`)
 - [x] 흐름: 지원서 생성 → `/discover` → `/download` → Document Parse → 양식 항목. 실패하면 모의 양식 (30초 제한)
 - [x] `wrangler dev`로 Worker → DO → 컨테이너 통합 실행 (로컬은 인터넷 켜기가 403으로 실패해 끄고 확인. 배포 환경에서 인터넷 켠 채로 다시 확인)
-- [ ] 실제 공고 1건에서 내려받기 → 항목 추출 (F16 완료 조건)
+- [x] 팀 점검 API `POST /api/admin/form-probe {pageUrl}` (팀 계정): 실제 공고로 discover → download → Document Parse 결과 확인
+- [x] K-Startup 첨부 이름 찾기 ('다운로드' 링크 옆 파일 이름)
+- [x] 실제 공고 1건(2026 팁스, pbancSn=176076)에서 운영 환경 확인: 첨부 6개 찾기 → HWPX 내려받기 → Document Parse 본문 (~20초)
+- [ ] 신청서 양식(사업계획서 서식)이 붙은 공고로 항목 추출·fill 확인 (팁스 공고는 공고문만 있어 절 제목이 항목으로 잡힘)
+- [x] 배포마다 컨테이너 인스턴스 이름을 바꿔 새 이미지로 시작 (`CF_VERSION_METADATA`)
 
 ## 5. 배포 (선행 조건)
 
 - [x] DB: `GilApp` Durable Object 의 SQLite KV + Zod 스키마 검사 (`apps/api/src/db/schema.ts`, `store.ts`). 재시작해도 데이터 유지
 - [x] 웹 정적 파일을 같은 Worker 에서 제공 (Workers Static Assets, `/api/*` 만 Worker 가 먼저 받음)
 - [x] 계정: Workers Paid $5 (확인됨)
-- [ ] 사용량 경보 설정 (Containers·Workers AI) **입력 필요**
-- [ ] 첫 배포는 사용자 확인 후 (`wrangler deploy`)
+- [ ] 사용량 경보 설정 (Cloudflare 알림: Containers·Workers AI, Upstage 콘솔 사용량) **입력 필요**
+- [x] 배포: https://gil-api.samsepi0l1337.workers.dev (Worker + GilApp DO + DocWorker 컨테이너 + 웹)
+- [x] 배포 환경 secret `UPSTAGE_API_KEY`, `AI_MODE=upstage`, `DECIDE_ENABLED=1`
+- [x] 운영 확인: 로그인 → 상담(Solar Mini 질문 ~1.4초) → 요약(Solar Pro ~7.5초) → 결과(Decide 관련도 반영)
 
 ## 6. 발표·검증
 
