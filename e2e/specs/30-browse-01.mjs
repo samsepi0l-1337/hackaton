@@ -17,13 +17,12 @@ await step('recent most viewed and closing soon sorts', async () => {
   // Give a resource other than the recent leader a view; the detail spec reserves another resource.
   const target = recent.body.items[recent.body.items.length - 1].resource.id;
   await api('GET', '/api/resources/' + encodeURIComponent(target));
-  const buttons = await page.evaluate(() => [...document.querySelectorAll('[aria-label="정렬"] button')].map(b => b.textContent));
-  assert(buttons.length >= 3, 'sorting controls exist');
+  const sorts = await page.evaluate(() => [...document.querySelectorAll('#ro option')].map(option => option.value));
+  assert(sorts.length >= 3, 'at least three sort options exist');
   const orders = [];
-  for (const label of buttons) {
-    await page.click(`button:text-is("${label}")`);
-    await page.waitForFunction(t => [...document.querySelectorAll('[aria-label="정렬"] button')].some(b => b.textContent === t && b.getAttribute('aria-pressed') === 'true'), label);
-    const sort = new URL(await page.url()).searchParams.get('sort') || 'deadline';
+  for (const sort of sorts) {
+    await page.selectOption('#ro', sort);
+    await page.waitForFunction(value => new URLSearchParams(location.search).get('sort') === (value === 'deadline' ? null : value), sort);
     const result = await api('GET', '/api/resources?sort=' + encodeURIComponent(sort));
     eq(result.status, 200, sort + ' response');
     const titles = result.body.items.map(x => x.resource.title);

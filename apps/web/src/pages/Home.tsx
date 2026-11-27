@@ -39,6 +39,7 @@ export function Home() {
               <Link to="/mentor">AI 창업멘토</Link>
             </form>
             <p>기관·제목·지원 내용 키워드로 부산 창업 지원사업을 찾아보세요.</p>
+            <p className="first-steps">처음이라면: <Link to="/test">창업 유형 테스트</Link> → <Link to="/mentor">AI 창업 상담</Link> → 맞춤형 공고 · <Link to="/guide">이용 방법</Link></p>
           </div>
           <section className="pane shortcuts">
             <div className="pane-title">

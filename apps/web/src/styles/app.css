@@ -164,6 +164,8 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .primary-stack { justify-content: flex-start; }
 .search-area { text-align: center; padding: 0 4%; flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .search-area p { font-size: 14px; color: #566a80; margin: 8px 0 0; }
+.search-area .first-steps { color: var(--portal-ink); font-weight: 700; }
+.search-area .first-steps a { color: #155cd0; text-decoration: underline; text-underline-offset: 2px; }
 .search-pill { display: flex; align-items: stretch; background: linear-gradient(108deg, #09b58b 8%, #009f9c 53%, #386dfa 94%); padding: 2px; border-radius: 99px; box-shadow: 0 5px 11px #216ece24; }
 .search-input { display: flex; align-items: center; min-width: 0; flex: 1; height: 64px; background: #fff; border-radius: 99px; position: relative; padding-left: 75px; }
 .search-input img { position: absolute; bottom: 0; left: 12px; width: 62px; height: 71px; object-fit: contain; object-position: bottom; pointer-events: none; }
