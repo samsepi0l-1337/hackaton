@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { IDEA_MAX_V2 } from '@gil/shared';
 import type { ConsultQuota, ExploreOptionsResponse, ExploreSession, ReadinessStage, ReviewRegion, StartProfile } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
+import type { FocusInfo, StartWithFocus } from '../api/client';
 import { BottomBar } from '../components/BottomBar';
 import { ChipGroup, MultiChipGroup } from '../components/Chips';
 import { RegionPicker } from '../components/RegionPicker';
@@ -15,11 +17,39 @@ import { localAiAvailable } from '../lib/localAi';
 
 type Save = 'idle' | 'saving' | 'saved' | 'error';
 
-export function StartStep({ opts, initial, quota, onStarted }: {
+/** 관심 공고 배너. "빼기"는 시작 정보의 focusResourceId 를 null 로 저장한다. */
+export function FocusBanner({ focus, start, onRemoved }: { focus: FocusInfo; start: StartWithFocus; onRemoved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function remove() {
+    setBusy(true); setErr('');
+    try { await api.saveStart({ start: { ...start, focusResourceId: null } }); onRemoved(); } catch (x) { setErr(errMessage(x)); setBusy(false); }
+  }
+  return (
+    <section className="card focus-banner stack" aria-label="관심 공고">
+      <div className="row between">
+        <span className="tag">관심 공고</span>
+        <button className="btn small ghost" type="button" onClick={remove} disabled={busy}>관심 공고 빼기</button>
+      </div>
+      <p style={{ margin: 0 }}>
+        <Link to={`/programs/${encodeURIComponent(focus.id)}`}><strong>{focus.title}</strong></Link>
+        <span className="muted"> · {focus.agency}{focus.endDate && ` · 마감 ${focus.endDate}`}</span>
+      </p>
+      <p className="muted" style={{ margin: 0 }}>이 공고를 바탕으로 질문하고 준비할 것을 제안해 드려요.</p>
+      {err && <p className="error-text" role="alert">{err}</p>}
+    </section>
+  );
+}
+
+export function StartStep({ opts, initial, quota, focus, onFocusRemoved, onStarted }: {
   opts: ExploreOptionsResponse; initial: StartProfile; quota: ConsultQuota | null;
+  focus: FocusInfo | null; onFocusRemoved: () => void;
   onStarted: (s: ExploreSession, start: StartProfile) => void;
 }) {
-  const [start, setStart] = useState<StartProfile>(initial);
+  const [start, setStart] = useState<StartWithFocus>(() => {
+    const cur = (initial as StartWithFocus).focusResourceId;
+    return focus && !cur ? { ...initial, focusResourceId: focus.id } : initial;
+  });
   const [save, setSave] = useState<Save>('idle');
   const [err, setErr] = useState('');
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
@@ -28,7 +58,7 @@ export function StartStep({ opts, initial, quota, onStarted }: {
   const latest = useRef(start);
   latest.current = start;
 
-  const clean = (s: StartProfile): StartProfile => ({
+  const clean = (s: StartWithFocus): StartWithFocus => ({
     ...s, idea: s.idea?.trim() || undefined, interestNote: s.interestNote?.trim() || undefined,
     interests: s.interests?.length ? s.interests : undefined,
   });
@@ -72,6 +102,7 @@ export function StartStep({ opts, initial, quota, onStarted }: {
   return (
     <div className="stack">
       <Progress current={0} />
+      {focus && <FocusBanner focus={focus} start={clean(start)} onRemoved={() => { setStart((s) => ({ ...s, focusResourceId: null })); onFocusRemoved(); }} />}
       <section className="card stack" aria-labelledby="pv">
         <h2 id="pv" style={{ margin: 0 }}>시작 전에 확인해 주세요</h2>
         <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{opts.privacy}</p>

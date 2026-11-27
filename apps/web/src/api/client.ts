@@ -5,19 +5,25 @@ import { localAiHeaderValue } from '../lib/localAi';
 import type {
   AuthResponse, ExploreChatRequest, ExploreChatResponse, ExploreEventType, ExploreFeedbackRequest, ExploreOptionsResponse,
   ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
-  BasicProfile, BufsFeedbackResponse, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
+  BasicProfile, BufsFeedbackResponse, StartProfile, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
 import type { ApplicationView, ApproveRequest, CreateApplicationRequest, UpdateApplicationRequest } from '@gil/shared';
 import type { HomeResponse, LikesResponse,RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
 
 export const AUTH_GATE_EVENT = 'gil:auth-gate';
 
+/** 관심 공고 (서버 계약; packages/shared 반영 전까지 웹에서 로컬로 확장). */
+export interface FocusInfo { id: string; title: string; agency: string; type: string; endDate: string | null; recruitStatus: string; url: string | null }
+export type StartWithFocus = StartProfile & { focusResourceId?: string | null };
+export type FocusSession = ExploreSession & { focus?: FocusInfo | null };
+export interface ApplicationQuota { used: number; limit: number | null; remaining: number | null; resetAt: string | null; blocked: boolean }
+
 export class ApiClientError extends Error {
-  code: ErrorCode | 'network';
+  code: ErrorCode | 'network' | 'application_limit';
   fields: FieldError[];
   status: number;
   quota?: ConsultQuota;
-  constructor(status: number, code: ErrorCode | 'network', message: string, fields: FieldError[] = [], quota?: ConsultQuota) {
+  constructor(status: number, code: ErrorCode | 'network' | 'application_limit', message: string, fields: FieldError[] = [], quota?: ConsultQuota) {
     super(message);
     this.status = status;
     this.code = code;
@@ -94,9 +100,9 @@ export const api = {
   // 비회원 탐색 흐름 (/api/explore/*)
   exploreOptions: () => get<ExploreOptionsResponse>(ROUTES.exploreOptions),
   problems: (interests: string[], region?: string) => get<ProblemsResponse>(ROUTES.problems + qs({ interests: interests.join(','), region })),
-  exploreSession: () => get<ExploreSession>(ROUTES.explore),
+  exploreSession: () => get<FocusSession>(ROUTES.explore),
   resetExplore: () => del<unknown>(ROUTES.explore),
-  saveStart: (b: StartRequest) => put<ExploreSession>(ROUTES.start, b),
+  saveStart: (b: StartRequest | { start: StartWithFocus }) => put<FocusSession>(ROUTES.start, b),
   saveExploration: (b: ExplorationRequest) => put<ExploreSession>(ROUTES.exploration, b),
   exploreChat: (b: ExploreChatRequest) => post<ExploreChatResponse>(ROUTES.exploreChat, b),
   createSummary: () => post<{ summary: SummaryV2; regional: RegionalContextCard | null }>(ROUTES.exploreSummary),
@@ -130,6 +136,7 @@ export const api = {
 
   applications: () => get<{ items: ApplicationView[] }>(ROUTES.applications),
   application: (id: string) => get<ApplicationView>(ROUTES.application(id)),
+  applicationQuota: () => get<ApplicationQuota>('/api/applications/quota'),
   createApplication: (programId: string) => post<ApplicationView>(ROUTES.applications, { programId } satisfies CreateApplicationRequest),
   updateApplication: (id: string, b: UpdateApplicationRequest) => put<ApplicationView>(ROUTES.application(id), b),
   approveApplication: (id: string) => post<ApplicationView>(ROUTES.approve(id), { confirm: true } satisfies ApproveRequest),

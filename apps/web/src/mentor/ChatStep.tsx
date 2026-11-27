@@ -4,6 +4,8 @@ import { DIRECTION_STATUS_LABEL } from '@gil/shared';
 import type { ChatMessage, ConsultQuota, DirectionStatus, ExploreChatRequest, ExploreSession, SummaryV2 } from '@gil/shared';
 import type { ProblemCard } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
+import type { FocusInfo } from '../api/client';
+import { FocusBanner } from './StartStep';
 import { Field } from '../components/TextField';
 import { errMessage } from '../lib/format';
 import { ITEM_LABEL, Progress, ProblemLine, item } from './Common';
@@ -86,8 +88,9 @@ function Suggestions({ list, status, direction, onChange }: {
   );
 }
 
-export function ChatStep({ session, problem: card, quota, onSession, onQuota, onRefreshQuota, onBackToStart, onSummary }: {
+export function ChatStep({ session, problem: card, quota, focus, onFocusRemoved, onSession, onQuota, onRefreshQuota, onBackToStart, onSummary }: {
   session: ExploreSession; problem: ProblemCard | null; quota: ConsultQuota | null;
+  focus: FocusInfo | null; onFocusRemoved: () => void;
   onSession: (s: ExploreSession) => void; onQuota: (q: ConsultQuota) => void; onRefreshQuota: () => void;
   onBackToStart: () => void; onSummary: (s: SummaryV2) => void;
 }) {
@@ -166,6 +169,7 @@ export function ChatStep({ session, problem: card, quota, onSession, onQuota, on
   return (
     <div className="stack">
       <Progress current={1} onGo={onBackToStart} />
+      {focus && <FocusBanner focus={focus} start={session.start} onRemoved={onFocusRemoved} />}
       {(problem || session.exploration?.customProblem) && (
         <section className="card stack" aria-label="선택한 문제">
           <span className="muted">내가 고른 문제</span>
