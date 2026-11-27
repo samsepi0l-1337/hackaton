@@ -120,7 +120,6 @@ export function Layout() {
               {user || loading
                 ? <Link to="/me" {...cur('/me')} style={loading ? { visibility: 'hidden' } : undefined}><PortalIcon name="user" /> 내 정보</Link>
                 : <Link to={loginTo} {...(onLogin ? ({ 'aria-current': 'page' } as const) : {})}><PortalIcon name="login" /> 로그인</Link>}
-              <Link to="/admin" {...cur('/admin')}><PortalIcon name="bars" /> 팀 통계</Link>
             </div>
           </div>
           <button type="button" className="mobile-menu" aria-label={navOpen ? '메뉴 닫기' : '메뉴 열기'} aria-controls="portal-nav" aria-expanded={navOpen} onClick={() => { setNavOpen(!navOpen); setPinned(null); setHover(null); setFocusIn(null); setDismissed(null); }}>
@@ -149,7 +148,8 @@ export function Layout() {
                   onBlur={onGroupBlur(i)}
                 >
                   <button type="button" aria-expanded={open} onClick={() => {
-                    if (open) { setDismissed(i); setPinned(null); setFocusIn(null); } else { setDismissed(null); setPinned(i); }
+                    // 호버로만 열린 메뉴는 첫 클릭에 고정하고, 고정된 메뉴는 클릭하면 닫는다.
+                    if (pinned === i) { setDismissed(i); setPinned(null); setFocusIn(null); } else { setDismissed(null); setPinned(i); }
                   }}>
                     {g.label}
                     <PortalIcon name="down" size={16} />
@@ -163,7 +163,6 @@ export function Layout() {
               );
             })}
             {user ? <Link className="mobile-account" to="/me" {...cur('/me')}>내 정보</Link> : <Link className="mobile-account" to={loginTo}>로그인</Link>}
-            <Link className="mobile-account" to="/admin" {...cur('/admin')}>팀 통계</Link>
           </div>
         </nav>
       </header>

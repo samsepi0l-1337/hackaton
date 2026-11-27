@@ -156,16 +156,17 @@ export function Me() {
   return (
     <div className="container account-page me-page">
       <h1>내 정보</h1>
+      <div className="me-col">
       <section className="card stack">
         <h2 style={{ margin: 0 }}>계정</h2>
         <p style={{ margin: 0 }}>{user.email} <span className="badge">{user.emailVerified ? '이메일 인증 완료' : '이메일 인증 전'}</span></p>
         {!user.emailVerified && <VerifyPanel email={user.email} onDone={() => {}} lead="인증하면 창업 준비를 쓸 수 있어요. 메일의 링크를 누르거나 코드를 입력해 주세요." />}
       </section>
 
-      <PasswordSection notice={new URLSearchParams(loc.search).get('notice') === 'password'} />
-
       <ProfileSection />
+      </div>
 
+      <div className="me-col">
       <section className="card stack">
         <h2 style={{ margin: 0 }}>이번 주 상담</h2>
         {!verified
@@ -183,7 +184,9 @@ export function Me() {
         <div><Link className="btn" to="/test">{type ? '다시 하기' : '테스트 하기'}</Link></div>
       </section>
 
-      {user.isTeam && <Link className="me-wide" to="/admin">팀 통계 보기</Link>}
+      <PasswordSection notice={new URLSearchParams(loc.search).get('notice') === 'password'} />
+      </div>
+
       {err && <p className="error-text me-wide" role="alert">{err}</p>}
       <section className="row me-wide">
         <button className="btn" onClick={async () => { await logout(); nav('/'); }}>로그아웃</button>

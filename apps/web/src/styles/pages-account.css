@@ -7,6 +7,8 @@
 .container.me-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .container.me-page > * { margin: 0; min-width: 0; }
 .container.me-page > h1, .container.me-page > .me-wide { grid-column: 1 / -1; }
+/* 두 열은 각자 위에서부터 쌓는다. 카드 높이가 달라도 빈 칸이 생기지 않는다. */
+.container.me-page > .me-col { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 .container.me-page > h1 { margin-bottom: 0; }
 
 /* 유형 테스트 */

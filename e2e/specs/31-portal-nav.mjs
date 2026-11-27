@@ -17,6 +17,21 @@ await step('signed-out masthead login links to login with next', async () => {
   eq(new URL(await page.url()).pathname, '/login', 'login opens login page');
 });
 
+await step('login next stays intact and login returns to guide', async () => {
+  const account = await newAccount('portal-next');
+  await resetOrigin();
+  await go('/login?next=%2Fguide');
+  await page.waitForSelector('.account-actions a[href^="/login"]');
+  eq(await page.evaluate(() => document.querySelector('.account-actions a[href^="/login"]').getAttribute('aria-current')), 'page', 'login link is current');
+  await page.click('.account-actions a[href^="/login"]');
+  eq(new URL(await page.url()).pathname + new URL(await page.url()).search, '/login?next=%2Fguide', 'login next remains intact');
+  await page.fill('input[type="email"]', account.email);
+  await page.fill('input[type="password"]', account.password);
+  await page.click('form button:has-text("로그인")');
+  await page.waitForURL('**/guide');
+  eq(new URL(await page.url()).pathname, '/guide', 'login returns to guide');
+});
+
 await step('logged-in masthead shows 내 정보 linking to /me', async () => {
   await newAccount('portal-nav');
   await go('/');
@@ -46,6 +61,20 @@ await step('지원사업 dropdown opens and closes on clicks and Escape', async 
   eq(await page.evaluate(() => document.querySelector('#portal-nav .nav-group button').getAttribute('aria-expanded')), 'true', 'dropdown reopened');
   await page.cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
   eq(await page.evaluate(() => document.querySelector('#portal-nav .nav-group button').getAttribute('aria-expanded')), 'false', 'Escape closes dropdown');
+});
+
+await step('hovered 지원사업 pins then explicitly closes without pointer movement', async () => {
+  await go('/');
+  const point = await page.evaluate(() => {
+    const r = document.querySelector('#portal-nav .nav-group button').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+  eq(await page.evaluate(() => document.querySelector('#portal-nav .nav-group button').getAttribute('aria-expanded')), 'true', 'hover opens dropdown');
+  await page.click('#portal-nav .nav-group:first-child button');
+  eq(await page.evaluate(() => document.querySelector('#portal-nav .nav-group button').getAttribute('aria-expanded')), 'true', 'click pins hovered dropdown');
+  await page.click('#portal-nav .nav-group:first-child button');
+  eq(await page.evaluate(() => document.querySelector('#portal-nav .nav-group button').getAttribute('aria-expanded')), 'false', 'second click closes hovered dropdown');
 });
 
 await step('home shortcuts expand from four to eight and collapse to four', async () => {
