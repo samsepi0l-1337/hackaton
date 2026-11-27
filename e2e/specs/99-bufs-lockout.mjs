@@ -1,5 +1,5 @@
 await resetOrigin();
-// The IP-based lock survives resetOrigin, so this spec must run last.
+// This spec must run last: the /bufs IP lock lasts 10 minutes and survives resetOrigin.
 await step('bufs wrong password lockout', async () => {
   await go('/bufs');
   await page.waitForSelector('input[type=password]');

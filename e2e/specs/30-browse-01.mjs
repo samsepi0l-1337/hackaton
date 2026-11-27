@@ -62,6 +62,10 @@ await step('type stage search q and paging', async () => {
   assert((await page.url()).includes('q=e2e-no-such-resource-xyz'), 'empty search reflected in URL');
   await go('/programs');
   await waitTitles(all.body.items.map(x => x.resource.title));
+  if (all.body.items.length <= 10) {
+    await go('/programs?page=999');
+    await waitTitles(all.body.items.map(x => x.resource.title));
+  }
   if (all.body.items.length > 10) {
     const first = await page.evaluate(() => document.querySelector('article h3').textContent);
     await page.click('nav[aria-label="페이지"] button:text-is("2")');

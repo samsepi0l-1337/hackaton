@@ -50,7 +50,9 @@ await step('fit sort with my conditions', async () => {
   await seeText('지금은 내 정보 조건과 창업 준비 단계로만 정렬해요');
   const r = await api('GET', '/api/resources?sort=fit');
   eq(r.status, 200, 'fit sort works with profile');
-  await page.waitForFunction(t => document.querySelector('article h3')?.textContent === t, r.body.items[0].resource.title);
+  const titles = r.body.items.map(x => x.resource.title).slice(0, 10);
+  await page.waitForFunction(expected => JSON.stringify([...document.querySelectorAll('article h3')].map(x => x.textContent)) === JSON.stringify(expected), titles);
+  eq(await page.evaluate(() => [...document.querySelectorAll('article h3')].map(x => x.textContent)), titles, 'rendered fit order');
   const oldOrder = before.body.items.map(x => x.resource.id);
   const newOrder = r.body.items.map(x => x.resource.id);
   assert(JSON.stringify(oldOrder) !== JSON.stringify(newOrder), 'conditions change fit order');
