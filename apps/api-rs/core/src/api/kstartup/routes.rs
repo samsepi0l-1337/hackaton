@@ -1,8 +1,22 @@
-//! TS 원본: apps/api/src/kstartup/routes.ts
+//! POST /api/admin/kstartup/sync
 use crate::app::Cx;
-use crate::http::{HResult, HttpError, Req};
+use crate::http::{HResult, HttpError, Req, Resp};
 
-/// POST /api/admin/kstartup/sync
-pub async fn sync(_cx: &mut Cx<'_>, _req: &Req) -> HResult {
-    Err(HttpError::not_implemented("POST /api/admin/kstartup/sync"))
+pub async fn sync(cx: &mut Cx<'_>, req: &Req) -> HResult {
+    if !crate::api::bufs::is_admin(cx, req) {
+        let (status, code) = if cx.user.is_some() {
+            (403, "forbidden")
+        } else {
+            (401, "unauthorized")
+        };
+        return Err(HttpError::new(
+            status,
+            code,
+            "관리자만 쓸 수 있어요 (/bufs 로그인)",
+        ));
+    }
+    Ok(Resp::json(
+        200,
+        &super::sync::run_sync(cx.kv, cx.env, cx.ports, cx.now).await,
+    ))
 }
