@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CONDITION_NOTE, CONDITION_STATUS_LABEL, RECRUIT_STATUS_LABEL } from '@gil/shared';
 import { LOCAL_AI_NOTE } from '../lib/localAi';
+import { HeartButton } from './HeartButton';
 import type { ConditionStatus, RecruitStatus, Resource, ResourceCard } from '@gil/shared';
 
 const RECRUIT_MARK: Record<RecruitStatus, string> = { open: '●', closed: '■', always: '◆', unknown: '?' };
@@ -43,7 +44,7 @@ export function ResourceResultCard({ card, onLink, localReason }: { card: Resour
   const r = card.resource;
   return (
     <article className="card stack">
-      <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /></div>
+      <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /><HeartButton id={r.id} title={r.title} liked={!!card.liked} /></div>
       <h3 style={{ margin: 0 }}><Link to={`/programs/${encodeURIComponent(r.id)}`}>{r.title}</Link></h3>
       <p className="muted">{r.agency}</p>
       <p><strong>관련 이유</strong> {localReason ?? card.reason}{(card.reasonProvenance === 'ai' || localReason) && <> <span className="badge">AI 제안·미검증</span></>}{localReason && <span className="muted"> {LOCAL_AI_NOTE}</span>}</p>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  applySummaryEdit, buildFieldQuestions, FIELD_PRESUPPOSE, buildPrep, buildRegional, buildSummary, checkConditions, coverageNote, problemsFor, recommendResources, validateStart,
+  applySummaryEdit, buildFieldQuestions, FIELD_PRESUPPOSE, buildPrep, buildRegional, buildSummary, checkConditions, mergeConditions, coverageNote, problemsFor, recommendResources, validateStart,
   type Exploration, type ProblemCard, type RegionalContext, type Resource,
 } from '../src';
 
@@ -53,9 +53,32 @@ describe('F4 조건 대조', () => {
     expect(status(r, {}).checks.find((c) => c.key === 'age')!.status).toBe('check');
   });
   test('원문 조건이 없으면 부합으로 확정하지 않는다', () => {
-    const s = status(res({ conditions: null }), { age: 25, residence: '해운대구', hasBusiness: false });
+    const s = status(res({ conditions: null, regions: ['부산'] }), { age: 25, residence: '해운대구', hasBusiness: false });
     expect(s.status).toBe('check');
-    expect(s.checks.filter((c) => c.key !== 'period').every((c) => c.status === 'check')).toBe(true);
+    const by = (k: string) => s.checks.find((c) => c.key === k)!;
+    expect(by('age').status).toBe('check');
+    expect(by('business').status).toBe('check');
+    // 입력한 값은 비교에 쓰였다는 것을 보여 준다
+    expect(by('age').detail).toContain('25세');
+    expect(by('business').detail).toContain('사업자 없음');
+    // 거주 조건이 없으면 지원 지역과 비교한다
+    expect(by('residence').status).toBe('match');
+    expect(by('residence').detail).toContain('해운대구');
+  });
+  test('지원 지역: 전국은 부합, 다른 지역은 불일치가 아니라 확인 필요', () => {
+    const get = (regions: Resource['regions'], u: object) => status(res({ conditions: null, regions }), u).checks.find((c) => c.key === 'residence')!.status;
+    expect(get(['전국'], { residence: '서울' })).toBe('match');
+    expect(get(['부산'], { residence: '서울' })).toBe('check');
+    expect(get(['부산'], {})).toBe('check');
+  });
+  test('나이 제한 없음(ageAny)은 부합', () => {
+    const c = status(res({ conditions: { ageAny: true } }), { age: 52 }).checks.find((x) => x.key === 'age')!;
+    expect(c.status).toBe('match');
+  });
+  test('mergeConditions: 대화 입력이 먼저, 모름·빈 칸은 내 정보로', () => {
+    expect(mergeConditions({ age: 'unknown', residence: '해운대구' }, { age: 25, residence: '연제구', hasBusiness: false })).toEqual({ age: 25, residence: '해운대구', hasBusiness: false });
+    expect(mergeConditions(undefined, { age: 25 })).toEqual({ age: 25 });
+    expect(mergeConditions({ age: 30 }, undefined)).toEqual({ age: 30 });
   });
   test('거주지·사업자', () => {
     const r = res({ conditions: { residence: '부산', business: 'pre' }, recruitStatus: 'always' });

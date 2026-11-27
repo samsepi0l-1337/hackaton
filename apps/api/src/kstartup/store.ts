@@ -27,7 +27,7 @@ export const ResourceSchema = z.object({
   capabilityTags: z.array(z.string()),
   contextIds: z.array(z.string()),
   conditions: z.object({
-    ageMin: z.number().optional(), ageMax: z.number().optional(), residence: z.string().optional(), business: z.enum(['pre', 'any', 'registered']).optional(),
+    ageMin: z.number().optional(), ageMax: z.number().optional(), ageAny: z.boolean().optional(), residence: z.string().optional(), business: z.enum(['pre', 'any', 'registered']).optional(),
   }).nullable(),
   test: z.boolean(),
 });

@@ -9,7 +9,7 @@ import {
   type BasicProfile, type PlanItem, type Program, type User,
 } from '@gil/shared';
 import { hashLegacyPassword } from './password';
-import { ApplicationSchema, BasicProfileSchema, BufsLockSchema, BufsSessionSchema, FeedbackRecordSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, RecoverySchema, SessionSchema, UserSchema, VerifySchema, ViewsSchema, type ExploreState, type FeedbackRecord, type RecoveryRecord, type VerifyRecord } from './db/schema';
+import { ApplicationSchema, BasicProfileSchema, BufsLockSchema, BufsSessionSchema, FeedbackRecordSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, RecoverySchema, SessionSchema, UserSchema, VerifySchema, ViewsSchema, LikesSchema, type ExploreState, type FeedbackRecord, type RecoveryRecord, type VerifyRecord } from './db/schema';
 
 export interface UserRecord extends User { passwordHash: string }
 
@@ -90,6 +90,8 @@ export interface Store {
   /** 이번 요청에서 읽거나 바꾼 레코드를 검사해 저장한다. */
   /** 지원 자료 조회 수 (KV `views:<resourceId>`). */
   viewCount(resourceId: string): number;
+  likes(userId: string): string[];
+  setLikes(userId: string, ids: string[]): void;
   viewCounts(): Map<string, number>;
   /** 같은 보는 사람(viewer 해시)은 자료마다 VIEW_WINDOW_MS 안에 한 번만 센다. 센 경우 true. */
   recordView(resourceId: string, viewer: string, now: Date): boolean;
@@ -136,6 +138,7 @@ const K = {
   recovery: (uid: string) => `recovery:${uid}`,
   rate: (kind: string, h: string) => `rate:${kind}:${h}`,
   profile: (uid: string) => `profile:${uid}`,
+  likes: (uid: string) => `likes:${uid}`,
   feedback: (id: string) => `feedback:${id}`,
   bufsLock: (h: string) => `bufslock:${h}`,
   bufs: (t: string) => `bufs:${t}`,
@@ -238,6 +241,7 @@ export async function createStore(now: Date, kv: KvLike = memoryKv(), opts: Stor
       kv.delete(K.recovery(id));
       kv.delete(K.quota(`u:${id}`));
       kv.delete(K.profile(id));
+      kv.delete(K.likes(id));
       explores.delete(id);
       users.delete(id);
       mentors.delete(id);
@@ -338,6 +342,14 @@ export async function createStore(now: Date, kv: KvLike = memoryKv(), opts: Stor
       return r.success ? r.data : [];
     },
     setQuota(key, times) { kv.put(K.quota(key), check(QuotaSchema, times, K.quota(key))); },
+    likes(uid) {
+      const r = LikesSchema.safeParse(kv.get(K.likes(uid)));
+      return r.success ? r.data : [];
+    },
+    setLikes(uid, ids) {
+      if (ids.length === 0) kv.delete(K.likes(uid));
+      else kv.put(K.likes(uid), check(LikesSchema, ids, K.likes(uid)));
+    },
     viewCount(id) {
       const r = ViewsSchema.safeParse(kv.get(K.views(id)));
       return r.success ? r.data : 0;
@@ -407,7 +419,7 @@ function purgeTestRecords(kv: KvLike, store: Store): void {
   const drop: string[] = [];
   for (const [k] of kv.list({ prefix: 'explore:g-' })) drop.push(k); // 예전 비회원 탐색 기록
   for (const p of ['quota:c:', 'quota:ip:']) for (const [k] of kv.list({ prefix: p })) drop.push(k); // 예전 쿠키·IP 횟수
-  for (const p of ['mentor:', 'explore:', 'profile:']) for (const [k] of kv.list({ prefix: p })) if (!live.has(k.slice(p.length))) drop.push(k);
+  for (const p of ['mentor:', 'explore:', 'profile:', 'likes:']) for (const [k] of kv.list({ prefix: p })) if (!live.has(k.slice(p.length))) drop.push(k);
   for (const k of drop) { kv.delete(k); keys++; }
   kv.delete(K.seeded);
   kv.put(K.purged, new Date().toISOString());

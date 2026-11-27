@@ -69,14 +69,29 @@ export function industryTagsOf(body: string): IndustryTag[] {
   return INDUSTRY_TAGS.filter((tag) => (tag === 'AI' ? /(?<![A-Za-z])AI(?![A-Za-z])/.test(body) : body.includes(tag)));
 }
 
+/** 나이 구간들이 빈틈 없이 이어지면 [최소, 최대]. 중간에 빈 나이가 있으면 null (하나의 범위로 줄이면 틀린다). */
+export function contiguous(ranges: Array<[number, number]>): [number, number] | null {
+  if (ranges.length === 0) return null;
+  const s = [...ranges].sort((a, b) => a[0] - b[0]);
+  let [lo, hi] = s[0];
+  for (const [a, b] of s.slice(1)) {
+    if (a > hi + 1) return null;
+    hi = Math.max(hi, b);
+  }
+  return [lo, hi];
+}
+
 function conditionsOf(item: KStartupItem): Resource['conditions'] {
   const c: NonNullable<Resource['conditions']> = {};
   const ranges = parseAgeRanges(text(item.biz_trgt_age));
-  if (Array.isArray(ranges) && ranges.length) {
-    const lo = Math.min(...ranges.map((r) => r[0]));
-    const hi = Math.max(...ranges.map((r) => r[1]));
-    if (lo > 0) c.ageMin = lo;
-    if (Number.isFinite(hi)) c.ageMax = hi;
+  const span = ranges === 'open' ? [0, Infinity] as const : Array.isArray(ranges) ? contiguous(ranges) : null;
+  if (span) {
+    const [lo, hi] = span;
+    if (lo <= 0 && !Number.isFinite(hi)) c.ageAny = true;
+    else {
+      if (lo > 0) c.ageMin = lo;
+      if (Number.isFinite(hi)) c.ageMax = hi;
+    }
   }
   const { business } = enyyOf(item.biz_enyy);
   if (business) c.business = business;

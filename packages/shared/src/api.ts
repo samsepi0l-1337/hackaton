@@ -88,7 +88,12 @@ export const ROUTES = {
   events: '/api/explore/events', // POST { type: ExploreEventType, resourceId? } → { ok: true } (원문 대화 넣지 않음)
   resources: '/api/resources', // GET ?type=&stage=&q=&sort=recent|popular|deadline (기본 deadline) → { items: ResourceCard[] } (F18)
   resource: (id: string) => `/api/resources/${encodeURIComponent(id)}`, // GET → ResourceCard (조회 1회로 센다: 같은 사람은 6시간에 한 번)
+  likes: '/api/likes', // GET → LikesResponse (로그인 필요)
+  like: (id: string) => `/api/likes/${encodeURIComponent(id)}`, // PUT { liked: boolean } → LikesResponse (로그인 필요)
 } as const;
+
+/** 관심 표시(하트)한 자료 id 와, 하트에서 읽은 관심 주제 (안내용). */
+export interface LikesResponse { ids: string[]; topics: string[] }
 
 // ---- 개정 기획 요청·응답 ----
 export interface ExploreOptionsResponse {

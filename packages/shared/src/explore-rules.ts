@@ -3,6 +3,7 @@
 import { BUSAN_DISTRICTS } from './constants';
 import { CONTEXTS, PROBLEMS, RESOURCES } from './data';
 import { kstDate } from './date';
+import { likeSimilarity, type LikeProfile } from './likes';
 import {
   IDEA_MAX_V2, INDUSTRY_TAGS, INTEREST_EXTRA, REVIEW_REGIONS,
   type ConditionCheck, type ConditionStatus, type Exploration, type FieldQuestion, type IndustryTag, type PrepItem, type ProblemCard,
@@ -68,6 +69,34 @@ export interface ConditionResult {
   notes: string[];
 }
 
+/**
+ * 원문에 거주 조건이 없을 때: 자료의 이용·지원 지역과 입력한 거주지를 비교한다.
+ * 지원 지역은 사업장 소재지 기준일 수 있어서 달라도 '불일치'로 정하지 않는다 (추천에서 빠지지 않게).
+ */
+function regionCheck(r: Resource, userRes: string | null): ConditionCheck {
+  if (r.regions.includes('전국')) return mk('residence', '거주지', 'match', userRes ? `전국 대상이에요 (입력한 거주지 ${userRes})` : '전국 대상이에요');
+  const area = r.regions.join('·');
+  if (!area) return mk('residence', '거주지', 'check', '원문의 거주 조건을 확인하지 못했어요');
+  if (!userRes) return mk('residence', '거주지', 'check', `지원 지역은 ${area}예요. 거주지를 입력하지 않아 비교하지 못했어요`);
+  const have = regionOfText(userRes);
+  const inArea = have !== null && r.regions.some((x) => x === have || x === '부울경');
+  return inArea
+    ? mk('residence', '거주지', 'match', `입력한 거주지(${userRes})가 지원 지역(${area})에 속해요. 사업장 소재지 조건은 공식 안내로 확인해 주세요`)
+    : mk('residence', '거주지', 'check', `지원 지역(${area})과 입력한 거주지(${userRes})가 달라요. 사업장 소재지 기준인지 공식 안내로 확인해 주세요`);
+}
+
+/** 대화에서 입력한 조건이 먼저, 비었거나 '모름'인 칸은 내 정보 값으로 채운다. */
+export function mergeConditions(session: UserConditions | undefined, profile: UserConditions | undefined): UserConditions | undefined {
+  if (!session) return profile;
+  if (!profile) return session;
+  const out: UserConditions = { ...profile };
+  for (const k of ['age', 'residence', 'affiliation', 'hasBusiness'] as const) {
+    const v = session[k];
+    if (v !== undefined && v !== 'unknown' && v !== '') (out as Record<string, unknown>)[k] = v;
+  }
+  return out;
+}
+
 export function checkConditions(r: Resource, user: UserConditions | undefined, now: Date): ConditionResult {
   const u = user ?? {};
   const c = r.conditions;
@@ -76,14 +105,15 @@ export function checkConditions(r: Resource, user: UserConditions | undefined, n
 
   // 나이
   const age = typeof u.age === 'number' ? u.age : null;
-  if (!c || (c.ageMin === undefined && c.ageMax === undefined)) checks.push(mk('age', '나이', 'check', '원문의 나이 조건을 확인하지 못했어요'));
+  if (c?.ageAny) checks.push(mk('age', '나이', 'match', age === null ? '나이 제한이 없다고 명시돼 있어요' : `나이 제한이 없다고 명시돼 있어요 (입력한 나이 ${age}세)`));
+  else if (!c || (c.ageMin === undefined && c.ageMax === undefined)) checks.push(mk('age', '나이', 'check', age === null ? '원문의 나이 조건을 확인하지 못했어요' : `입력한 나이는 ${age}세예요. 원문에 나이 조건이 없어 공식 안내로 확인해 주세요`));
   else if (age === null) checks.push(mk('age', '나이', 'check', '나이를 입력하지 않아 비교하지 못했어요'));
   else if ((c.ageMin !== undefined && age < c.ageMin) || (c.ageMax !== undefined && age > c.ageMax)) checks.push(mk('age', '나이', 'mismatch', `입력한 나이 ${age}세가 명시 조건(${c.ageMin ?? ''}~${c.ageMax ?? ''}세)과 달라요`));
   else checks.push(mk('age', '나이', 'match', `입력한 나이 ${age}세가 명시 조건(${c.ageMin ?? ''}~${c.ageMax ?? ''}세) 범위예요`));
 
   // 거주지
   const userRes = typeof u.residence === 'string' && u.residence !== 'unknown' ? u.residence : null;
-  if (!c?.residence) checks.push(mk('residence', '거주지', 'check', '원문의 거주 조건을 확인하지 못했어요'));
+  if (!c?.residence) checks.push(regionCheck(r, userRes));
   else if (!userRes) checks.push(mk('residence', '거주지', 'check', '거주지를 입력하지 않아 비교하지 못했어요'));
   else {
     const need = regionOfText(c.residence) ?? c.residence;
@@ -97,7 +127,7 @@ export function checkConditions(r: Resource, user: UserConditions | undefined, n
 
   // 사업자 여부
   const biz = typeof u.hasBusiness === 'boolean' ? u.hasBusiness : null;
-  if (!c?.business) checks.push(mk('business', '사업자 여부', 'check', '원문의 사업자 조건을 확인하지 못했어요'));
+  if (!c?.business) checks.push(mk('business', '사업자 여부', 'check', biz === null ? '원문의 사업자 조건을 확인하지 못했어요' : `입력한 정보는 ${biz ? '사업자 있음' : '사업자 없음(예비창업자)'}이에요. 원문에 사업자 조건이 없어 공식 안내로 확인해 주세요`));
   else if (c.business === 'any') checks.push(mk('business', '사업자 여부', 'match', '사업자 여부와 상관없다고 명시돼 있어요'));
   else if (biz === null) checks.push(mk('business', '사업자 여부', 'check', '사업자 여부를 입력하지 않아 비교하지 못했어요'));
   else if ((c.business === 'pre') === biz) checks.push(mk('business', '사업자 여부', 'mismatch', c.business === 'pre' ? '예비창업자(사업자 없음) 대상이라고 명시돼 있어요' : '사업자 등록자 대상이라고 명시돼 있어요'));
@@ -156,6 +186,8 @@ export interface ExploreRecommendInput {
   now: Date;
   resources?: Resource[];
   problems?: ProblemCard[];
+  /** 관심 표시(하트)한 자료의 특징. 후보를 늘리지 않고, 같은 점수 묶음 안의 순서에만 쓴다. */
+  likes?: LikeProfile | null;
 }
 export interface Recommended { resource: Resource; condition: ConditionResult; regionMatch: boolean; linked: boolean; capMatch: boolean }
 
@@ -184,8 +216,10 @@ export function recommendResources(input: ExploreRecommendInput): { items: Recom
     if (condition.closed || condition.status === 'mismatch') continue;
     const linked = linkedIds.has(r.id);
     const capMatch = r.capabilityTags.some((t) => caps.has(t));
-    const fit = (linked ? 2 : 0) + (capMatch ? 1 : 0);
-    if (fit === 0 && input.readiness) continue; // 억지로 채우지 않는다
+    const base = (linked ? 2 : 0) + (capMatch ? 1 : 0);
+    if (base === 0 && input.readiness) continue; // 억지로 채우지 않는다 (하트만으로는 후보가 되지 않음)
+    // 하트 비슷함(0..1)은 0.9 배로 더해서 문제 연결(2)·도움 종류(1) 차이를 뒤집지 않는다.
+    const fit = base + 0.9 * likeSimilarity(r, input.likes);
     rows.push({ resource: r, condition, regionMatch: resourceRegionMatch(r, input.reviewRegion), linked, capMatch, fit });
   }
   // 지역은 동등한 후보 사이의 순서에만 쓴다. 마감 임박 가산점 없음.

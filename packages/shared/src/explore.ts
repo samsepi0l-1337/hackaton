@@ -91,7 +91,7 @@ export interface Resource {
   industryTags: IndustryTag[]; // 실제 지원 분야 (명시 근거 있을 때만)
   capabilityTags: string[]; // 교육·상담·시제품 등
   contextIds: string[];
-  conditions: { ageMin?: number; ageMax?: number; residence?: string; business?: 'pre' | 'any' | 'registered' } | null; // null = 원문 조건 미확인
+  conditions: { ageMin?: number; ageMax?: number; ageAny?: boolean; residence?: string; business?: 'pre' | 'any' | 'registered' } | null; // null = 원문 조건 미확인
   test: boolean;
 }
 
@@ -188,12 +188,14 @@ export interface ResourceCard {
   condition: { status: ConditionStatus; checks: ConditionCheck[] };
   regionMatch: boolean; // 사용자 검토 지역과 연결 (동순위 정렬에만 사용)
   views?: number; // 많이 본 공모 순서에 쓰는 조회 수 (목록·상세 응답에만 붙는다)
+  liked?: boolean; // 로그인 사용자가 관심 표시(하트)한 자료
+  fit?: number; // '나에게 맞는 순' 점수 (하트 비슷함 + 내 정보 조건 + 준비 단계). 목록 응답에만
 }
 
-/** 지원 목록 정렬: 최근 공모 / 많이 본 공모 / 마감 임박. */
-export const RESOURCE_SORTS = ['recent', 'popular', 'deadline'] as const;
+/** 지원 목록 정렬: 나에게 맞는 순 / 최근 공모 / 많이 본 공모 / 마감 임박. */
+export const RESOURCE_SORTS = ['fit', 'recent', 'popular', 'deadline'] as const;
 export type ResourceSort = (typeof RESOURCE_SORTS)[number];
-export const RESOURCE_SORT_LABEL: Record<ResourceSort, string> = { recent: '최근 공모', popular: '많이 본 공모', deadline: '마감 임박' };
+export const RESOURCE_SORT_LABEL: Record<ResourceSort, string> = { fit: '나에게 맞는 순', recent: '최근 공모', popular: '많이 본 공모', deadline: '마감 임박' };
 
 /** 데이터 버전. 문제 카드가 바뀌면 올린다. */
 export const EXPLORE_DATA_VERSION = '2026-11-27.no-test-data';

@@ -7,7 +7,7 @@ import type {
   ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
   BasicProfile, BufsFeedbackResponse, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
-import type { RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
+import type { LikesResponse, RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
 
 export const AUTH_GATE_EVENT = 'gil:auth-gate';
 
@@ -109,4 +109,6 @@ export const api = {
 
   resources: (q: ResourceQuery) => get<{ items: ResourceCard[] }>(ROUTES.resources + qs({ ...q })),
   resource: (id: string) => get<ResourceCard>(ROUTES.resource(id)),
+  likes: () => get<LikesResponse>(ROUTES.likes),
+  like: (id: string, liked: boolean) => put<LikesResponse>(ROUTES.like(id), { liked }),
 };
