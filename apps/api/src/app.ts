@@ -555,6 +555,10 @@ export function createApp(opts: AppOptions = {}) {
     const env = { ...opts.env, ...(c.env ?? {}) } as Bindings;
     const docWorker = opts.docWorkerFor?.(env) ?? null;
     if (!docWorker) throw new HttpError(409, 'conflict', 'doc-worker 가 연결되어 있지 않아요');
+    if (b.discoverOnly === true) {
+      const res = await docWorker.fetch('/discover', { pageUrl: b.pageUrl });
+      return c.json({ status: res.status, body: await res.json().catch(() => null) });
+    }
     const started = Date.now();
     const r = await readAnnouncementForm(env, { docWorker, fetch: opts.fetch }, b.pageUrl);
     const ms = Date.now() - started;

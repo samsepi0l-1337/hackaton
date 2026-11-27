@@ -20,4 +20,6 @@ export interface Bindings {
   DOC_WORKER?: DurableObjectNamespace;
   /** '0' 이면 컨테이너 인터넷을 끈다 (로컬 dev 확인용). 기본 켬. */
   DOC_WORKER_INTERNET?: string;
+  /** 배포 버전 정보 (wrangler version_metadata). */
+  CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
 }

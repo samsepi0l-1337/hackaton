@@ -14,7 +14,7 @@ export class GilApp extends DurableObject<Bindings> {
     super(ctx, env);
     this.app = createApp({
       store: () => createStore(new Date(), ctx.storage.kv),
-      docWorkerFor: (e) => (e.DOC_WORKER ? docWorkerClient(e.DOC_WORKER) : null),
+      docWorkerFor: (e) => (e.DOC_WORKER ? docWorkerClient(e.DOC_WORKER, e.CF_VERSION_METADATA?.id) : null),
     });
   }
 
