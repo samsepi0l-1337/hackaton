@@ -7,8 +7,13 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
-  // 배포 환경: Upstage 사용 (secret UPSTAGE_API_KEY 필요). 로컬 Bun 실행은 기본 off.
-  "vars": { "AI_MODE": "upstage", "AI_GATEWAY_ID": "gil-gateway", "DECIDE_ENABLED": "1" },
+  // Upstage 호출은 모두 AI Gateway(gil-gateway, 커스텀 provider custom-upstage)를 지난다. 키는 게이트웨이 BYOK, Worker 는 secret CF_AIG_TOKEN(Run)만 가진다.
+  "vars": {
+    "AI_MODE": "upstage",
+    "AI_GATEWAY_ID": "gil-gateway",
+    "DECIDE_ENABLED": "1",
+    "UPSTAGE_BASE_URL": "https://gateway.ai.cloudflare.com/v1/01d6807196c93a4774c1bb50ee8f4ebb/gil-gateway/custom-upstage"
+  },
 
   // AI_MODE=route 일 때 AI Gateway 동적 라우트 dynamic/gil 호출. 로컬 dev에서도 원격 호출이다.
   "ai": { "binding": "AI" },

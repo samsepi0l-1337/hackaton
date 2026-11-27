@@ -1,6 +1,7 @@
 // 문장 생성 어댑터. 어떤 실패든 null 을 돌려주고 호출한 쪽이 규칙 문장을 쓴다. 절대 throw 하지 않는다.
 import { AI_GATEWAY_ID_DEFAULT, AI_ROUTE, AI_TIMEOUT_MS, AI_TIMEOUT_BY_TASK, SOLAR_MODELS, UPSTAGE_BASE_URL, type AiMetadata, type AiMode, type AiTask } from '@gil/shared';
 import type { Bindings } from '../env';
+import { upstageHeaders, upstageReady } from './upstage';
 
 export interface ChatMsg { role: 'system' | 'user' | 'assistant'; content: string }
 export interface AiDeps { fetch?: typeof fetch }
@@ -11,7 +12,7 @@ export interface TextAi {
 
 export function resolveMode(env: Partial<Bindings>): AiMode {
   const m = (env.AI_MODE ?? 'off').trim().toLowerCase();
-  if (m === 'upstage') return env.UPSTAGE_API_KEY ? 'upstage' : 'off';
+  if (m === 'upstage') return upstageReady(env) ? 'upstage' : 'off';
   if (m === 'route') return env.AI ? 'route' : 'off';
   return 'off';
 }
@@ -43,8 +44,7 @@ export function createTextAi(env: Partial<Bindings> = {}, deps: AiDeps = {}): Te
           const out = await withTimeout(() => env.AI!.run(AI_ROUTE as any, { messages } as any, { gateway: { id: env.AI_GATEWAY_ID || AI_GATEWAY_ID_DEFAULT, metadata } } as any), AI_TIMEOUT_BY_TASK[task]);
           return contentOf(out);
         }
-        const headers: Record<string, string> = { 'content-type': 'application/json', authorization: `Bearer ${env.UPSTAGE_API_KEY}`, 'cf-aig-metadata': JSON.stringify(metadata) };
-        if (env.CF_AIG_TOKEN) headers['cf-aig-authorization'] = `Bearer ${env.CF_AIG_TOKEN}`;
+        const headers = upstageHeaders(env, { 'content-type': 'application/json', 'cf-aig-metadata': JSON.stringify(metadata) });
         return await withTimeout(async (signal) => {
           const res = await doFetch(`${base}/chat/completions`, { method: 'POST', headers, signal, body: JSON.stringify({ model: SOLAR_MODELS[task], messages }) });
           if (!res.ok) throw new Error(`http ${res.status}`);

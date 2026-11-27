@@ -12,7 +12,7 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | 공통 패키지(타입·계약·규칙·테스트 데이터) | 완료 (#5) |
 | API (메모리 저장소) | 완료 (#6) |
 | 목업 웹 | 완료 (#8) |
-| 국내 AI (Upstage Solar·Decide·Document Parse) + AI Gateway | 구현 완료 (#11, #12), 실제 키 확인 남음 |
+| 국내 AI (Upstage) + AI Gateway | 운영 중, 모든 호출 게이트웨이 경유. 동적 라우트 전환은 보류 |
 | Cloudflare Containers doc-worker | 구현·로컬 통합 완료, 실제 공고 확인은 배포 후 |
 | DB (Durable Object SQLite + Zod) | 완료 |
 | 배포 | 완료: https://gil-api.samsepi0l1337.workers.dev |
@@ -76,8 +76,9 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] 테스트: 가짜 fetch로 성공·실패·시간 초과·사실 검사·Decide 응답·Document Parse 응답
 - [x] Upstage API 키 `gil-hackathon` 발급, 로컬 `apps/api/.dev.vars` (git 제외)
 - [ ] Solar Decide 베타 약관 동의 (조직 소유자, 2026-12-23 전) **입력 필요** — 지금은 동의 없이도 호출됨
-- [ ] AI Gateway 생성(인증 켜기), 커스텀 프로바이더 `upstage` (base `https://api.upstage.ai`) 등록, 라우트 업로드·배포
-- [ ] 라우트 모델 노드의 provider 값(`custom-upstage`?, `workers-ai`?)을 대시보드에서 확인
+- [x] AI Gateway `gil-gateway` 생성(인증·로그·분당 120회), 커스텀 provider `upstage`, Upstage 키 BYOK, 동적 라우트 `dynamic/gil` 생성·배포 (`infra/ai-gateway/`)
+- [x] 운영: Solar·Decide·Document Parse 모두 게이트웨이 경유 (`UPSTAGE_BASE_URL`=custom-upstage, secret `CF_AIG_TOKEN` Run 권한). Worker 의 Upstage 키 secret 삭제
+- [ ] 동적 라우트 `dynamic/gil` 로 전환 (`AI_MODE=route`): 커스텀 provider 노드가 동작하지 않아 보류 — `infra/ai-gateway/README.md`
 - [ ] Upstage 콘솔·AI Gateway 대시보드에서 하루 사용량 확인
 
 ## 4. Cloudflare Containers: doc-worker

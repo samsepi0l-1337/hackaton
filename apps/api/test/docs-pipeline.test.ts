@@ -28,11 +28,11 @@ describe('parseDocument', () => {
       seen = { url, headers: new Headers(init?.headers), form: init!.body as FormData };
       return json({ content: { markdown: '## 본문', text: '평문' } });
     };
-    const r = await parseDocument({ ...env, CF_AIG_TOKEN: 't', UPSTAGE_BASE_URL: 'https://gw.example/v1/' }, file, { fetch: f });
+    const r = await parseDocument({ ...env, CF_AIG_TOKEN: 't', UPSTAGE_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/a/g/custom-upstage/' }, file, { fetch: f });
     expect(r?.text).toBe('## 본문');
     expect(r?.kind).toBe('hwpx');
-    expect(seen!.url).toBe('https://gw.example/v1/document-digitization');
-    expect(seen!.headers.get('authorization')).toBe('Bearer k');
+    expect(seen!.url).toBe('https://gateway.ai.cloudflare.com/v1/a/g/custom-upstage/document-digitization');
+    expect(seen!.headers.get('authorization')).toBeNull(); // 게이트웨이 경유: 키는 BYOK
     expect(seen!.headers.get('cf-aig-authorization')).toBe('Bearer t');
     expect(seen!.form.get('model')).toBe('document-parse');
     expect((seen!.form.get('document') as File).name).toBe('사업계획서.hwpx');

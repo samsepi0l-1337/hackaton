@@ -2,6 +2,7 @@
 import { DECIDE_ATTEMPTS, DECIDE_MAX_CHOICES, DECIDE_MODEL, DECIDE_TIMEOUT_MS, UPSTAGE_BASE_URL, type Program } from '@gil/shared';
 import type { Bindings } from '../env';
 import { resolveMode, type AiDeps } from './solar';
+import { upstageHeaders, upstageReady } from './upstage';
 
 export interface Decide {
   enabled: boolean;
@@ -22,7 +23,7 @@ export function normalizeByMax(probs: Record<string, number>): Record<string, nu
 
 export function createDecide(env: Partial<Bindings> = {}, deps: AiDeps = {}): Decide {
   const doFetch = deps.fetch ?? fetch;
-  const enabled = resolveMode(env) !== 'off' && !!env.UPSTAGE_API_KEY && env.DECIDE_ENABLED === '1';
+  const enabled = resolveMode(env) !== 'off' && upstageReady(env) && env.DECIDE_ENABLED === '1';
   const base = (env.UPSTAGE_BASE_URL || UPSTAGE_BASE_URL).replace(/\/+$/, '');
   return {
     enabled,
@@ -35,8 +36,7 @@ export function createDecide(env: Partial<Bindings> = {}, deps: AiDeps = {}): De
       const timeout = new Promise<never>((_, rej) => { timer = setTimeout(() => { ctl.abort(); rej(new Error('timeout')); }, DECIDE_TIMEOUT_MS); });
       try {
         const criteria = Object.fromEntries(list.map((p) => [p.id, clip(`${p.title} / ${p.category} / ${p.content}`, 200)]));
-        const headers: Record<string, string> = { 'content-type': 'application/json', authorization: `Bearer ${env.UPSTAGE_API_KEY}` };
-        if (env.CF_AIG_TOKEN) headers['cf-aig-authorization'] = `Bearer ${env.CF_AIG_TOKEN}`;
+        const headers = upstageHeaders(env, { 'content-type': 'application/json', 'cf-aig-metadata': JSON.stringify({ app: 'gil', task: 'decide', user_id: 'server' }) });
         const res = await Promise.race([timeout, doFetch(`${base}/systemone`, {
           method: 'POST', headers, signal: ctl.signal,
           body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { upstageHeaders, upstageReady } from '../ai/upstage';
 // Upstage Document Parse 호출. 실패해도 던지지 않고 null 을 돌려준다.
 import {
   DOCUMENT_PARSE_MAX_BYTES,
@@ -50,8 +51,8 @@ export async function parseDocument(
     console.warn(`[docs] 파일이 너무 큼: ${file.fileName} (${file.bytes.byteLength} bytes)`);
     return null;
   }
-  if (!env.UPSTAGE_API_KEY) {
-    console.warn('[docs] UPSTAGE_API_KEY 없음, 문서 파싱 생략');
+  if (!upstageReady(env)) {
+    console.warn('[docs] Upstage 설정 없음 (키 또는 게이트웨이), 문서 파싱 생략');
     return null;
   }
   const doFetch: FetchFn = opts.fetch ?? ((u, i) => fetch(u, i));
@@ -63,8 +64,7 @@ export async function parseDocument(
   form.set('output_formats', "['markdown','text']");
   form.set('coordinates', 'false');
   form.set('document', new Blob([file.bytes as BlobPart]), file.fileName);
-  const headers: Record<string, string> = { Authorization: `Bearer ${env.UPSTAGE_API_KEY}` };
-  if (env.CF_AIG_TOKEN) headers['cf-aig-authorization'] = `Bearer ${env.CF_AIG_TOKEN}`;
+  const headers = upstageHeaders(env);
 
   try {
     const res = await doFetch(url, { method: 'POST', headers, body: form });

@@ -72,8 +72,20 @@ describe('text ai adapter', () => {
     expect(calls[0]!.url).toBe('https://api.upstage.ai/v1/chat/completions');
     expect(calls[0]!.body.model).toBe('solar-mini-4-5-preview');
     expect(calls[1]!.body.model).toBe('solar-pro-4');
+    // 게이트웨이 주소가 아니면 직접 호출: Upstage 키만 보낸다
     expect((calls[0]!.headers as any).authorization).toBe('Bearer k');
+    expect((calls[0]!.headers as any)['cf-aig-authorization']).toBeUndefined();
+  });
+  test('upstage via AI Gateway: 키 없이 게이트웨이 토큰만 (BYOK)', async () => {
+    const { f, calls } = fake(() => chat('안녕'));
+    const gw = { AI_MODE: 'upstage', CF_AIG_TOKEN: 't', UPSTAGE_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/a/gil-gateway/custom-upstage' };
+    const ai = createTextAi(gw, { fetch: f });
+    expect(ai.mode).toBe('upstage');
+    expect(await ai.generate('mentor', [{ role: 'user', content: 'hi' }], { userId: 'g-1' })).toBe('안녕');
+    expect(calls[0]!.url).toBe('https://gateway.ai.cloudflare.com/v1/a/gil-gateway/custom-upstage/chat/completions');
+    expect((calls[0]!.headers as any).authorization).toBeUndefined();
     expect((calls[0]!.headers as any)['cf-aig-authorization']).toBe('Bearer t');
+    expect(JSON.parse((calls[0]!.headers as any)['cf-aig-metadata'])).toMatchObject({ task: 'mentor', user_id: 'g-1' });
   });
   test('http errors and empty answers give null', async () => {
     for (const status of [500, 403]) {

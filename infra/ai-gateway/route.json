@@ -1,43 +1,132 @@
 {
   "name": "gil",
   "elements": [
-    { "id": "start", "type": "start", "outputs": { "next": { "elementId": "per_user" } } },
+    {
+      "id": "start",
+      "type": "start",
+      "outputs": {
+        "next": {
+          "elementId": "per_user"
+        }
+      }
+    },
     {
       "id": "per_user",
       "type": "rate",
-      "properties": { "limitType": "count", "key": "metadata.user_id", "limit": 40, "window": 3600 },
-      "outputs": { "success": { "elementId": "daily_budget" } }
+      "properties": {
+        "limitType": "count",
+        "key": "metadata.user_id",
+        "limit": 40,
+        "window": 3600
+      },
+      "outputs": {
+        "success": {
+          "elementId": "daily_budget"
+        },
+        "fallback": {
+          "elementId": "end"
+        }
+      }
     },
     {
       "id": "daily_budget",
       "type": "rate",
-      "properties": { "limitType": "cost", "key": "metadata.app", "limit": 1, "window": 86400 },
-      "outputs": { "success": { "elementId": "is_fast" } }
+      "properties": {
+        "limitType": "cost",
+        "key": "metadata.app",
+        "limit": 1,
+        "window": 86400
+      },
+      "outputs": {
+        "success": {
+          "elementId": "is_fast"
+        },
+        "fallback": {
+          "elementId": "end"
+        }
+      }
     },
     {
       "id": "is_fast",
       "type": "conditional",
-      "properties": { "conditions": { "metadata.task": { "$in": ["mentor", "reason"] } } },
-      "outputs": { "true": { "elementId": "solar_mini" }, "false": { "elementId": "solar_pro" } }
+      "properties": {
+        "conditions": {
+          "metadata.task": {
+            "$in": [
+              "mentor",
+              "reason",
+              "prep"
+            ]
+          }
+        }
+      },
+      "outputs": {
+        "true": {
+          "elementId": "solar_mini"
+        },
+        "false": {
+          "elementId": "solar_pro"
+        }
+      }
     },
     {
       "id": "solar_pro",
       "type": "model",
-      "properties": { "provider": "custom-upstage", "model": "solar-pro-4", "timeout": 15000, "retries": 1 },
-      "outputs": { "success": { "elementId": "end" }, "fallback": { "elementId": "solar_mini" } }
+      "properties": {
+        "provider": "custom-upstage",
+        "model": "solar-pro-4",
+        "timeout": 9000,
+        "retries": 0
+      },
+      "outputs": {
+        "success": {
+          "elementId": "end"
+        },
+        "fallback": {
+          "elementId": "solar_mini_fallback"
+        }
+      }
+    },
+    {
+      "id": "solar_mini_fallback",
+      "type": "model",
+      "properties": {
+        "provider": "custom-upstage",
+        "model": "solar-mini-4-5-preview",
+        "timeout": 5000,
+        "retries": 0
+      },
+      "outputs": {
+        "success": {
+          "elementId": "end"
+        },
+        "fallback": {
+          "elementId": "end"
+        }
+      }
     },
     {
       "id": "solar_mini",
       "type": "model",
-      "properties": { "provider": "custom-upstage", "model": "solar-mini-4-5-preview", "timeout": 8000, "retries": 1 },
-      "outputs": { "success": { "elementId": "end" }, "fallback": { "elementId": "workers_ai" } }
+      "properties": {
+        "provider": "custom-upstage",
+        "model": "solar-mini-4-5-preview",
+        "timeout": 7000,
+        "retries": 0
+      },
+      "outputs": {
+        "success": {
+          "elementId": "end"
+        },
+        "fallback": {
+          "elementId": "end"
+        }
+      }
     },
     {
-      "id": "workers_ai",
-      "type": "model",
-      "properties": { "provider": "workers-ai", "model": "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "timeout": 8000, "retries": 0 },
-      "outputs": { "success": { "elementId": "end" } }
-    },
-    { "id": "end", "type": "end", "outputs": {} }
+      "id": "end",
+      "type": "end",
+      "outputs": {}
+    }
   ]
 }
