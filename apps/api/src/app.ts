@@ -32,6 +32,8 @@ export interface AppOptions {
   store?: () => Promise<Store>;
   /** 탐색 AI 호출 한도 (행위자당 시간당). 기본 40. */
   exploreAiLimit?: number;
+  /** 테스트용: 상담 횟수 제한 덮어쓰기 (기본 CONSULT_LIMIT: 7일 3회). */
+  consultLimit?: { count?: number; windowDays?: number };
 }
 
 type Env = AppEnv;
@@ -131,7 +133,7 @@ export function createApp(opts: AppOptions = {}) {
 
   app.onError((err, c) => {
     if (err instanceof HttpError) {
-      const body: ApiError = { error: { code: err.code, message: err.message, ...(err.fields ? { fields: err.fields } : {}) } };
+      const body: ApiError = { error: { code: err.code, message: err.message, ...(err.fields ? { fields: err.fields } : {}), ...(err.quota ? { quota: err.quota } : {}) } };
       return c.json(body, err.status);
     }
     console.error(err);
@@ -589,7 +591,7 @@ export function createApp(opts: AppOptions = {}) {
     return c.json({ ...stats, explore: exploreStats(store) });
   });
 
-  mountExplore(app, { clock, aiLimit: opts.exploreAiLimit });
+  mountExplore(app, { clock, aiLimit: opts.exploreAiLimit, consultLimit: opts.consultLimit, env: opts.env });
 
   return app;
 }

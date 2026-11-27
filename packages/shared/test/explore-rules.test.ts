@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  applySummaryEdit, buildPrep, buildRegional, buildSummary, checkConditions, coverageNote, problemsFor, recommendResources, validateStart,
+  applySummaryEdit, buildFieldQuestions, FIELD_PRESUPPOSE, buildPrep, buildRegional, buildSummary, checkConditions, coverageNote, problemsFor, recommendResources, validateStart,
   type Exploration, type ProblemCard, type RegionalContext, type Resource,
 } from '../src';
 
@@ -223,5 +223,21 @@ describe('지역 검토 카드', () => {
     const note = coverageNote('울산');
     expect(note).toContain('울산');
     expect(note).toContain('자료가 없어요');
+  });
+});
+
+describe('buildFieldQuestions', () => {
+  const prob = { id: 'p', title: '[테스트] 협력사의 기록 관리', affectedUser: '현장 관리자', unknowns: ['이미 쓰는 서비스가 있는지'] } as unknown as ProblemCard;
+  test('최대 3개, 현재 방식을 먼저 묻고 전제하지 않는다', () => {
+    const q = buildFieldQuestions(prob, null, null, prob.unknowns);
+    expect(q.length).toBeLessThanOrEqual(3);
+    expect(q[0]!.question).toContain('협력사의 기록 관리');
+    expect(q[0]!.question).toContain('현재 어떤 방식');
+    expect(q.map((x) => x.id)).toContain('fq-tools');
+    for (const x of q) { expect(x.source).toBe('rule'); expect(FIELD_PRESUPPOSE.test(x.question)).toBe(false); }
+  });
+  test('문제가 없어도 일반 질문 3개', () => {
+    const q = buildFieldQuestions(undefined, null, null, []);
+    expect(q.map((x) => x.id)).toEqual(['fq-current', 'fq-time', 'fq-conditions']);
   });
 });

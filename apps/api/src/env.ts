@@ -20,6 +20,8 @@ export interface Bindings {
   DOC_WORKER?: DurableObjectNamespace;
   /** '0' 이면 컨테이너 인터넷을 끈다 (로컬 dev 확인용). 기본 켬. */
   DOC_WORKER_INTERNET?: string;
+  /** 상담 횟수 제한에서 접속 IP 를 해시할 때 붙이는 솔트 (secret). 없으면 고정 문자열. 원본 IP 는 저장하지 않는다. */
+  IP_HASH_SALT?: string;
   /** 배포 버전 정보 (wrangler version_metadata). */
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
 }
