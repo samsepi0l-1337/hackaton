@@ -81,7 +81,7 @@ export function Home() {
           </div>
           <p className="stage-prompt">{stage.prompt}</p>
           <div className="stage-links">
-            {stage.links.map((l) => <Link key={l.to} to={l.to}>{l.label}<PortalIcon name="next" size={15} /></Link>)}
+            {stage.links.map((l) => <Link key={l.to} to={l.to}><span><b>{l.label}</b><small>{l.desc}</small></span><PortalIcon name="next" size={15} /></Link>)}
           </div>
         </section>
         <div className="middle-stack">
@@ -130,7 +130,7 @@ export function Home() {
             {sum && sum.closingSoon.length === 0 && <p className="muted" style={{ marginTop: 12 }}>지금 마감이 임박한 공고가 없어요. 위의 전체 지원공고에서 다른 공고를 찾아보세요.</p>}
             {sum && sum.closingSoon.length > 0 && (
               <ul className="deadline-list">
-                {sum.closingSoon.map(({ program: p, dDay }) => (
+                {sum.closingSoon.slice(0, 2).map(({ program: p, dDay }) => (
                   <li key={p.id}>
                     <a title={p.title} href={p.url} target="_blank" rel="noreferrer">
                       <strong>{p.title}</strong>

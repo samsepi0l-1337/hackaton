@@ -13,12 +13,12 @@ export type TileColor = 'blue' | 'teal' | 'coral' | 'violet';
 export const SHORTCUTS: { label: string; to: string; icon: PortalIconName; color: TileColor }[] = [
   { label: '전체 지원공고', to: '/programs', icon: 'doc', color: 'blue' },
   { label: '나에게 맞는 순 공고', to: '/programs?sort=fit', icon: 'spark', color: 'violet' },
-  { label: '최근 공모', to: '/programs?sort=recent', icon: 'calendar', color: 'teal' },
-  { label: '많이 본 공모', to: '/programs?sort=popular', icon: 'flag', color: 'coral' },
-  { label: '지원사업 공고', to: '/programs?type=지원사업', icon: 'bag', color: 'coral' },
+  { label: '최근 공모', to: '/programs?sort=recent', icon: 'calendar', color: 'blue' },
+  { label: '많이 본 공모', to: '/programs?sort=popular', icon: 'flag', color: 'blue' },
+  { label: '지원사업 공고', to: '/programs?type=지원사업', icon: 'bag', color: 'teal' },
   { label: '창업 교육', to: '/programs?type=교육', icon: 'book', color: 'teal' },
   { label: '창업 공간', to: '/programs?type=공간', icon: 'layers', color: 'teal' },
-  { label: '상담 공고', to: '/programs?type=상담', icon: 'chat', color: 'violet' },
+  { label: '상담 공고', to: '/programs?type=상담', icon: 'chat', color: 'teal' },
 ];
 export const SHORTCUTS_COLLAPSED = 4;
 
@@ -31,13 +31,14 @@ export const ACCOUNT_LINKS: { label: string; to: string; icon: PortalIconName }[
 ];
 
 /** 단계 탭은 공고의 아이디어 단계(stage) 필터와 같다. 사업 연차 필터는 없다. */
-const stageLinks = (stage: string, name: string): { label: string; to: string }[] => [
-  { label: `${name} 단계 공고`, to: `/programs?stage=${stage}` },
-  { label: `${name} 단계 교육`, to: `/programs?stage=${stage}&type=${encodeURIComponent('교육')}` },
-  { label: `${name} 단계 지원사업`, to: `/programs?stage=${stage}&type=${encodeURIComponent('지원사업')}` },
+type StageLink = { label: string; desc: string; to: string };
+const stageLinks = (stage: string, name: string): StageLink[] => [
+  { label: `${name} 단계 공고`, desc: '교육·상담·공간·지원사업을 모두 보여줘요', to: `/programs?stage=${stage}` },
+  { label: `${name} 단계 교육`, desc: '교육 유형만 골라 보여줘요', to: `/programs?stage=${stage}&type=${encodeURIComponent('교육')}` },
+  { label: `${name} 단계 지원사업`, desc: '지원사업 유형만 골라 보여줘요', to: `/programs?stage=${stage}&type=${encodeURIComponent('지원사업')}` },
 ];
 
-export const STAGE_TABS: { value: string; label: string; icon: string; prompt: string; links: { label: string; to: string }[] }[] = [
+export const STAGE_TABS: { value: string; label: string; icon: string; prompt: string; links: StageLink[] }[] = [
   { value: 'no_idea', label: '탐색', icon: '🌱', prompt: '아직 아이디어를 찾고 있나요?', links: stageLinks('no_idea', '아이디어 탐색') },
   { value: 'has_idea', label: '구상', icon: '💡', prompt: '아이디어는 있는데 아직 시작 전인가요?', links: stageLinks('has_idea', '아이디어 구상') },
   { value: 'preparing', label: '준비', icon: '🚀', prompt: '창업을 구체적으로 준비하고 있나요?', links: stageLinks('preparing', '창업 준비') },
