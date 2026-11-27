@@ -9,7 +9,7 @@ Source of truth: `apps/web/src/styles/tokens.css` (tokens) and `apps/web/src/sty
 Colours:
 - Page background `--color-bg` #f7f9fc. Surface `--color-surface` #fff. Text `--color-text` #1b1f27. Muted `--color-muted` #667085. Border `--color-border` #e1e5eb.
 - Primary `--color-primary` #1d5fd6, soft `--color-primary-soft` #e8f0fe. Portal blue `--portal-blue` #2568e9 (main buttons). Ink `--portal-ink` #192b42 (portal text). Panel line `--panel-line` #d5e1f3 (pane border).
-- Status: danger #d92d20 / soft #fdecea, warn #b54708 / soft #fff4e5, ok #067647 / soft #e7f6ee.
+- Status: danger #b42318 / soft #fdecea (작은 글씨 대비 4.5:1 이상을 위해 #d92d20 에서 바꿈), warn #b54708 / soft #fff4e5, ok #067647 / soft #e7f6ee.
 - Tile colours (classes): blue #e6efff / #3579ce, teal #ddf6ee / #098869, coral #fff0e5 / #d87538, violet #f0eaff / #8562c7 (background / icon).
 - Other fixed colours: strip #edf2f7, brand accent #124c85, shortcut pane #e6f3fe, row grey #eff3f8, chip border #d6e0ed.
 

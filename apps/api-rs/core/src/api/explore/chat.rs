@@ -14,6 +14,8 @@ pub fn question(key: &str) -> Option<&'static str> {
         "prepared" => Some("지금까지 알아보거나 준비한 것이 있나요?"),
         "region" => Some("부울경의 조선·해양, 자동차, 항공, 방산, 수소·에너지, 데이터센터, AI, 2차전지 분야 중 이 구상과 연결해보고 싶은 분야가 있나요? 잘 모르겠으면 그렇다고 해도 돼요."),
         "interestOnly" => Some("선택한 산업에서 제품을 만드는 일과 관련 업무를 돕는 서비스 중 살펴보고 싶은 방향이 있나요?"),
+        // 관심 공고가 목록에서 빠졌을 때 쓰는 질문 (공고 이름 없이).
+        "focus" => Some("관심 있는 지원 사업을 받는다면 가장 먼저 해 보고 싶은 일은 무엇인가요?"),
         _ => None,
     }
 }
@@ -27,11 +29,13 @@ pub fn plan_questions(start: &Value, exploration: &Value, answers: &[Value]) -> 
     };
     let mut plan: Vec<String> = base.into_iter().map(str::to_owned).collect();
     let region = start["reviewRegion"].as_str().unwrap_or("");
+    // 관심 공고 질문은 첫 칸이다. 지역 질문은 그 칸을 피해서 넣는다 (같은 칸이면 지역 질문이 사라진다).
+    let focus = start["focusResourceId"].as_str().is_some_and(|s| !s.is_empty());
+    if focus { plan[0] = "focus".into(); }
     if region != "미정" && REVIEW_REGIONS.contains(&region) && !answers.iter().any(|a| a["key"] == "region") {
         let slot = ["interestOnly", "prepared", "contact", "trigger", "direction", "reason"].iter().find_map(|key| plan.iter().position(|p| p == key)).unwrap_or(1);
         plan[slot] = "region".into();
     }
-    if start["focusResourceId"].as_str().is_some_and(|s| !s.is_empty()) { plan[0] = "focus".into(); }
     plan
 }
 fn norm(s: &str) -> String { s.chars().filter(|c| !crate::jsstr::is_js_ws(*c)).collect() }
@@ -49,4 +53,21 @@ pub fn rule_suggestions(start: &Value, exploration: &Value, rejected: &[String],
     } else { vec!["관심 분야에서 직접 본 불편을 먼저 적어 보는 방향".into(), "관심 분야에서 일하는 사람의 이야기를 들어보는 방향".into()] };
     let dead: Vec<_> = rejected.iter().map(|x| norm(x)).collect();
     pool.into_iter().filter(|s| !dead.contains(&norm(s))).take(2).collect()
+}
+
+#[cfg(test)]
+mod focus_plan_tests {
+    use super::{plan_questions, question};
+    use serde_json::json;
+    #[test]
+    fn focus_and_region_questions_both_stay() {
+        let start = json!({"readiness":"preparing","reviewRegion":"울산","focusResourceId":"r1"});
+        let plan = plan_questions(&start, &json!({}), &[]);
+        assert_eq!(plan[0], "focus");
+        assert!(plan.iter().any(|p| p == "region"), "region question kept: {plan:?}");
+    }
+    #[test]
+    fn focus_question_has_a_fallback_text() {
+        assert!(question("focus").is_some_and(|q| !q.is_empty()));
+    }
 }

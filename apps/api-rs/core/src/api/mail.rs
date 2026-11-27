@@ -42,6 +42,17 @@ pub fn recovery_mail(to: &str, password: &str) -> Mail {
         html,
     }
 }
+/// 인증 전에 같은 이메일로 가입이 두 번 이상 있었을 때: 어느 비밀번호도 쓰지 않고 임시 비밀번호를 보낸다.
+pub fn contested_signup_mail(to: &str, password: &str) -> Mail {
+    let text = format!("해보까 임시 비밀번호\n\n이메일 인증 전에 이 이메일로 가입이 두 번 이상 있었어요. 안전을 위해 가입할 때 정한 비밀번호는 쓰지 않아요.\n\n임시 비밀번호: {password}\n{RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있어요. 인증한 화면에서 이 비밀번호를 '현재 비밀번호'로 넣고 새 비밀번호를 정해 주세요.\n시간이 지나면 '비밀번호 찾기'로 다시 받을 수 있어요.");
+    let html = wrap(&format!("<h2>임시 비밀번호</h2><p>이메일 인증 전에 이 이메일로 가입이 두 번 이상 있었어요. 안전을 위해 가입할 때 정한 비밀번호는 쓰지 않아요.</p><p style=\"font-size:22px;letter-spacing:2px\"><b>{}</b></p>\n<p>{RECOVERY_TTL_MINUTES}분 동안만 쓸 수 있어요. 인증한 화면에서 이 비밀번호를 '현재 비밀번호'로 넣고 새 비밀번호를 정해 주세요.</p><p style=\"color:#666\">시간이 지나면 '비밀번호 찾기'로 다시 받을 수 있어요.</p>", escape_html(password)));
+    Mail {
+        to: to.into(),
+        subject: "[해보까] 임시 비밀번호를 보내드려요".into(),
+        text,
+        html,
+    }
+}
 /// TS: `pickMailer(env: Bindings, fallback: Mailer): Mailer` 및 `Mailer.send(m: MailMessage): Promise<void>`.
 pub async fn send(env: &Env, ports: &dyn Ports, mail: &Mail) -> Result<(), String> {
     if env.contains_key("EMAIL") {

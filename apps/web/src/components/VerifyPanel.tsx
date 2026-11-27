@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { FormEvent } from 'react';
 import { VERIFY_RESEND_SECONDS } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
@@ -8,6 +9,7 @@ import { errMessage } from '../lib/format';
 
 /** 인증 메일 안내: 6자리 코드 입력 + 다시 보내기(60초 간격). 성공하면 로그인 상태가 되고 onDone 을 부른다. */
 export function VerifyPanel({ email, initialCooldown = 0, onDone, lead }: { email: string; initialCooldown?: number; onDone: () => void; lead?: string }) {
+  const nav = useNavigate();
   const { setUser } = useAuth();
   const [code, setCode] = useState('');
   const [cool, setCool] = useState(initialCooldown);
@@ -30,7 +32,8 @@ export function VerifyPanel({ email, initialCooldown = 0, onDone, lead }: { emai
     try {
       const r = await api.verifyEmail({ email, code });
       setUser(r.user);
-      onDone();
+      // 새 비밀번호를 정해야 하는 계정(인증 전 재가입)은 내 정보의 비밀번호 변경으로 보낸다.
+      if (r.user.mustChangePassword) nav('/me', { replace: true }); else onDone();
     } catch (x) {
       setErr(x instanceof ApiClientError && (x.code === 'bad_request' || x.code === 'validation')
         ? `${x.message} 코드가 틀렸거나 만료됐다면 인증 메일을 다시 받아 주세요.` : errMessage(x));
