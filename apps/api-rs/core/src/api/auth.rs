@@ -362,6 +362,26 @@ pub async fn get_profile(cx: &mut Cx<'_>, _: &Req) -> HResult {
     let u = require_user(cx)?;
     Resp::ok(json!({"profile":Store::new(cx.kv,cx.now).basic_profile(text(&u,"id"))}))
 }
+fn valid_residence(s: &str) -> bool {
+    RESIDENCE_OPTIONS.contains(&s)
+        || BUSAN_DISTRICTS.contains(&s)
+        || s.strip_prefix("울산 ").is_some_and(|d| ULSAN_DISTRICTS.contains(&d))
+        || s.strip_prefix("경남 ").is_some_and(|d| GYEONGNAM_DISTRICTS.contains(&d))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_residence;
+
+    #[test]
+    fn residence_districts_match_their_region() {
+        assert!(valid_residence("울산 남구"));
+        assert!(valid_residence("경남 김해시"));
+        assert!(!valid_residence("울산 해운대구"));
+        assert!(!valid_residence("경남 x"));
+    }
+}
+
 /// PUT /api/me/profile
 pub async fn put_profile(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let u = require_user(cx)?;
@@ -384,9 +404,7 @@ pub async fn put_profile(cx: &mut Cx<'_>, req: &Req) -> HResult {
                     "age" => v
                         .as_f64()
                         .is_some_and(|n| n.fract() == 0.0 && (0.0..=120.0).contains(&n)),
-                    "residence" => v.as_str().is_some_and(|s| {
-                        RESIDENCE_OPTIONS.contains(&s) || BUSAN_DISTRICTS.contains(&s)
-                    }),
+                    "residence" => v.as_str().is_some_and(valid_residence),
                     "hasBusiness" => v.is_boolean(),
                     "occupation" => v.as_str().is_some_and(|s| OCCUPATIONS.contains(&s)),
                     _ => false,
