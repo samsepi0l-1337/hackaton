@@ -6,7 +6,7 @@ use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 
 const RULES: &str = "당신은 창업을 처음 생각하는 청년의 생각 정리를 돕는 한국어 도우미예요. 해요체로 짧게 써요. 점수를 매기거나 성공 가능성을 평가하거나 과하게 칭찬하지 않아요. 기관·프로그램 이름, 금액, 마감일, 날짜, 숫자를 절대 쓰지 않아요. 사용자가 말하지 않은 경험·인터뷰·매출·팀을 지어내지 않아요. 확인되지 않은 것은 가설이라고 써요.";
-pub const REACTION_PROMPT: &str = "당신은 창업을 처음 생각하는 청년의 생각 정리를 돕는 한국어 도우미예요. 해요체로 짧게 써요. 점수를 매기거나 성공 가능성을 평가하거나 과하게 칭찬하지 않아요. 기관·프로그램 이름, 금액, 마감일, 날짜, 숫자를 절대 쓰지 않아요. 사용자가 말하지 않은 경험·인터뷰·매출·팀을 지어내지 않아요. 확인되지 않은 것은 가설이라고 써요.\n사용자의 직전 답을 듣고 짧게 받아 주는 반응 한 문장만 써요. 예: \"동네 어르신들의 장보기 불편을 직접 보셨군요.\"\n- 사용자가 한 말만 바탕으로 써요. 새로운 사실·조언·평가·칭찬을 더하지 않아요.\n- 질문하지 않아요. 물음표를 쓰지 않아요. 다음 질문은 코드가 붙여요.\n- 40자 안팎, 마침표로 끝나는 한 문장만 출력해요.";
+pub const REACTION_PROMPT: &str = "당신은 창업을 처음 생각하는 청년과 이야기하는 따뜻한 한국어 상담자예요. 해요체로 짧게 써요. 점수를 매기거나 성공 가능성을 평가하거나 과하게 칭찬하지 않아요. 기관·프로그램 이름, 금액, 마감일, 날짜, 숫자를 절대 쓰지 않아요. 사용자가 말하지 않은 경험·인터뷰·매출·팀을 지어내지 않아요.\n사용자의 직전 답을 듣고, 다음 질문으로 자연스럽게 넘어가도록 받아 주는 한 문장만 써요.\n- 사용자의 말을 그대로 되풀이하지 말고, 핵심을 자기 말로 짧게 받아요.\n- \"~하셨군요\"로만 끝내지 말고 말끝을 바꿔요. 예: \"직접 겪은 불편이라 더 와닿아요.\", \"짧게 사는 자취생이라면 사서 버리는 부담이 크겠어요.\", \"친구들 이야기부터 들어 보면 방향이 잡히겠어요.\"\n- 다음 질문과 어색하게 겹치지 않게 써요. 새로운 사실·조언·평가를 더하지 않아요.\n- 질문하지 않아요. 물음표를 쓰지 않아요. 다음 질문은 코드가 붙여요.\n- 40자 안팎, 마침표로 끝나는 한 문장만 출력해요.";
 pub const REACTION_MAX: usize = 60;
 async fn join_all<F: std::future::Future>(futures: Vec<F>) -> Vec<F::Output> {
     let mut pending: Vec<_> = futures.into_iter().map(|f| Some(Box::pin(f))).collect();
@@ -67,7 +67,7 @@ impl ExploreAi<'_> {
     }
     pub async fn question(&mut self, base: &str, last_answer: &str) -> (String, bool) {
         if js_trim(last_answer).is_empty() { return (base.into(), false); }
-        let r = self.call("mentor", REACTION_PROMPT, &format!("사용자의 직전 답: {last_answer}"), Some("mentor")).await;
+        let r = self.call("mentor", REACTION_PROMPT, &format!("사용자의 직전 답: {last_answer}\n다음에 할 질문(참고만, 쓰지 않기): {base}"), Some("mentor")).await;
         let reaction = clean_reaction(guarded(r.text.as_deref(), &[last_answer], &[], REACTION_MAX).as_deref());
         (reaction.map(|s| format!("{s} {base}")).unwrap_or_else(|| base.into()), r.failed)
     }
