@@ -8,6 +8,11 @@
 - `goldens/http/`: HTTP 요청·응답 기록 → `cargo test -p gil-core --test http_goldens <파일>`.
 - 골든은 고정된 회귀 데이터다. 동작을 일부러 바꿀 때만 고친다. 공용 함수 골든 기록은 `harness/README.md` 참고 (`GIL_RECORD_FN`).
 
+## 지원서 작성 제한
+- `AppOpts.application_limit: Option<(횟수, 일수)>` (`core/src/app.rs`). 운영 Worker 는 `Some((2, 7))`, 즉 계정당 7일에 2회다 (`worker/src/lib.rs`). `None` 이면 제한이 없다.
+- `GET /api/applications/quota`: 로그인한 계정의 `{used, limit, remaining, resetAt, blocked}`. 제한이 없으면 `limit`·`remaining`·`resetAt` 이 null.
+- `POST /api/applications`: 제한을 넘으면 429 `application_limit`.
+
 ## 코드 규칙 (꼭 지킨다)
 골든이 JS 와 같은 결과를 기대한다. 아래 규칙을 어기면 골든 테스트가 깨진다.
 - 길이·자르기는 UTF-16 (`jsstr::len16`, `take16`). 한글은 UTF-8 3바이트라 `str::len` 은 틀린다.
