@@ -7,7 +7,6 @@ ICT INNOHACK 2026 (동남권 이노베이션 해커톤) 참가 자료 모음.
 | [event-guide.md](event-guide.md) | 행사 안내서: 일정, 장소, 시상, 평가 방식, 미션, 규정 | 주최 측 안내서 (사용자 제공) |
 | [ot-briefing.md](ot-briefing.md) | OT 녹음 전사 요약: 트랙 3개, 심사 배점, 멘토 팁 | 다글로 전사 (사용자 제공) |
 | [past-winners.md](past-winners.md) | 역대 ICT 이노베이션 해커톤·공모전 수상작, 2025 동남권 우수사례, 피우다프로젝트 시범적용 | 사용자 제공 목록, ICT 이노베이션스퀘어 2025 우수사례집 |
-| [topic-candidates.md](topic-candidates.md) | 위 자료를 근거로 한 주제 후보와 순위 (분석) | 팀 내부 분석 |
 
 ## 핵심 일정
 
