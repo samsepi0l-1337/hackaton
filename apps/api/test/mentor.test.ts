@@ -38,29 +38,30 @@ describe('mentor', () => {
     expect(first.body.messages[1].questionIndex).toBe(0);
     expect(first.body.done).toBe(false);
     // 빈 요청 반복해도 중복 없음
-    expect((await c.post('/api/mentor/chat')).body.messages).toEqual([]);
+    expect((await c.post('/api/mentor/chat')).body.messages.length).toBe(2);
     const a1 = await c.post('/api/mentor/chat', { message: '직접 중고거래 앱을 써요' });
     expect(a1.body.questionIndex).toBe(1);
-    expect(a1.body.messages[1].questionIndex).toBe(1);
+    expect(a1.body.messages.at(-1).questionIndex).toBe(1);
     const a2 = await c.post('/api/mentor/chat', { skip: true });
-    expect(a2.body.messages[0].skipped).toBe(true);
+    expect(a2.body.messages.at(-2).skipped).toBe(true);
     expect(a2.body.questionIndex).toBe(2);
     const a3 = await c.post('/api/mentor/chat', { message: '남구는 대학이 많아서요' });
     expect(a3.body.done).toBe(true);
     expect(a3.body.questionIndex).toBe(3);
     // 질문 이후 자유 질문
     const free = await c.post('/api/mentor/chat', { message: '지원금 얼마나 받아요?' });
-    expect(free.body.messages[1].text).toBe(MENTOR_PROGRAM_DEFLECT);
+    expect(free.body.messages.at(-1).text).toBe(MENTOR_PROGRAM_DEFLECT);
     expect(free.body.done).toBe(true);
     const other = await c.post('/api/mentor/chat', { message: '고마워요' });
-    expect(other.body.messages[1].text).not.toBe(MENTOR_PROGRAM_DEFLECT);
+    expect(other.body.messages.at(-1).text).not.toBe(MENTOR_PROGRAM_DEFLECT);
+    expect(other.body.messages).toEqual((await c.get('/api/mentor/session')).body.messages);
 
     const sess = (await c.get('/api/mentor/session')).body;
     expect(sess.step).toBe('chat');
     expect(sess.messages.length).toBe(2 + 2 + 2 + 2 + 2 + 2 - 1);
 
     const sum = await c.post('/api/mentor/summary');
-    expect(sum.body.summary.busan).toBe('남구에서 시작'); // 3번째 질문 답이 있어도 건너뛴 답 때문에 shared draftSummary는 인덱스가 밀려 폴백
+    expect(sum.body.summary.busan).toBe('남구는 대학이 많아서요'); // 3번째 질문(부산 연결점) 답
     const edited = await c.put('/api/mentor/summary', { summary: { ...sum.body.summary, problem: '수정됨' } });
     expect(edited.body.summary.problem).toBe('수정됨');
     expect((await c.put('/api/mentor/summary', { summary: { problem: 1 } })).status).toBe(400);

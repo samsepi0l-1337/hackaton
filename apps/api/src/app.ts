@@ -291,7 +291,7 @@ export function createApp(opts: AppOptions = {}) {
     m.messages.push(...added);
     m.step = 'chat';
     m.updatedAt = at;
-    return c.json({ messages: added, questionIndex: m.questionIndex, done: m.questionIndex >= MENTOR_QUESTION_COUNT });
+    return c.json({ messages: m.messages, questionIndex: m.questionIndex, done: m.questionIndex >= MENTOR_QUESTION_COUNT });
   });
 
   const SUMMARY_KEYS = ['problem', 'customer', 'solution', 'revenue', 'busan'] as const;
