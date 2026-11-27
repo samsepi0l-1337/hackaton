@@ -7,6 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct MemKv {
     data: BTreeMap<String, Value>,
     dirty: BTreeSet<String>,
+    /// DO 가 살아 있는 동안만 쓰는 메모리 상태 (저장하지 않는다). TS store 의 seenViews 같은 인스턴스 변수.
+    pub scratch: BTreeMap<String, Value>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -20,6 +22,7 @@ impl MemKv {
         MemKv {
             data: entries.into_iter().collect(),
             dirty: BTreeSet::new(),
+            scratch: BTreeMap::new(),
         }
     }
     pub fn get(&self, key: &str) -> Option<&Value> {
