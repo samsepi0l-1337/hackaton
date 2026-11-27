@@ -4,6 +4,7 @@ import { READINESS_OPTIONS, RESOURCE_SORTS, RESOURCE_SORT_LABEL, RESOURCE_TYPES,
 import type { ReadinessStage, ResourceCard, ResourceSort, ResourceType } from '@gil/shared';
 import { api } from '../api/client';
 import { RecruitBadge } from '../components/ResourceView';
+import { AREAS, RegionPicker } from '../components/RegionPicker';
 import { HeartButton } from '../components/HeartButton';
 import { useAuth } from '../components/AuthContext';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
@@ -11,12 +12,6 @@ import '../styles/pages-programs.css';
 
 const PAGE_SIZE = 10;
 const PAGE_WINDOW = 5;
-
-const AREAS: Record<string, { label: string; districts: string[] }> = {
-  부산: { label: '구·군', districts: ['중구', '서구', '동구', '영도구', '부산진구', '동래구', '남구', '북구', '해운대구', '사하구', '금정구', '강서구', '연제구', '수영구', '사상구', '기장군'] },
-  울산: { label: '구·군', districts: ['중구', '남구', '동구', '북구', '울주군'] },
-  경남: { label: '시·군', districts: ['창원시', '진주시', '통영시', '사천시', '김해시', '밀양시', '거제시', '양산시', '의령군', '함안군', '창녕군', '고성군', '남해군', '하동군', '산청군', '함양군', '거창군', '합천군'] },
-};
 
 /** 글에 나온 구·군 이름. 긴 이름부터 지워 "강서구"가 "서구"로 잡히지 않게 한다. 2글자 이름(중구 등)은 줄임말을 쓰지 않는다. */
 function mentionedDistricts(text: string, districts: string[]): Set<string> {
@@ -127,20 +122,8 @@ export function Programs() {
         </div>
         <div className="field">
           <label className="label" htmlFor="rr">지역</label>
-          <select id="rr" className="input" value={region ?? ''} onChange={(e) => update({ region: e.target.value || undefined, district: undefined })}>
-            <option value="">전체</option>
-            {Object.keys(AREAS).map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
+          <RegionPicker id="rr" region={region} district={district} onChange={(r, d) => update({ region: r, district: d })} />
         </div>
-        {region && (
-          <div className="field">
-            <label className="label" htmlFor="rd">{AREAS[region].label}</label>
-            <select id="rd" className="input" value={district ?? ''} onChange={(e) => update({ district: e.target.value || undefined })}>
-              <option value="">전체</option>
-              {AREAS[region].districts.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </div>
-        )}
         <div className="field">
           <label className="label" htmlFor="ro">정렬</label>
           <select id="ro" className="input" value={sort} onChange={(e) => update({ sort: e.target.value === 'deadline' ? undefined : e.target.value })}>
