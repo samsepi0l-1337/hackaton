@@ -38,7 +38,7 @@ export function Home() {
               </div>
               <Link to="/mentor">AI 창업멘토</Link>
             </form>
-            <p>아이디어 한 줄로, 지금 신청할 수 있는 부산 창업 지원사업을 찾아보세요.</p>
+            <p>아이디어 한 줄이나 키워드로 부산 창업 지원사업을 찾아보세요.</p>
           </div>
           <section className="pane shortcuts">
             <div className="pane-title">
@@ -59,7 +59,7 @@ export function Home() {
           </section>
         </div>
         <section className="pane account-panel">
-          <h2>내 창업 활동을<br />한눈에 확인하세요.</h2>
+          <h2>내 조건에 맞는 공고를<br />한눈에 확인하세요.</h2>
           <div className="account-grid">
             {ACCOUNT_LINKS.map((a) => (
               <Link key={a.label} to={a.to}><span><PortalIcon name={a.icon} size={19} /></span>{a.label}</Link>
@@ -81,29 +81,25 @@ export function Home() {
           </div>
           <p className="stage-prompt">{stage.prompt}</p>
           <div className="stage-links">
-            <Link to={stage.to}>{stage.link}<PortalIcon name="next" size={15} /></Link>
-            <Link to="/mentor">아이디어 상담받기<PortalIcon name="next" size={15} /></Link>
-            <Link to="/test">내 창업 유형 알아보기<PortalIcon name="next" size={15} /></Link>
+            {stage.links.map((l) => <Link key={l.to} to={l.to}>{l.label}<PortalIcon name="next" size={15} /></Link>)}
           </div>
         </section>
         <div className="middle-stack">
           <section className="pane service-panel" id="how-to">
             <div className="pane-title">
               <h2>원스톱 창업 상담</h2>
-              <Link aria-label="원스톱 창업 상담 시작" to="/mentor"><PortalIcon name="next" size={18} /></Link>
             </div>
-            <p>아이디어 정리부터 지원서 작성까지</p>
+            <p>아이디어 정리부터 지원사업 추천까지</p>
             <ol className="process-list">
               <li><PortalIcon name="doc" /><b>사업 정보 입력</b><small>아이디어와 고객</small></li>
               <li><PortalIcon name="chat" /><b>AI 멘토 상담</b><small>질문으로 구체화</small></li>
-              <li><PortalIcon name="flag" /><b>지원사업 Top3</b><small>추천과 지원서</small></li>
+              <li><PortalIcon name="flag" /><b>지원사업 Top3</b><small>추천과 공고 원문</small></li>
             </ol>
             <Link className="start-link" to="/mentor">상담 이어서 하기<PortalIcon name="next" size={16} /></Link>
           </section>
           <section className="pane fields-panel">
             <div className="pane-title">
               <h2>분야별 지원사업</h2>
-              <Link aria-label="모든 지원 분야 보기" to="/programs"><PortalIcon name="next" size={18} /></Link>
             </div>
             <div className="field-links">
               {FIELD_LINKS.map((f) => <Link key={f.label} to={f.to}>{f.label}</Link>)}
@@ -114,12 +110,11 @@ export function Home() {
           <section className="pane deadline-panel">
             <div className="pane-title">
               <h2>마감 임박 공고</h2>
-              <Link className="text-action" to="/programs">더 보기 <PortalIcon name="next" size={14} /></Link>
             </div>
             <div className="live-stats">
-              <Link to="/programs">모집 중 <b>{sum ? sum.openCount : '–'}</b>건</Link>
+              <span>모집 중 <b>{sum ? sum.openCount : '–'}</b>건</span>
               <i></i>
-              <Link to="/programs?sort=deadline">이번 주 마감 <b>{sum ? sum.closingThisWeek : '–'}</b>건</Link>
+              <span>이번 주 마감 <b>{sum ? sum.closingThisWeek : '–'}</b>건</span>
             </div>
             {res.loading && (
               <ul className="deadline-list" aria-busy="true" aria-label="불러오는 중">
@@ -128,11 +123,11 @@ export function Home() {
             )}
             {res.error && (
               <div className="state" role="alert">
-                <p>마감 공고를 불러오지 못했어요.</p>
+                <p>마감 공고를 불러오지 못했어요. 다시 시도해 주세요.</p>
                 <button className="btn small" onClick={res.reload}>다시 시도</button>
               </div>
             )}
-            {sum && sum.closingSoon.length === 0 && <p className="muted" style={{ marginTop: 12 }}>마감 예정 공고가 없습니다.</p>}
+            {sum && sum.closingSoon.length === 0 && <p className="muted" style={{ marginTop: 12 }}>지금 마감이 임박한 공고가 없어요. 위의 전체 지원공고에서 다른 공고를 찾아보세요.</p>}
             {sum && sum.closingSoon.length > 0 && (
               <ul className="deadline-list">
                 {sum.closingSoon.map(({ program: p, dDay }) => (

@@ -24,7 +24,9 @@ Shadow: `--shadow` 0 1px 3px rgba(16,24,40,.1) for cards. Pane 0 3px 9px #183e65
 ## Layout grid
 
 - Content width: `.portal-width` is min(1280px, 90%), centred. Other pages still use `.container` (max 960px, padding 16px).
+- Detail pages: `.main > .container` has 30px top padding (not 16px) so content clears the nav bar. Keep it.
 - Main page `.dashboard` has top margin 24px.
+- Collapsed shortcuts pane is content-height with the design padding; `.search-area` takes the spare height (content centred) so both top columns end on one line. Expanded looks as designed.
 - `.top-grid`: 2 columns, 2.06fr / 1fr, gap 22. Left is `.primary-stack` (search + shortcuts), right is the account panel.
 - `.lower-grid`: 3 columns, .79fr / 1.215fr / 1fr, gap 15, top margin 15. Columns: stage pane, `.middle-stack` (service + fields), `.right-stack` (deadlines + banner, 6px left margin).
 - `.shortcut-grid`: 4 columns, gap 10. `.account-grid`: 2 columns, gap 11. `.process-list`: 3 columns, gap 7.
@@ -37,7 +39,7 @@ Shadow: `--shadow` 0 1px 3px rgba(16,24,40,.1) for cards. Pane 0 3px 9px #183e65
 - Masthead `.masthead` (93px): left `.brand` (logo `/brand.svg` 49px, name in `<b>` with colour #124c85, weight 800, size 22 to 31px). Right `.mast-actions`: `.utility` (이용 방법, divider, K-Startup external) above `.account-actions` (AI 멘토, 공고 검색, 내 정보, 팀 통계; 20px icon + 16px bold text).
 - Nav `.portal-nav`: border top and bottom #cdd4df, `.nav-group` x4 (지원사업, AI 창업 상담, 창업 가이드, 내 활동). Button 17px bold, min height 53. First button has a grey tint #eef3f8.
 - Menu `.menu-panel`: under the button, min width 190, white, radius 0 0 12 12. Opens on click and on hover. Closes on Escape, outside click, link click and route change.
-- Footer `.footer-inner`: brand line (strong 16px), data-use sentence, source line with licence link.
+- Footer `.footer-inner`: brand line (strong 16px), data-use sentence (input is stored on the server, may go to Upstage (외부 AI), and can be deleted with 처음부터 다시 or 계정 삭제), source line with licence link.
 - Mobile only: `.mobile-menu` button and `.mobile-account` links (hidden on desktop).
 
 ## Components
@@ -66,7 +68,13 @@ Shadow: `--shadow` 0 1px 3px rgba(16,24,40,.1) for cards. Pane 0 3px 9px #183e65
 - Active stage tab: bold blue text #1859b8, 2px teal outline (#179d96) on the icon, pale green fill.
 - Focus: 3px #075ec7 outline, 3px offset, on links, buttons and inputs.
 - Expand button toggles "펼쳐보기" and "접기". Four tiles by default, eight when open.
-- Loading and error in the deadline pane keep the list height with three skeleton rows.
+- Loading (deadline pane): three skeleton rows keep the list height, `aria-busy` on the list. No message.
+- Error (deadline pane): the skeleton rows go away. A `.state` block with `role="alert"` says what failed ("마감 공고를 불러오지 못했어요. 다시 시도해 주세요.") and a "다시 시도" button reloads. A response that is not the expected shape (HTML fallback, `{}`) counts as an error, checked in `api.home`.
+- Empty (deadline pane): a muted line says there are no closing-soon notices and points to 전체 지원공고.
+- Current page: links to the current route carry `aria-current="page"` (bold blue in the shell). Only a link whose path and query match is current.
+- Menu: hover previews, click pins, focus inside the panel keeps it open. Escape restores focus to the group button only when focus was inside that group.
+- Hover and active states change colour only. No motion; `prefers-reduced-motion` turns off any transition.
+- Main page links: each destination appears at most twice (shell links not counted). Labels name what the destination shows. `/programs` takes type, stage, sort (fit, recent, popular, deadline; deadline is the default) and q. Stage tabs are idea stages, not business age.
 
 ## Icons
 

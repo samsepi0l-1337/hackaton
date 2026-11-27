@@ -1,55 +1,20 @@
-/* /mentor 상담 흐름: 디자인 사이트 look (포털 톤). 범위는 .mentor-page 안으로 한정한다. */
-.mentor-page { color: var(--portal-ink); letter-spacing: -.02em; }
-.mentor-page a { color: #155cd0; }
-.mentor-page a:hover { color: #155bc1; text-decoration: underline; }
-.mentor-page .btn, .mentor-page .choice-card { color: var(--portal-ink); }
-.mentor-page .btn:hover { text-decoration: none; }
-
-/* 제목 */
-.mentor-page h1 { font-size: 24px; line-height: 1.4; letter-spacing: -.055em; margin: 0 0 var(--space-2); }
-.mentor-page h2 { font-size: 18px; line-height: 1.4; letter-spacing: -.055em; }
-.mentor-page .card h2 { font-size: 22px; }
-.mentor-page h3 { font-size: 16px; }
-.mentor-page .muted { color: #566a80; }
+/* /mentor 상담 흐름: 공통 규칙은 pages-programs.css. 여기에는 상담 흐름에만 필요한 규칙을 둔다. */
+.mentor-page .choice-card { color: var(--portal-ink); }
+.mentor-page h2 + .muted, .mentor-page h1 + .muted { margin-top: 0; }
 
 /* 단계 표시 */
 .mentor-page .progress-steps { gap: 4px; margin: 0 0 var(--space-4); }
-.mentor-page .progress-steps li { font-size: 13px; padding: 8px 4px; border-bottom: 3px solid #e1e8f0; color: #667085; }
+.mentor-page .progress-steps li { font-size: 13px; padding: 8px 4px; border-bottom: 3px solid #e1e8f0; color: #566a80; }
 .mentor-page .progress-steps li.done { border-bottom-color: var(--portal-blue); color: var(--portal-ink); }
 .mentor-page .progress-steps li.current { border-bottom-color: var(--portal-blue); color: #1859b8; font-weight: 700; }
 
-/* 카드는 pane 모양 */
-.mentor-page .card { border: 1px solid var(--panel-line); border-radius: 17px; padding: 20px 24px; box-shadow: 0 3px 9px #183e6508; }
-.mentor-page .card.highlight, .mentor-page .problem-card.selected { border-color: var(--portal-blue); }
-.mentor-page .problem-card.selected { border-width: 2px; }
+/* 패널 */
+.mentor-page .problem-card.selected { border: 2px solid var(--portal-blue); }
 .mentor-page details.card > summary { font-weight: 700; }
 .mentor-page .summary-item { border-top: 1px solid #e7edf3; }
-.mentor-page .quote { border-left: 3px solid var(--panel-line); background: #f2f6fb; border-radius: 0 8px 8px 0; }
+.mentor-page .plain-list li + li { margin-top: 8px; }
 
-/* 버튼 */
-.mentor-page .btn { border: 1px solid #d6e0ed; border-radius: var(--radius-md); font-weight: 650; }
-.mentor-page .btn:hover:not(:disabled) { border-color: #92b9eb; background: #edf4ff; }
-.mentor-page .btn.primary { background: var(--portal-blue); border-color: var(--portal-blue); color: #fff; }
-.mentor-page .btn.primary:hover:not(:disabled) { background: #1d5fd6; border-color: #1d5fd6; color: #fff; }
-.mentor-page .btn.danger { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
-.mentor-page .btn.danger:hover:not(:disabled) { background: var(--color-danger); color: #fff; }
-.mentor-page .btn.ghost { background: transparent; border-color: transparent; }
-.mentor-page .btn[aria-pressed=true]:not(.primary) { background: #e8f0fe; border-color: var(--portal-blue); color: #1859b8; }
-
-/* 폼 */
-.mentor-page .field > .label { font-weight: 650; }
-.mentor-page .input { border: 1px solid var(--panel-line); border-radius: var(--radius-md); background: #fff; }
-.mentor-page .input:focus { border-color: var(--portal-blue); }
-.mentor-page .field.has-error .input { border-color: var(--color-danger); }
-
-/* 칩 */
-.mentor-page .chips { gap: 8px; }
-.mentor-page .chip { border: 1px solid #d6e0ed; color: var(--portal-ink); }
-.mentor-page .chip:hover { border-color: #92b9eb; color: #155bc1; }
-.mentor-page .chip.selected { background: #e8f0fe; border-color: var(--portal-blue); color: #1859b8; font-weight: 700; }
-
-/* 배지 */
-.mentor-page .badge { font-size: 13px; font-weight: 700; border-radius: 6px; background: #eff3f8; color: #546276; }
+/* 배지: 출처 */
 .mentor-page .badge.prov-user { background: var(--color-ok-soft); color: var(--color-ok); }
 .mentor-page .badge.prov-ai, .mentor-page .badge.prov-unknown { background: var(--color-warn-soft); color: var(--color-warn); }
 
@@ -62,7 +27,3 @@
 /* 하단 고정 줄 */
 .mentor-page .bottom-bar { background: #fff; border-top: 1px solid var(--panel-line); }
 .mentor-page .bottom-bar-inner { max-width: var(--content-width); }
-
-/* 상태 */
-.mentor-page .state { color: #566a80; }
-.mentor-page .plain-list li + li { margin-top: 8px; }

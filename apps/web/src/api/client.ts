@@ -107,7 +107,14 @@ export const api = {
   /** 통계용 이벤트. 실패해도 화면 흐름을 막지 않는다. 대화 원문은 보내지 않는다. */
   track: (type: ExploreEventType, resourceId?: string) => { post<{ ok: true }>(ROUTES.events, { type, resourceId }).catch(() => {}); },
 
-  home: () => get<HomeResponse>(ROUTES.home),
+  home: async () => {
+    const d = await get<unknown>(ROUTES.home) as Partial<HomeResponse> | null;
+    const ok = !!d && typeof d === 'object' && typeof d.openCount === 'number' && typeof d.closingThisWeek === 'number'
+      && Array.isArray(d.closingSoon)
+      && d.closingSoon.every((c) => !!c && typeof c === 'object' && !!(c as { program?: unknown }).program && typeof (c as { program: { id?: unknown } }).program.id === 'string');
+    if (!ok) throw new ApiClientError(0, 'network', '서버 응답을 읽지 못했어요. 잠시 후 다시 시도해 주세요.');
+    return d as HomeResponse;
+  },
   resources: (q: ResourceQuery) => get<{ items: ResourceCard[] }>(ROUTES.resources + qs({ ...q })),
   resource: (id: string) => get<ResourceCard>(ROUTES.resource(id)),
   likes: () => get<LikesResponse>(ROUTES.likes),

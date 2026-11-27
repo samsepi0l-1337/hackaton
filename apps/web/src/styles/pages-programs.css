@@ -1,54 +1,85 @@
-/* /programs, /programs/:id 디자인 (디자인 사이트 기준) */
-.programs-page, .program-detail { color: var(--portal-ink); }
-.programs-page h1, .program-detail h1 { font-size: 24px; font-weight: 800; letter-spacing: -.035em; line-height: 1.4; margin: 0 0 var(--space-3); }
-.programs-page > p.muted, .program-detail > p.muted { font-size: 13px; color: #566a80; }
+/* 상세 화면 공통 규칙 (programs, program-detail, mentor, account) + /programs, /programs/:id.
+   공통 범위는 :is()로 묶어 특이도를 (0,1,0)+요소로 낮게 유지한다. 기본 색은 :where()로 둬서
+   app.css의 .badge.eligible, .chip.selected 같은 상태 규칙이 이기게 한다. */
 
-/* 폼 */
-.programs-page .input { border: 1px solid var(--panel-line); border-radius: 12px; background: #fff; min-height: 44px; }
-.programs-page .input:focus-visible { outline: 3px solid #075ec7; outline-offset: 3px; }
-.programs-page .field { margin-bottom: 0; }
-.programs-page .field > .label { font-size: 13px; font-weight: 700; color: #324459; }
+/* 페이지 */
+:is(.programs-page, .program-detail, .mentor-page, .account-page) { color: var(--portal-ink); letter-spacing: -.02em; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page).stack > * + * { margin-top: var(--space-4); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) h1 { font-size: 24px; font-weight: 800; letter-spacing: -.045em; line-height: 1.4; margin: 0 0 var(--space-3); color: var(--portal-ink); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) h2 { font-size: 18px; font-weight: 800; letter-spacing: -.045em; line-height: 1.4; margin-bottom: var(--space-2); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) h2:first-child { margin-top: 0; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) h3 { font-size: 16px; font-weight: 800; letter-spacing: -.035em; line-height: 1.45; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .muted { color: #566a80; }
+:where(.programs-page, .program-detail, .mentor-page, .account-page) a:not(.btn) { color: #155cd0; }
+:where(.programs-page, .program-detail, .mentor-page, .account-page) a:not(.btn):hover { color: #155bc1; text-decoration: underline; }
+
+/* 패널 */
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .card { border: 1px solid var(--panel-line); border-radius: 12px; padding: 20px 24px; box-shadow: 0 3px 9px #183e6508; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .card.highlight { border-color: var(--portal-blue); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .card.state { padding: 40px 24px; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .quote { border-left: 3px solid var(--panel-line); background: #f2f6fb; border-radius: 0 8px 8px 0; color: #4d5e72; }
 
 /* 버튼 */
-.programs-page .btn, .program-detail .btn { border-radius: 999px; border: 1px solid #d6e0ed; background: #fff; color: #1859b8; font-weight: 700; box-shadow: 0 3px 9px #183e6508; }
-.programs-page .btn:hover, .program-detail .btn:hover { color: #155bc1; border-color: #92b9eb; }
-.programs-page .btn.primary, .program-detail .btn.primary { background: var(--portal-blue); border-color: var(--portal-blue); color: #fff; }
-.programs-page .btn.primary:hover, .program-detail .btn.primary:hover { color: #fff; filter: brightness(.95); }
-.programs-page .btn.ghost { box-shadow: none; background: transparent; }
-.programs-page .btn:disabled { box-shadow: none; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn { min-height: 44px; border-radius: 999px; border: 1px solid #d6e0ed; background: #fff; color: var(--portal-ink); font-weight: 700; box-shadow: none; transition: background-color .12s, border-color .12s, color .12s; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn.small { min-height: 34px; font-size: 14px; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn:hover:not(:disabled) { background: #edf4ff; border-color: #92b9eb; color: #155bc1; text-decoration: none; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn:active:not(:disabled) { background: #dbe8fd; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn.primary { background: var(--portal-blue); border-color: var(--portal-blue); color: #fff; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn.primary:hover:not(:disabled) { background: #1d5fd6; border-color: #1d5fd6; color: #fff; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn.primary:active:not(:disabled) { background: #1853bd; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn.danger { background: #fff; color: var(--color-danger); border-color: var(--color-danger); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn.danger:hover:not(:disabled) { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn.ghost { background: transparent; border-color: transparent; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .btn[aria-pressed=true]:not(.primary) { background: #e8f0fe; border-color: var(--portal-blue); color: #1859b8; }
 
-/* 카드 */
-.programs-page .card, .program-detail .card { border: 1px solid var(--panel-line); border-radius: 12px; box-shadow: 0 3px 9px #183e6508; padding: 17px 17px 18px; }
+/* 폼 */
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .field { margin-bottom: var(--space-4); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .field > .label { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--portal-ink); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .input { min-height: 44px; padding: 8px 13px; border: 1px solid #d6e0ed; border-radius: 12px; background: #fff; color: var(--portal-ink); transition: border-color .12s; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) textarea.input { min-height: 96px; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .input:hover { border-color: #92b9eb; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .input:focus-visible { border-color: var(--portal-blue); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .field.has-error .input { border-color: var(--color-danger); }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .check { align-items: flex-start; font-size: 14px; }
+
+/* 칩·태그·배지 */
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .chip { min-height: 36px; border: 1px solid #d6e0ed; color: var(--portal-ink); transition: background-color .12s, border-color .12s; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .chip:hover { border-color: #92b9eb; color: #155bc1; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .chip.selected { background: #e8f0fe; border-color: var(--portal-blue); color: #1859b8; font-weight: 700; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) :is(.tag, .badge) { border-radius: 6px; padding: 2px 8px; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .tag { font-size: 12px; }
+:is(.programs-page, .program-detail, .mentor-page, .account-page) .badge { font-size: 13px; font-weight: 700; }
+:where(.programs-page, .program-detail, .mentor-page, .account-page) .tag { background: #f7f9fc; border: 1px solid var(--color-border); color: #566a80; }
+:where(.programs-page, .program-detail, .mentor-page, .account-page) .badge { background: #eff3f8; color: #4d5e72; }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.programs-page, .program-detail, .mentor-page, .account-page) :is(.btn, .input, .chip) { transition: none; }
+}
+
+/* /programs */
+.programs-page .field { margin-bottom: 0; }
 .programs-page .card > .stack-gap, .programs-page .card.stack > * + * { margin-top: 8px; }
-.program-card h3 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -.035em; line-height: 1.45; }
+.programs-page .grid.cols-2 { gap: 12px; }
+.programs-page [role="group"] .btn.small { min-height: 34px; }
+.programs-page [role="note"] { background: #f2f6fb; border-radius: 8px; padding: 8px 12px; color: #4d5e72; }
+.programs-page nav[aria-label="페이지"] { margin-top: var(--space-4); }
+.programs-page nav[aria-label="페이지"] .btn { min-width: 34px; }
+.programs-page .heart, .program-detail .heart { min-width: 36px; min-height: 36px; }
+
+.program-card.card { padding: 17px 20px 18px; }
+.program-card h3 { margin: 0; }
 .program-card h3 a { color: var(--portal-ink); }
-.program-card h3 a:hover, .program-detail a:hover { color: #155bc1; text-decoration: underline; }
 .program-card p { margin-bottom: 0; }
 .program-card p:not(.muted) { font-size: 14px; color: #324459; }
 .program-card .btn.small { align-self: flex-start; }
 
-/* 태그·배지 */
-.programs-page .tag, .program-detail .tag { background: #f7f9fc; border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; padding: 1px 8px; color: #566a80; }
-.programs-page .badge, .program-detail .badge { font-size: 13px; font-weight: 700; border-radius: 6px; padding: 1px 8px; }
-
-/* 하트 */
-.programs-page .heart, .program-detail .heart { min-width: 36px; min-height: 36px; }
-
-/* 정렬·페이지 */
-.programs-page [role="group"] .btn.small { min-height: 34px; }
-.programs-page [role="note"] { background: #f2f6fb; border-radius: 7px; padding: 8px 11px; color: #4d5e72; }
-.programs-page nav[aria-label="페이지"] { margin-top: var(--space-4); }
-.programs-page nav[aria-label="페이지"] .btn { min-width: 34px; }
-.programs-page .grid.cols-2 { gap: 12px; }
-
-/* 상세 */
-.program-detail h2 { font-size: 18px; font-weight: 800; letter-spacing: -.055em; margin: 0; }
+/* /programs/:id */
 .program-detail .banner { border-radius: 12px; font-size: 14px; }
 .program-detail .facts { gap: 12px; }
-.program-detail .facts dt { font-size: 12px; color: #627084; }
+.program-detail .facts dt { font-size: 12px; color: #566a80; }
 .program-detail .facts dd { font-size: 16px; color: var(--portal-ink); }
 .program-detail .plain-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid #e7edf3; }
+.program-detail .plain-list li + li { margin-top: 0; }
 .program-detail .plain-list li:last-child { border-bottom: 0; }
-.program-detail .quote { border-left: 3px solid var(--panel-line); background: #f2f6fb; border-radius: 0 7px 7px 0; }
 .program-detail > .btn { align-self: flex-start; }
 .program-detail > a.btn { display: inline-flex; }

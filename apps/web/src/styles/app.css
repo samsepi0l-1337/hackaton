@@ -158,13 +158,13 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .top-grid { grid-template-columns: minmax(0, 2.06fr) minmax(0, 1fr); align-items: stretch; }
 .primary-stack, .middle-stack, .right-stack { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .primary-stack { justify-content: flex-start; }
-.search-area { text-align: center; padding: 0 4%; }
+.search-area { text-align: center; padding: 0 4%; flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .search-area p { font-size: 14px; color: #566a80; margin: 8px 0 0; }
 .search-pill { display: flex; align-items: stretch; background: linear-gradient(108deg, #09b58b 8%, #009f9c 53%, #386dfa 94%); padding: 2px; border-radius: 99px; box-shadow: 0 5px 11px #216ece24; }
 .search-input { display: flex; align-items: center; min-width: 0; flex: 1; height: 64px; background: #fff; border-radius: 99px; position: relative; padding-left: 75px; }
 .search-input img { position: absolute; bottom: 0; left: 12px; width: 62px; height: 71px; object-fit: contain; object-position: bottom; pointer-events: none; }
 .search-input input { min-width: 0; width: 100%; background: none; border: 0; padding: 7px 2px; color: var(--portal-ink); font-size: clamp(16px, 1.45vw, 21px); letter-spacing: -.04em; }
-.search-input input::placeholder { color: #77879a; }
+.search-input input::placeholder { color: #5f6f82; }
 .search-input button, .mobile-menu { padding: 10px; border: 0; color: #243446; background: transparent; cursor: pointer; }
 .search-input button { margin-right: 7px; }
 .search-pill > a { display: grid; place-items: center; color: #fff; padding: 0 clamp(12px, 1.8vw, 27px); font-weight: 750; font-size: clamp(16px, 1.55vw, 21px); }
@@ -173,7 +173,7 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .pane-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
 .pane-title > svg { color: #8094ad; }
 .text-action { display: inline-flex; gap: 5px; align-items: center; font-size: 14px; white-space: nowrap; border: 0; background: transparent; padding: 3px 0; color: #445366; cursor: pointer; }
-.shortcuts { background: #e6f3fe; flex: 1; }
+.shortcuts { background: #e6f3fe; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .shortcut-grid > a { padding: 10px 13px; min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 5px; background: #fff; border-radius: 9px; font-size: clamp(14px, 1.1vw, 16px); font-weight: 700; }
 .shortcut-grid > a:hover { box-shadow: inset 0 0 0 1px #92b9eb; color: #1652a4; }
@@ -230,7 +230,20 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .footer-inner { padding-block: 22px 32px; }
 .footer-inner strong { display: block; color: #344960; margin-bottom: 6px; font-size: 16px; }
 .footer-inner p { margin: 3px 0; }
+/* 상세 화면은 셸의 메뉴 줄 바로 아래에서 시작하므로 위 여백을 16px 대신 30px로 둔다(DESIGN.md 참고). */
 .main > .container { padding-block-start: 30px; }
+/* 누르는 동작에 답하는 상태. 움직임 없이 색만 바꾼다. */
+.btn:hover:not(:disabled) { background: var(--color-primary-soft); }
+.btn.primary:hover:not(:disabled), .account-panel .btn:hover { background: #1d56c9; }
+.btn.danger:hover:not(:disabled) { background: #b42318; }
+.btn:active:not(:disabled) { filter: brightness(.94); }
+.chip:hover { border-color: var(--color-primary); }
+.stage-tabs button:hover { color: #1859b8; }
+.start-link:hover, .type-banner:hover strong { text-decoration: underline; }
+.nav-group > button:focus-visible, .menu-panel a:focus-visible { outline-offset: -3px; }
+.portal-header a[aria-current=page]:not(.brand),.menu-panel a[aria-current=page] { color: #175ac7; font-weight: 800; }
+.live-stats span { white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 @media (max-width: 1100px) {
   .portal-width { width: 94%; }
   .shortcuts, .lower-grid .pane { padding: 16px; }

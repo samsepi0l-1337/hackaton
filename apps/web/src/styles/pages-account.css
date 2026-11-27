@@ -1,61 +1,35 @@
-/* 계정·인증·테스트·관리자 화면 (디자인 사이트의 pane·field·button 규칙) */
-.container.account-page { width: min(1280px, 90%); max-width: 1280px; padding: 30px 0 16px; color: var(--portal-ink); letter-spacing: -.035em; }
-.container.account-page.narrow { width: 100%; max-width: 480px; padding-inline: 16px; }
-.account-page h1 { font-size: 24px; line-height: 1.4; letter-spacing: -.055em; margin: 0 0 16px; color: var(--portal-ink); }
-.account-page h2 { font-size: 20px; line-height: 1.4; letter-spacing: -.055em; margin: 0; }
-.account-page h3 { font-size: 16px; letter-spacing: -.04em; }
-.account-page a { color: #155cd0; }
-.account-page a:hover { color: #155bc1; text-decoration: underline; }
-.account-page a.btn:hover { text-decoration: none; }
-.account-page .muted { color: #566a80; }
-
-/* pane */
-.account-page .card { border: 1px solid var(--panel-line); border-radius: 17px; padding: 22px 25px; box-shadow: 0 3px 9px #183e6508; }
-.account-page .card.state { padding: 40px 25px; }
-.account-page .stack > .card + .card { margin-top: 16px; }
-
-/* 폼 */
-.account-page .field { margin-bottom: 16px; }
-.account-page .field > .label { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--portal-ink); }
-.account-page .input { min-height: 46px; border: 1px solid #d6e0ed; border-radius: 9px; background: #fff; color: var(--portal-ink); padding: 8px 13px; }
-.account-page .input:focus-visible { border-color: var(--portal-blue); }
-.account-page .field.has-error .input { border-color: var(--color-danger); }
-.account-page .check { align-items: flex-start; font-size: 14px; }
-
-/* 버튼 */
-.account-page .btn { min-height: 44px; border-radius: 7px; border: 1px solid #d6e0ed; background: #fff; color: var(--portal-ink); font-weight: 700; }
-.account-page .btn:hover:not(:disabled) { background: #edf4ff; color: #175ac7; }
-.account-page .btn.primary { background: var(--portal-blue); border-color: var(--portal-blue); color: #fff; min-height: 48px; }
-.account-page .btn.primary:hover:not(:disabled) { background: #155bc1; color: #fff; }
-.account-page .btn.danger { background: #fff; color: var(--color-danger); border-color: var(--color-danger); }
-.account-page .btn.danger:hover:not(:disabled) { background: var(--color-danger-soft); color: var(--color-danger); }
-.account-page .btn.small { min-height: 34px; font-size: 14px; }
-.account-page .btn.ghost { background: transparent; border-color: transparent; }
-.account-page .badge { border-radius: 6px; font-size: 13px; background: #eff3f8; color: #4d5e72; }
+/* 계정·인증·테스트·관리자 화면: 공통 규칙은 pages-programs.css. 여기에는 이 화면들에만 필요한 규칙을 둔다. */
+/* 폭은 다른 상세 화면과 같은 .container(--content-width)를 쓴다. */
+.container.account-page.narrow { max-width: 480px; }
+.container.test-page { max-width: 760px; }
 
 /* 내 정보 */
-.container.me-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.container.me-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .container.me-page > * { margin: 0; min-width: 0; }
 .container.me-page > h1, .container.me-page > .me-wide { grid-column: 1 / -1; }
 .container.me-page > h1 { margin-bottom: 0; }
 
 /* 유형 테스트 */
-.account-page .hero { background: #e6f3fe; border: 1px solid var(--panel-line); border-radius: 16px; padding: 28px 25px; }
-.account-page .hero h1 { font-size: 26px; margin-bottom: 4px; }
+.account-page .hero { background: #e6f3fe; border: 1px solid var(--panel-line); border-radius: 12px; padding: 28px 24px; }
+.account-page .hero h1 { margin-bottom: 4px; }
 .account-page .progress { height: 8px; background: #e7edf3; }
 .account-page .progress > div { background: var(--portal-blue); }
-.account-page .option-btn { border: 1px solid var(--panel-line); border-radius: 11px; background: #fff; color: var(--portal-ink); font-size: 17px; font-weight: 650; padding: 16px 20px; box-shadow: 0 3px 9px #183e6508; }
-.account-page .option-btn:hover { background: #edf4ff; border-color: #92b9eb; color: #1652a4; }
-.account-page .option-btn.selected { background: #eaf1ff; border-color: var(--portal-blue); }
+.account-page .option-btn { border: 1px solid var(--panel-line); border-radius: 12px; background: #fff; color: var(--portal-ink); font-size: 17px; font-weight: 650; padding: 16px 20px; box-shadow: none; transition: background-color .12s, border-color .12s; }
+.account-page .option-btn:hover { background: #edf4ff; border-color: #92b9eb; color: #155bc1; }
+.account-page .option-btn:active { background: #dbe8fd; }
+.account-page .option-btn.selected { background: #e8f0fe; border-color: var(--portal-blue); }
 .account-page .axis .bar { background: #e7edf3; }
 .account-page .axis .bar > span { background: var(--portal-blue); }
-.container.test-page { max-width: 760px; }
 
 /* 통계·표 */
-.account-page .stat { padding: 26px 25px; }
+.account-page .stat { padding: 24px; }
 .account-page .stat .num { font-size: 32px; font-weight: 800; color: #185dbd; letter-spacing: -.04em; }
 .account-page .bufs-table table { background: #fff; border: 1px solid var(--panel-line); border-radius: 12px; }
 .account-page .bufs-table th { background: #f2f6fb; color: #4d5e72; font-weight: 700; }
 
 /* 대화상자 */
-.sheet { border-radius: 17px; }
+.sheet { border-radius: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .account-page .option-btn { transition: none; }
+}
