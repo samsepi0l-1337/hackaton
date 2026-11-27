@@ -28,6 +28,7 @@ const VARS: &[&str] = &[
     "ADMIN_PASSWORD_HASH",
     "TEST_MODE",
     "TEST_NOW",
+    "TEST_FIXTURES",
     "E2E_MAIL_LOG",
 ];
 
@@ -263,7 +264,7 @@ impl GilApp {
                 entries.push((k, v));
             }
         }
-        if env.get("TEST_MODE").map(|s| s == "1").unwrap_or(false) {
+        if env.get("TEST_FIXTURES").map(|s| s == "1").unwrap_or(false) {
             gil_core::shared::data::use_test_fixtures();
         }
         let mut kv = MemKv::from_entries(entries);
