@@ -40,8 +40,9 @@ def allow_private():
 def _blocked_ip(ip):
     if ip.version == 6 and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
+    # is_global 이 아니면 막는다: is_private 는 100.64.0.0/10 (CGNAT) 을 내부 주소로 보지 않는다.
     return (ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved
-            or ip.is_multicast or ip.is_unspecified)
+            or ip.is_multicast or ip.is_unspecified or not ip.is_global)
 
 
 def check_url(url):

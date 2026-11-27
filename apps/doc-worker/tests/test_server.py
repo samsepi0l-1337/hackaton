@@ -188,7 +188,7 @@ class SsrfTests(unittest.TestCase):
     def test_blocked(self):
         for u in ("http://127.0.0.1/x", "http://10.1.2.3/", "http://172.16.0.1/", "http://192.168.1.1/",
                   "http://169.254.169.254/latest", "http://[::1]/", "http://[fc00::1]/", "http://localhost/",
-                  "http://[::ffff:127.0.0.1]/"):
+                  "http://[::ffff:127.0.0.1]/", "http://100.64.0.1/"):
             with self.assertRaises(server.ApiError, msg=u) as c:
                 server.check_url(u)
             self.assertEqual(c.exception.status, 400)

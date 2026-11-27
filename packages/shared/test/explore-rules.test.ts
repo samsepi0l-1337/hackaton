@@ -245,8 +245,9 @@ describe('지역 검토 카드', () => {
   });
   test('자료 범위 안내는 자료가 없는 지역을 정직하게 말한다', () => {
     const note = coverageNote('울산');
-    expect(note).toContain('울산');
-    expect(note).toContain('자료가 없어요');
+    // '울산' 과 '자료가 없어요' 는 경남 문구로도 늘 들어 있어서, 고른 지역에 대한 문장을 그대로 확인한다.
+    expect(note).toContain('울산·경남은(는) 아직 자료가 없어요');
+    expect(note).toContain('검토 지역으로 고른 울산은(는) 자료가 없어서');
   });
 });
 
