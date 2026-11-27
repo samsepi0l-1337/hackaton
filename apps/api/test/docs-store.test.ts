@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ParsedDocRecord } from '../src/db/schema';
 import { readAnnouncementForm, type DocWorkerClient, type ParsedDocCache } from '../src/docs/pipeline';
+import * as pipeline from '../src/docs/pipeline';
 import { createAiTasks } from '../src/ai/tasks';
 import { createStore, memoryKv, urlHash } from '../src/store';
 import { PRE_STARTUP_PLAN } from './docs-fixtures';
@@ -67,6 +68,42 @@ describe('Document Parse 결과 저장', () => {
     const r3 = await readAnnouncementForm(env, { docWorker: worker(), fetch, docs, summarize: async () => '정리됨', now }, 'u');
     expect('error' in r3 ? null : r3.summary).toBe('정리됨');
     expect(docs.data.get(att.url)!.summary).toBe('정리됨');
+    expect((docs.data.get(att.url)! as ParsedDocRecord & { summaryAttempts: number }).summaryAttempts).toBe(2);
+  });
+
+  test('summary 실패는 최초 시도를 포함해 세 번까지만 재시도한다', async () => {
+    const docs = memCache();
+    let calls = 0;
+    const summarize = async () => { calls++; return null; };
+    const deps = { docWorker: worker(), fetch: async () => json({ content: { markdown: PRE_STARTUP_PLAN } }), docs, summarize, now };
+    const results = [];
+    for (let i = 0; i < 5; i++) {
+      results.push(await readAnnouncementForm(env, deps, 'u'));
+      if (i === 2) expect(calls).toBe(3);
+    }
+    expect(calls).toBe(3);
+    expect((pipeline as typeof pipeline & { MAX_SUMMARY_ATTEMPTS: number }).MAX_SUMMARY_ATTEMPTS).toBe(3);
+    expect(docs.data.get(att.url)!.summary).toBeNull();
+    expect((docs.data.get(att.url)! as ParsedDocRecord & { summaryAttempts: number }).summaryAttempts).toBe(3);
+    expect(results[3]).toMatchObject({ cached: true, summary: null });
+  });
+
+  test('summaryAttempts 없는 이전 저장본은 0회로 취급해 다시 정리한다', async () => {
+    const old = { url: att.url, fileName: att.name, kind: att.kind, text: '본문', fields: [], warnings: [], summary: null, parsedAt: now().toISOString() };
+    const docs = memCache();
+    docs.data.set(att.url, old as ParsedDocRecord);
+    let calls = 0;
+    const result = await readAnnouncementForm(env, { docWorker: worker(), docs, summarize: async () => { calls++; return null; }, now }, 'u');
+    expect(result).toMatchObject({ cached: true, summary: null });
+    expect(calls).toBe(1);
+    expect((docs.data.get(att.url)! as ParsedDocRecord & { summaryAttempts: number }).summaryAttempts).toBe(1);
+  });
+
+  test('store는 summaryAttempts 없는 이전 저장본에 기본값 0을 적용한다', async () => {
+    const store = await createStore(now(), memoryKv(), { seedUsers: false });
+    const old = { url: att.url, fileName: att.name, kind: att.kind, text: '본문', fields: [], warnings: [], summary: null, parsedAt: now().toISOString() };
+    store.saveParsedDoc(old as ParsedDocRecord);
+    expect((store.parsedDoc(att.url)! as ParsedDocRecord & { summaryAttempts: number }).summaryAttempts).toBe(0);
   });
 
   test('저장 실패는 양식 읽기를 막지 않는다', async () => {
@@ -81,7 +118,7 @@ describe('Document Parse 결과 저장', () => {
     const rec: ParsedDocRecord = { url: att.url, fileName: '공고문.pdf', kind: 'pdf', text: '본문', fields: [{ label: '개요', maxLength: 500, required: true }], warnings: [], summary: '정리', parsedAt: now().toISOString() };
     store.saveParsedDoc(rec);
     expect(kv.data.has(`doc:${urlHash(att.url)}`)).toBe(true);
-    expect(store.parsedDoc(att.url)).toEqual(rec);
+    expect(store.parsedDoc(att.url)).toEqual(expect.objectContaining(rec));
     expect(store.parsedDoc('https://k/other')).toBeUndefined();
     expect(() => store.saveParsedDoc({ ...rec, kind: 'xls' as never })).toThrow();
   });
