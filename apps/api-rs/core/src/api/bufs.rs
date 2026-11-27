@@ -162,7 +162,9 @@ fn int_of(req: &Req, key: &str, default: usize, max: usize) -> Result<usize, Htt
         if digits.is_empty() || !digits.chars().all(|c| c.is_ascii() && c.is_digit(radix)) {
             None
         } else {
-            u64::from_str_radix(digits, radix).ok().map(|n| n as f64)
+            Some(digits.chars().fold(0.0, |n, c| {
+                n * f64::from(radix) + c.to_digit(radix).map_or(0.0, f64::from)
+            }))
         }
     } else if trimmed.is_empty() {
         Some(0.0)
@@ -222,6 +224,7 @@ mod tests {
     fn integer_query_accepts_javascript_radix_prefixes() {
         for (raw, expected) in [
             ("0x10", Some(16)),
+            ("0x10000000000000000", Some(200)),
             ("0b101", Some(5)),
             ("0o17", Some(15)),
             ("0x", None),
