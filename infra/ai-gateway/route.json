@@ -55,7 +55,8 @@
             "$in": [
               "mentor",
               "reason",
-              "prep"
+              "prep",
+              "extract"
             ]
           }
         }

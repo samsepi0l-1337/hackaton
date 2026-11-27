@@ -227,6 +227,19 @@ export const FeedbackRecordSchema = z.object({
 });
 export type FeedbackRecord = z.infer<typeof FeedbackRecordSchema>;
 
+/** Document Parse 결과 (`doc:<첨부 URL 해시>`). 같은 첨부는 다시 파싱하지 않는다. summary 는 Solar 정리, 실패하면 null. */
+export const ParsedDocRecordSchema = z.object({
+  url: z.string().min(1).max(2000),
+  fileName: z.string().max(300),
+  kind: z.enum(['pdf', 'hwp', 'hwpx', 'docx', 'unknown']),
+  text: z.string().max(50_000),
+  fields: z.array(z.object({ label: z.string().max(300), maxLength: z.number().int().nullable(), required: z.boolean() })).max(200),
+  warnings: z.array(z.string().max(300)).max(20),
+  summary: z.string().max(2000).nullable(),
+  parsedAt: isoTime,
+});
+export type ParsedDocRecord = z.infer<typeof ParsedDocRecordSchema>;
+
 /** /bufs 로그인 실패 횟수와 잠금 (`bufslock:<IP 해시>`), 관리자 세션 (`bufs:<token>`). */
 export const BufsLockSchema = z.object({ fails: z.number().int().min(0), lockedUntil: isoTime.nullable() });
 export const BufsSessionSchema = z.object({ expiresAt: isoTime });

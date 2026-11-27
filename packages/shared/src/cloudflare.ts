@@ -19,7 +19,7 @@ export const SOLAR_MODELS: Record<AiTask, string> = {
   summary: 'solar-pro-4',
   prep: 'solar-mini-4-5-preview', // 운영에서 Pro 가 15초를 넘겨 Mini 로 바꿈
   draft: 'solar-pro-4',
-  extract: 'solar-pro-4',
+  extract: 'solar-mini-4-5-preview', // 12,000자 문서에서 Pro 4.9초·양식 항목 누락, Mini 0.4초·정확 (2026-11-27 측정)
 };
 
 /** 동적 라우트 이름. 모델 이름 자리에 넣는다. 정의: infra/ai-gateway/route.json */

@@ -16,7 +16,7 @@ import { createDevMailer, pickMailer, type Mailer } from './mail';
 import { createPasswords } from './password';
 import type { Bindings } from './env';
 import { createAiTasks } from './ai/tasks';
-import { readAnnouncementForm, type DocWorkerClient } from './docs/pipeline';
+import { readAnnouncementForm, type DocWorkerClient, type ParsedDocCache } from './docs/pipeline';
 import { HttpError, type AppEnv } from './http';
 import { exploreStats, mountExplore } from './explore/routes';
 import { mergeResources, RESOURCES } from '@gil/shared';
@@ -56,6 +56,8 @@ const notFound = (m = '찾을 수 없어요') => new HttpError(404, 'not_found',
 const MUST_CHANGE_ALLOWED = new Set(['/api/auth/me', '/api/auth/password', '/api/auth/logout']);
 
 const FORM_TIMEOUT_MS = 30_000;
+/** Document Parse 결과를 store 의 `doc:` 레코드로 저장·재사용한다. */
+const docCache = (store: Store): ParsedDocCache => ({ get: (url) => store.parsedDoc(url), put: (r) => store.saveParsedDoc(r) });
 /** 신원 정보 항목: AI가 채우지 않는다. */
 const IDENTITY_RE = /(성명|이름|대표자|연락처|전화|휴대|이메일|e-?mail|주소|생년월일)/i;
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
@@ -424,7 +426,7 @@ export function createApp(opts: AppOptions = {}) {
     const env = { ...opts.env, ...(c.env ?? {}) } as Bindings;
     const docWorker = program.url ? opts.docWorkerFor?.(env) ?? null : null;
     if (docWorker) {
-      const form = await withTimeout(readAnnouncementForm(env, { docWorker, fetch: opts.fetch }, program.url), FORM_TIMEOUT_MS);
+      const form = await withTimeout(readAnnouncementForm(env, { docWorker, fetch: opts.fetch, docs: docCache(store), summarize: (d) => c.get('ai').docSummary(d, u.id) }, program.url), FORM_TIMEOUT_MS);
       if (form && 'fields' in form && form.fields.length > 0) {
         ruleFields = form.fields.map((x, i) => ({
           key: `f${i + 1}`, label: x.label, maxLength: x.maxLength, required: x.required,
@@ -536,10 +538,10 @@ export function createApp(opts: AppOptions = {}) {
       return c.json({ status: res.status, body: await res.json().catch(() => null) });
     }
     const started = Date.now();
-    const r = await readAnnouncementForm(env, { docWorker, fetch: opts.fetch }, b.pageUrl);
+    const r = await readAnnouncementForm(env, { docWorker, fetch: opts.fetch, docs: docCache(c.get('store')), summarize: (d) => c.get('ai').docSummary(d) }, b.pageUrl);
     const ms = Date.now() - started;
     if ('error' in r) return c.json({ ok: false, ms, error: r.error });
-    return c.json({ ok: true, ms, attachment: r.attachment, kind: r.parsed.kind, warnings: r.parsed.warnings, fields: r.fields, textPreview: r.parsed.text.slice(0, 1500) });
+    return c.json({ ok: true, ms, attachment: r.attachment, kind: r.parsed.kind, cached: r.cached, summary: r.summary, warnings: r.parsed.warnings, fields: r.fields, textPreview: r.parsed.text.slice(0, 1500) });
   });
 
   app.get('/api/admin/stats', (c) => {
