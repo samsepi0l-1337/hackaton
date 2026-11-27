@@ -1,0 +1,164 @@
+[
+  {
+    "url": "https://ccei.creativekorea.or.kr/busan/",
+    "target": null,
+    "procedure": "공식 홈페이지에서 문의 경로 확인",
+    "prep": "관심 분야와 지금까지 정리한 내용 한 장",
+    "affiliationLimit": null,
+    "costPeriod": null,
+    "endDate": null,
+    "checkedAt": null,
+    "sourceExcerpt": null,
+    "industryTags": [],
+    "capabilityTags": [
+      "상담"
+    ],
+    "contextIds": [
+      "ctx-busan-ship"
+    ],
+    "conditions": null,
+    "test": true,
+    "id": "rs-ccei-consult",
+    "type": "상담",
+    "title": "[테스트] 창업 상담",
+    "agency": "부산창조경제혁신센터",
+    "stages": [
+      "no_idea",
+      "has_idea",
+      "preparing"
+    ],
+    "content": "창업 아이디어와 준비 방향 상담 (운영 범위 확인 필요)",
+    "regions": [
+      "부산"
+    ],
+    "recruitStatus": "unknown"
+  },
+  {
+    "url": "https://www.bepa.kr",
+    "target": null,
+    "procedure": "공식 공고 확인 후 신청",
+    "prep": null,
+    "affiliationLimit": null,
+    "costPeriod": null,
+    "endDate": null,
+    "checkedAt": null,
+    "sourceExcerpt": null,
+    "industryTags": [],
+    "capabilityTags": [
+      "교육"
+    ],
+    "contextIds": [],
+    "conditions": null,
+    "test": true,
+    "id": "rs-bepa-edu",
+    "type": "교육",
+    "title": "[테스트] 청년 창업 입문 교육",
+    "agency": "부산경제진흥원",
+    "stages": [
+      "no_idea",
+      "has_idea"
+    ],
+    "content": "창업 기초 교육 (실제 과정·일정 확인 필요)",
+    "regions": [
+      "부산"
+    ],
+    "recruitStatus": "unknown"
+  },
+  {
+    "url": "https://www.btp.or.kr",
+    "target": null,
+    "procedure": "모집 공고 확인",
+    "prep": "사업 구상 요약",
+    "affiliationLimit": null,
+    "costPeriod": null,
+    "endDate": null,
+    "checkedAt": null,
+    "sourceExcerpt": null,
+    "industryTags": [],
+    "capabilityTags": [
+      "공간",
+      "시제품"
+    ],
+    "contextIds": [],
+    "conditions": {
+      "business": "any"
+    },
+    "test": true,
+    "id": "rs-btp-space",
+    "type": "공간",
+    "title": "[테스트] 기술창업 보육 공간",
+    "agency": "부산테크노파크",
+    "stages": [
+      "preparing"
+    ],
+    "content": "입주 공간과 보육 프로그램 (입주 조건 확인 필요)",
+    "regions": [
+      "부산"
+    ],
+    "recruitStatus": "unknown"
+  },
+  {
+    "url": "https://www.pknu.ac.kr",
+    "target": null,
+    "procedure": "대학 창업지원단 문의",
+    "prep": null,
+    "affiliationLimit": "재학생",
+    "costPeriod": null,
+    "endDate": null,
+    "checkedAt": null,
+    "sourceExcerpt": null,
+    "industryTags": [],
+    "capabilityTags": [
+      "교육"
+    ],
+    "contextIds": [],
+    "conditions": null,
+    "test": true,
+    "id": "rs-pknu-edu",
+    "type": "교육",
+    "title": "[테스트] 대학 창업지원단 교육",
+    "agency": "부경대학교 창업지원단",
+    "stages": [
+      "no_idea",
+      "has_idea"
+    ],
+    "content": "재학생 대상 창업 교육·동아리 (외부인 이용 가능 여부 확인 필요)",
+    "regions": [
+      "부산"
+    ],
+    "recruitStatus": "unknown"
+  },
+  {
+    "url": "https://www.k-startup.go.kr",
+    "target": null,
+    "procedure": "K-Startup 공고 확인 후 온라인 신청",
+    "prep": "사업계획서",
+    "affiliationLimit": null,
+    "costPeriod": null,
+    "endDate": null,
+    "checkedAt": null,
+    "sourceExcerpt": null,
+    "industryTags": [],
+    "capabilityTags": [
+      "자금"
+    ],
+    "contextIds": [],
+    "conditions": {
+      "ageMax": 39,
+      "business": "pre"
+    },
+    "test": true,
+    "id": "rs-kstartup-pre",
+    "type": "지원사업",
+    "title": "[테스트] 예비창업자 사업화 지원 공고",
+    "agency": "창업진흥원(K-Startup)",
+    "stages": [
+      "preparing"
+    ],
+    "content": "사업화 자금·교육 (연도별 공고 내용 확인 필요)",
+    "regions": [
+      "전국"
+    ],
+    "recruitStatus": "unknown"
+  }
+]
