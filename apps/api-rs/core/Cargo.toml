@@ -2,7 +2,7 @@
 name = "gil-core"
 version = "0.1.0"
 edition = "2021"
-description = "부산 창업 길잡이 API — 플랫폼 독립 로직 (TS apps/api 와 같은 동작)"
+description = "해보까 API — 플랫폼 독립 로직 (TS apps/api 와 같은 동작)"
 
 [dependencies]
 serde.workspace = true
