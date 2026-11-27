@@ -11,7 +11,7 @@ import {
   type Program, type ProgramListQuery, type Stats, type User,
 } from '@gil/shared';
 import { mountAuth, publicUser } from './auth';
-import { mountBufs } from './bufs';
+import { isAdmin, mountBufs } from './bufs';
 import { createDevMailer, pickMailer, type Mailer } from './mail';
 import { createPasswords } from './password';
 import type { Bindings } from './env';
@@ -525,8 +525,7 @@ export function createApp(opts: AppOptions = {}) {
   const rate = (n: number, d: number) => (d === 0 ? null : n / d);
   // 팀 점검용: 실제 공고 상세 URL 로 F16 양식 읽기(doc-worker → Document Parse)를 끝까지 돌려 본다.
   app.post('/api/admin/form-probe', async (c) => {
-    const u = requireUser(c);
-    if (!u.isTeam) throw new HttpError(403, 'forbidden', '팀 계정만 쓸 수 있어요');
+    if (!isAdmin(c)) throw new HttpError(c.get('user') ? 403 : 401, c.get('user') ? 'forbidden' : 'unauthorized', '관리자만 쓸 수 있어요 (/bufs 로그인)');
     const b = await json(c);
     if (typeof b.pageUrl !== 'string' || !/^https?:\/\//.test(b.pageUrl)) throw bad('pageUrl(http/https)이 필요해요');
     const env = { ...opts.env, ...(c.env ?? {}) } as Bindings;
@@ -544,8 +543,7 @@ export function createApp(opts: AppOptions = {}) {
   });
 
   app.get('/api/admin/stats', (c) => {
-    const u = requireUser(c);
-    if (!u.isTeam) throw new HttpError(403, 'forbidden', '팀 계정만 볼 수 있어요');
+    if (!isAdmin(c)) throw new HttpError(c.get('user') ? 403 : 401, c.get('user') ? 'forbidden' : 'unauthorized', '관리자만 쓸 수 있어요 (/bufs 로그인)');
     const store = c.get('store');
     const mentors = store.allMentors();
     const surveyed = mentors.filter((m) => m.survey !== null);

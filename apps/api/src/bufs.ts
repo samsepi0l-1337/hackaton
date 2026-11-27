@@ -16,6 +16,13 @@ const LOCK_MINUTES = 10;
 const clientIp = (c: Ctx) => c.req.header('cf-connecting-ip')?.trim() || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
 
 /** ab***@gmail.com 처럼 가린다. */
+/** 관리자 권한: /bufs 관리자 세션 또는 팀 계정 (운영에는 팀 계정이 없다). */
+export function isAdmin(c: Ctx): boolean {
+  if (c.get('user')?.isTeam === true) return true;
+  const t = getCookie(c, BUFS_COOKIE);
+  return !!t && c.get('store').bufsSessionValid(t, c.get('now'));
+}
+
 export function maskEmail(email: string): string {
   const [local = '', domain = ''] = email.split('@');
   return `${local.slice(0, 2)}***@${domain}`;

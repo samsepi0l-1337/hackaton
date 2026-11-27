@@ -132,6 +132,7 @@ const K = {
   bufs: (t: string) => `bufs:${t}`,
   limitHits: 'meta:limitHits',
   seeded: 'meta:seeded',
+  purged: 'meta:purged-test-v1',
   schema: 'meta:schema',
 };
 
@@ -144,9 +145,17 @@ function check<S extends z.ZodTypeAny>(schema: S, value: unknown, key: string): 
   return r.data;
 }
 
-export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<Store> {
+export interface StoreOptions {
+  /** 테스트 계정(@test.local)을 넣을지. 로컬·테스트는 true, 운영(GilApp)은 false. */
+  seedUsers?: boolean;
+  /** 운영 KV 에 남은 테스트 기록을 한 번 지운다 (테스트 계정과 그 기록, 예전 비회원 탐색·횟수 기록). */
+  purgeTestData?: boolean;
+}
+
+export async function createStore(now: Date, kv: KvLike = memoryKv(), opts: StoreOptions = {}): Promise<Store> {
+  const seedUsers = opts.seedUsers ?? true;
   // 시드 사용자는 처음 한 번만 넣는다 (Durable Object 에서는 재시작해도 남는다).
-  if (!kv.get(K.seeded)) {
+  if (seedUsers && !kv.get(K.seeded)) {
     for (const s of SEED_USERS) {
       if (kv.get(K.user(s.id))) continue;
       const u: UserRecord = { id: s.id, email: s.email, isTeam: s.isTeam, createdAt: now.toISOString(), passwordHash: await hashLegacyPassword(s.password), emailVerified: true, mustChangePassword: false };
@@ -186,12 +195,12 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
   };
   loadAll();
   // 인증 기능 이전에 만든 시드 사용자는 인증된 것으로 본다.
-  for (const s of SEED_USERS) {
+  if (seedUsers) for (const s of SEED_USERS) {
     const u = users.get(s.id);
     if (u && !u.emailVerified) { u.emailVerified = true; kv.put(K.user(u.id), check(UserSchema, u, K.user(u.id))); }
   }
 
-  return {
+  const store: Store = {
     programs: seedPrograms(now),
     agencies: SEED_AGENCIES,
     findUser: (id) => users.get(id),
@@ -355,4 +364,21 @@ export async function createStore(now: Date, kv: KvLike = memoryKv()): Promise<S
       touchedApps.clear();
     },
   };
+  if (opts.purgeTestData && !kv.get(K.purged)) purgeTestRecords(kv, store);
+  return store;
+}
+
+/** 운영 KV 의 테스트 기록을 지운다 (한 번만, meta:purged-test-v1 로 표시). */
+function purgeTestRecords(kv: KvLike, store: Store): void {
+  let users = 0, keys = 0;
+  for (const u of store.allUsers()) if (u.email.toLowerCase().endsWith('@test.local')) { store.deleteUser(u.id); users++; }
+  const live = new Set(store.allUsers().map((u) => u.id));
+  const drop: string[] = [];
+  for (const [k] of kv.list({ prefix: 'explore:g-' })) drop.push(k); // 예전 비회원 탐색 기록
+  for (const p of ['quota:c:', 'quota:ip:']) for (const [k] of kv.list({ prefix: p })) drop.push(k); // 예전 쿠키·IP 횟수
+  for (const p of ['mentor:', 'explore:', 'profile:']) for (const [k] of kv.list({ prefix: p })) if (!live.has(k.slice(p.length))) drop.push(k);
+  for (const k of drop) { kv.delete(k); keys++; }
+  kv.delete(K.seeded);
+  kv.put(K.purged, new Date().toISOString());
+  console.log(`[store] 테스트 기록 삭제: 계정 ${users}개, 레코드 ${keys}개`);
 }

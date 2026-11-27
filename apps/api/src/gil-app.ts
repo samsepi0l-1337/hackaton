@@ -19,7 +19,7 @@ export class GilApp extends DurableObject<Bindings> {
     this.kstartup = createKStartupStore(ctx.storage.kv);
     this.app = createApp({
       kstartup: this.kstartup,
-      store: () => createStore(new Date(), ctx.storage.kv),
+      store: () => createStore(new Date(), ctx.storage.kv, { seedUsers: false, purgeTestData: true }),
       docWorkerFor: (e) => (e.DOC_WORKER ? docWorkerClient(e.DOC_WORKER, e.CF_VERSION_METADATA?.id) : null),
     });
   }
