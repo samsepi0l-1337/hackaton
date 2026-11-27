@@ -164,8 +164,20 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid 
 .primary-stack { justify-content: flex-start; }
 .search-area { text-align: center; padding: 0 4%; flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .search-area p { font-size: 14px; color: #566a80; margin: 8px 0 0; }
-.search-area .first-steps { color: var(--portal-ink); font-weight: 700; }
-.search-area .first-steps a { color: #155cd0; text-decoration: underline; text-underline-offset: 2px; }
+/* 처음 이용 순서: 검색바 아래, 같은 그라데이션 색을 이어받은 단계 칩 */
+.search-area .first-steps { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; font-size: 14px; }
+.search-area .first-steps-label { color: #566a80; font-weight: 600; }
+.search-area .first-steps ol { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.search-area .first-steps li { display: flex; align-items: center; gap: 6px; }
+.search-area .first-steps li + li::before { content: ''; width: 10px; height: 2px; border-radius: 2px; background: #c3d3e6; }
+.search-area .first-steps ol a { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px 0 5px; border: 1px solid var(--panel-line); border-radius: 99px; background: #fff; color: var(--portal-ink); font-weight: 700; box-shadow: 0 2px 6px #183e650d; }
+.search-area .first-steps ol a:hover { border-color: #8fb3f0; color: #155cd0; }
+.search-area .first-steps b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 12px; }
+.search-area .first-steps li:nth-child(1) b { background: #09b58b; }
+.search-area .first-steps li:nth-child(2) b { background: #009f9c; }
+.search-area .first-steps li:nth-child(3) b { background: #386dfa; }
+.search-area .first-steps-guide { color: #155cd0; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.search-area .first-steps a:focus-visible { outline: 2px solid var(--portal-blue); outline-offset: 2px; }
 .search-pill { display: flex; align-items: stretch; background: linear-gradient(108deg, #09b58b 8%, #009f9c 53%, #386dfa 94%); padding: 2px; border-radius: 99px; box-shadow: 0 5px 11px #216ece24; }
 .search-input { display: flex; align-items: center; min-width: 0; flex: 1; height: 64px; background: #fff; border-radius: 99px; position: relative; padding-left: 75px; }
 .search-input img { position: absolute; bottom: 0; left: 12px; width: 62px; height: 71px; object-fit: contain; object-position: bottom; pointer-events: none; }
