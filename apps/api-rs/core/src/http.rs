@@ -64,7 +64,7 @@ impl Resp {
         Resp {
             status,
             headers: vec![("content-type".into(), "application/json".into())],
-            body: serde_json::to_string(v).unwrap_or_default(),
+            body: serde_json::to_string(&js_numbers(v)).unwrap_or_default(),
         }
     }
     pub fn ok(v: Value) -> Result<Resp, HttpError> {
@@ -155,3 +155,34 @@ impl HttpError {
 }
 
 pub type HResult = Result<Resp, HttpError>;
+
+/// JSON.stringify 처럼 정수인 f64 (1.0, -0.0) 를 정수로 쓴다. serde_json 은 `1.0` 으로 쓴다.
+pub fn js_numbers(v: &Value) -> Value {
+    match v {
+        Value::Number(n) => match n.as_f64() {
+            Some(f) if n.is_f64() && f.fract() == 0.0 && f.abs() <= 9_007_199_254_740_991.0 => {
+                Value::from(f as i64)
+            }
+            _ => v.clone(),
+        },
+        Value::Array(a) => Value::Array(a.iter().map(js_numbers).collect()),
+        Value::Object(m) => {
+            Value::Object(m.iter().map(|(k, x)| (k.clone(), js_numbers(x))).collect())
+        }
+        _ => v.clone(),
+    }
+}
+
+#[cfg(test)]
+mod js_number_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn whole_floats_print_as_integers() {
+        let r = Resp::json(
+            200,
+            &json!({"a": 1.0, "b": [30.0, 0.5, -0.0], "c": {"d": 2.25}}),
+        );
+        assert_eq!(r.body, r#"{"a":1,"b":[30,0.5,0],"c":{"d":2.25}}"#);
+    }
+}

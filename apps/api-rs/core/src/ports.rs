@@ -70,4 +70,8 @@ pub trait Ports {
     fn random_bytes(&self, n: usize) -> Vec<u8>;
     /// console.log / warn / error. level: "log" | "warn" | "error".
     fn log(&self, level: &str, msg: &str);
+    /// 지금 시각 (ms, TS `Date.now()`). 경과 시간 측정용. 기본값은 시계 없음 (테스트는 0 경과).
+    fn now_ms(&self) -> Option<f64> {
+        None
+    }
 }
