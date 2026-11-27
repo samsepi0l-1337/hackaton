@@ -107,6 +107,8 @@ pub async fn parse_document(env: &Env, ports: &dyn Ports, file: &DocFile) -> Opt
             url: format!("{}/document-digitization", base.trim_end_matches('/')),
             headers,
             form: Some(form),
+            // 응답이 멈추면 끝없이 기다리지 않는다 (지원서 작성 전체 제한 30초 안).
+            timeout_ms: Some(25_000),
             ..Default::default()
         })
         .await
