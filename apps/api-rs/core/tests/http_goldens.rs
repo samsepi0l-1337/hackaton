@@ -19,7 +19,18 @@ fn volatile(s: &str) -> bool {
             }
         })
         .1;
-    hexrun >= 24 || s.starts_with("MOCK-")
+    hexrun >= 24 || s.starts_with("MOCK-") || is_uuid(s)
+}
+
+/// crypto.randomUUID() 꼴 (8-4-4-4-12 소문자 hex). 매번 다른 값이다.
+fn is_uuid(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('-').collect();
+    parts.len() == 5
+        && parts.iter().zip([8, 4, 4, 4, 12]).all(|(p, n)| {
+            p.len() == n
+                && p.chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        })
 }
 
 /// TS 와 Rust 값을 비교한다. 매번 다른 문자열은 대응표에 넣고 같다고 본다.
