@@ -20,6 +20,7 @@ export const ResourceSchema = z.object({
   costPeriod: z.string().nullable(),
   recruitStatus: z.enum(['open', 'closed', 'always', 'unknown']),
   endDate: z.string().nullable(),
+  startDate: z.string().nullable().optional(),
   checkedAt: z.string().nullable(),
   sourceExcerpt: z.string().nullable(),
   industryTags: z.array(z.enum(['조선·해양', '자동차', '항공', '방산', '수소·에너지', '데이터센터', 'AI', '2차전지'])),

@@ -124,6 +124,7 @@ export function kstartupToResource(item: KStartupItem, now: Date): Resource | nu
     costPeriod: null,
     recruitStatus: recruitStatusOf(item, today),
     endDate: toIso(item.pbanc_rcpt_end_dt),
+    startDate: toIso(item.pbanc_rcpt_bgng_dt),
     checkedAt: today,
     sourceExcerpt: detail ? clip(detail, 120) : body ? clip(body, 120) : null,
     industryTags: industryTagsOf([title, detail ?? '', body ?? ''].join(' ')),

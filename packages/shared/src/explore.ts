@@ -85,6 +85,7 @@ export interface Resource {
   costPeriod: string | null; // 기간·비용, 모르면 null
   recruitStatus: RecruitStatus; // 상시는 명시 근거가 있을 때만
   endDate: string | null; // YYYY-MM-DD, 시각 없음
+  startDate?: string | null; // YYYY-MM-DD, 접수 시작·등록일. 모르면 null·없음
   checkedAt: string | null;
   sourceExcerpt: string | null;
   industryTags: IndustryTag[]; // 실제 지원 분야 (명시 근거 있을 때만)
@@ -186,7 +187,13 @@ export interface ResourceCard {
   reasonProvenance: 'rule' | 'ai';
   condition: { status: ConditionStatus; checks: ConditionCheck[] };
   regionMatch: boolean; // 사용자 검토 지역과 연결 (동순위 정렬에만 사용)
+  views?: number; // 많이 본 공모 순서에 쓰는 조회 수 (목록·상세 응답에만 붙는다)
 }
+
+/** 지원 목록 정렬: 최근 공모 / 많이 본 공모 / 마감 임박. */
+export const RESOURCE_SORTS = ['recent', 'popular', 'deadline'] as const;
+export type ResourceSort = (typeof RESOURCE_SORTS)[number];
+export const RESOURCE_SORT_LABEL: Record<ResourceSort, string> = { recent: '최근 공모', popular: '많이 본 공모', deadline: '마감 임박' };
 
 /** 데이터 버전. 문제 카드가 바뀌면 올린다. */
 export const EXPLORE_DATA_VERSION = '2026-11-27.no-test-data';

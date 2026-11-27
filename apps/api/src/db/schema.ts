@@ -188,6 +188,8 @@ export const ExploreStateSchema = z.object({
 export type ExploreState = z.infer<typeof ExploreStateSchema>;
 
 /** 상담 시작 시각 목록 (키마다 `quota:<key>`). 7일이 지난 항목은 쓸 때 지운다. */
+/** 지원 자료 조회 수 (KV `views:<resourceId>`). */
+export const ViewsSchema = z.number().int().nonnegative();
 export const QuotaSchema = z.array(isoTime).max(100);
 
 /** 내 정보: 기본 정보 (`profile:<userId>`). 모두 선택. */

@@ -18,7 +18,7 @@ export function ProgramDetail() {
     <div className="container stack">
       <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} />{r.regions.map((g) => <span key={g} className="tag">{g}</span>)}</div>
       <h1>{r.title}</h1>
-      <p className="muted">{r.agency}</p>
+      <p className="muted">{r.agency}{r.startDate && ` · 등록 ${r.startDate}`}{data.views !== undefined && ` · 조회 ${data.views}`}</p>
       {r.recruitStatus === 'closed' && <p className="banner" role="status">모집이 종료된 안내예요.{r.endDate && ` (종료 ${r.endDate})`}</p>}
 
       <section className="card stack">
