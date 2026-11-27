@@ -55,7 +55,7 @@ fn start_session(cx: &mut Cx<'_>, req: &Req, id: &str, change: bool, value: Valu
         .map_err(internal)?;
     Ok(Resp::json(200, &value).with_header(
         "set-cookie",
-        &set_cookie(SESSION_COOKIE, &token, 1209600, true, "Lax", req.is_https()),
+        &set_cookie(SESSION_COOKIE, &token, crate::api::store::SESSION_MAX_AGE_SECONDS, true, "Lax", req.is_https()),
     ))
 }
 fn limited(cx: &mut Cx<'_>, kind: &str, address: &str, seconds: i64) -> bool {
@@ -71,7 +71,8 @@ fn limited(cx: &mut Cx<'_>, kind: &str, address: &str, seconds: i64) -> bool {
     store.set_last_request(kind, &hash, &iso(cx.now));
     false
 }
-async fn send_verification(cx: &mut Cx<'_>, req: &Req, user: &Value) -> Result<bool, HttpError> {
+/// `pending`: 인증을 마쳐야 적용되는 새 비밀번호 해시 (이미 있는 미인증 계정에 다시 가입할 때).
+async fn send_verification(cx: &mut Cx<'_>, req: &Req, user: &Value, pending: Option<&str>) -> Result<bool, HttpError> {
     let token = URL_SAFE_NO_PAD.encode(cx.ports.random_bytes(32));
     let bytes = cx.ports.random_bytes(4);
     let n = bytes
@@ -82,7 +83,11 @@ async fn send_verification(cx: &mut Cx<'_>, req: &Req, user: &Value) -> Result<b
         % 1_000_000;
     let code = format!("{n:06}");
     let id = text(user, "id");
-    Store::new(cx.kv,cx.now).set_verification(id,json!({"tokenHash":sha256_hex(&token),"codeHash":sha256_hex(&format!("{id}:{code}")),"expiresAt":iso(cx.now+i64::from(VERIFY_TTL_HOURS)*3_600_000),"sentAt":iso(cx.now),"attempts":0})).map_err(internal)?;
+    let mut rec = json!({"tokenHash":sha256_hex(&token),"codeHash":sha256_hex(&format!("{id}:{code}")),"expiresAt":iso(cx.now+i64::from(VERIFY_TTL_HOURS)*3_600_000),"sentAt":iso(cx.now),"attempts":0});
+    if let Some(h) = pending {
+        rec["pendingHash"] = json!(h);
+    }
+    Store::new(cx.kv,cx.now).set_verification(id,rec).map_err(internal)?;
     let origin = match cx.env("APP_ORIGIN") {
         Some(origin) => origin.to_owned(),
         None => url::Url::parse(&req.url)
@@ -138,15 +143,31 @@ pub async fn signup(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let hash = create_passwords(cx.env("PASSWORD_PEPPER"), cx.ports)
         .hash(p)
         .map_err(internal)?;
-    let mut user = existing.unwrap_or_else(|| json!({"id":uuid(cx),"email":e,"isTeam":false,"createdAt":iso(cx.now),"passwordHash":hash,"emailVerified":false,"mustChangePassword":false}));
-    user["passwordHash"] = json!(hash);
-    Store::new(cx.kv, cx.now)
-        .add_user(user.clone())
-        .map_err(internal)?;
+    // 이미 있는 미인증 계정: 비밀번호를 바로 바꾸지 않는다. 메일 소유자가 인증해야 새 비밀번호가 적용된다.
+    // 그 전에 그 계정으로 열린 세션은 모두 닫는다 (다른 사람이 먼저 가입한 경우).
+    let pending = existing.is_some();
+    let user = match existing {
+        Some(u) => {
+            Store::new(cx.kv, cx.now).delete_all_sessions(text(&u, "id"));
+            u
+        }
+        None => {
+            let u = json!({"id":uuid(cx),"email":e,"isTeam":false,"createdAt":iso(cx.now),"passwordHash":hash,"emailVerified":false,"mustChangePassword":false});
+            Store::new(cx.kv, cx.now).add_user(u.clone()).map_err(internal)?;
+            u
+        }
+    };
     let sent = if limited(cx, "verify", &e, i64::from(VERIFY_RESEND_SECONDS)) {
+        if pending {
+            let mut store = Store::new(cx.kv, cx.now);
+            if let Some(mut r) = store.verification(text(&user, "id")) {
+                r["pendingHash"] = json!(hash);
+                store.set_verification(text(&user, "id"), r).map_err(internal)?;
+            }
+        }
         false
     } else {
-        send_verification(cx, req, &user).await?
+        send_verification(cx, req, &user, pending.then_some(hash.as_str())).await?
     };
     Resp::created(json!({"ok":true,"email":e,"verificationSent":sent}))
 }
@@ -202,11 +223,16 @@ pub async fn verify(cx: &mut Cx<'_>, req: &Req) -> HResult {
     } else {
         return Err(HttpError::bad("token 또는 email과 code가 필요해요"));
     };
-    let _ = rec;
+    let pending = text(&rec, "pendingHash");
+    if !pending.is_empty() {
+        user["passwordHash"] = json!(pending);
+    }
     user["emailVerified"] = json!(true);
     let id = text(&user, "id").to_string();
     store.add_user(user.clone()).map_err(internal)?;
     store.delete_verification(&id);
+    // 인증 전에 열린 세션은 메일 소유자의 것이라고 볼 수 없다.
+    store.delete_all_sessions(&id);
     start_session(cx, req, &id, false, json!({"user":public_user(&user)}))
 }
 /// POST /api/auth/verify/resend
@@ -224,14 +250,71 @@ pub async fn verify_resend(cx: &mut Cx<'_>, req: &Req) -> HResult {
     }
     if let Some(u) = Store::new(cx.kv, cx.now).find_user_by_email(&e) {
         if u.get("emailVerified").and_then(Value::as_bool) != Some(true) {
-            let _ = send_verification(cx, req, &u).await?;
+            let pending = Store::new(cx.kv, cx.now)
+                .verification(text(&u, "id"))
+                .map(|r| text(&r, "pendingHash").to_owned())
+                .filter(|h| !h.is_empty());
+            let _ = send_verification(cx, req, &u, pending.as_deref()).await?;
         }
     }
     Resp::ok(json!({"ok":true}))
 }
+const LOGIN_FAIL_LIMIT: usize = 10;
+const LOGIN_FAIL_WINDOW_MS: i64 = 15 * 60_000;
+fn login_fail_key(req: &Req, email: &str) -> String {
+    let ip = req
+        .header("cf-connecting-ip")
+        .map(js_trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("local");
+    format!("login:{}", sha256_hex(&format!("{email}|{ip}")))
+}
+fn recent_login_failures(cx: &mut Cx<'_>, key: &str) -> Vec<Value> {
+    let now = cx.now;
+    Store::new(cx.kv, cx.now)
+        .quota(key)
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|t| {
+            t.as_str()
+                .and_then(parse_ms)
+                .is_some_and(|at| now - at < LOGIN_FAIL_WINDOW_MS)
+        })
+        .cloned()
+        .collect()
+}
 /// POST /api/auth/login
+/// 같은 이메일·IP 로 15분에 10번 틀리면 잠시 막는다.
 pub async fn login(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let b = body(req)?;
+    let key = login_fail_key(req, &email(&b));
+    let mut fails = recent_login_failures(cx, &key);
+    if fails.len() >= LOGIN_FAIL_LIMIT {
+        return Err(HttpError::new(
+            429,
+            "too_many",
+            "로그인을 너무 많이 시도했어요. 15분 뒤에 다시 해 주세요",
+        ));
+    }
+    let res = login_checked(cx, req, &b).await;
+    match &res {
+        Err(e) if e.status == 401 => {
+            fails.push(json!(iso(cx.now)));
+            Store::new(cx.kv, cx.now)
+                .set_quota(&key, json!(fails))
+                .map_err(internal)?;
+        }
+        Ok(_) if !fails.is_empty() => {
+            Store::new(cx.kv, cx.now)
+                .set_quota(&key, json!([]))
+                .map_err(internal)?;
+        }
+        _ => {}
+    }
+    res
+}
+async fn login_checked(cx: &mut Cx<'_>, req: &Req, b: &Value) -> HResult {
     let fail = || HttpError::new(401, "unauthorized", "이메일 또는 비밀번호가 맞지 않아요");
     let mut u = Store::new(cx.kv, cx.now)
         .find_user_by_email(&email(&b))
@@ -379,6 +462,87 @@ mod tests {
         assert!(valid_residence("경남 김해시"));
         assert!(!valid_residence("울산 해운대구"));
         assert!(!valid_residence("경남 x"));
+    }
+
+    use crate::testkit::{Client, TestApp};
+    use serde_json::{json, Value};
+
+    const EMAIL: &str = "victim@example.com";
+    fn signup(app: &mut TestApp, c: &mut Client, pw: &str) -> u16 {
+        let b = json!({"email":EMAIL,"password":pw,"passwordConfirm":pw,"consent":true});
+        app.call(c, "POST", "/api/auth/signup", Some(b)).0
+    }
+    fn login(app: &mut TestApp, c: &mut Client, pw: &str) -> u16 {
+        app.call(c, "POST", "/api/auth/login", Some(json!({"email":EMAIL,"password":pw}))).0
+    }
+    fn me(app: &mut TestApp, c: &mut Client) -> Value {
+        app.call(c, "GET", "/api/auth/me", None).1["user"].clone()
+    }
+    fn last_token(app: &TestApp) -> String {
+        let mails = app.ports.mails.borrow();
+        let text = &mails.last().expect("mail").text;
+        let at = text.find("token=").expect("token") + 6;
+        text[at..].split_whitespace().next().unwrap().to_string()
+    }
+
+    #[test]
+    fn signup_again_does_not_take_over_an_unverified_account() {
+        let mut app = TestApp::new();
+        let (mut attacker, mut victim) = (app.client(), app.client());
+        assert_eq!(signup(&mut app, &mut attacker, "Attacker123!"), 201);
+        assert_eq!(login(&mut app, &mut attacker, "Attacker123!"), 200);
+        assert_eq!(signup(&mut app, &mut victim, "Victim123!x"), 201);
+        assert!(me(&mut app, &mut attacker).is_null(), "attacker session closed by the new signup");
+        // 인증 전에는 아직 예전 비밀번호다. 공격자가 다시 로그인해도 인증 때 세션이 닫힌다.
+        assert_eq!(login(&mut app, &mut attacker, "Attacker123!"), 200);
+        let token = last_token(&app);
+        let (s, _, _) = app.call(&mut victim, "POST", "/api/auth/verify", Some(json!({"token":token})));
+        assert_eq!(s, 200);
+        assert!(me(&mut app, &mut attacker).is_null(), "sessions opened before verify are closed");
+        assert_eq!(me(&mut app, &mut victim)["emailVerified"], true);
+        let mut fresh = app.client();
+        assert_eq!(login(&mut app, &mut fresh, "Attacker123!"), 401);
+        assert_eq!(login(&mut app, &mut fresh, "Victim123!x"), 200);
+    }
+
+    #[test]
+    fn resend_keeps_the_pending_password() {
+        let mut app = TestApp::new();
+        let (mut a, mut v) = (app.client(), app.client());
+        signup(&mut app, &mut a, "Attacker123!");
+        signup(&mut app, &mut v, "Victim123!x");
+        app.now += 61_000;
+        let (s, _, _) = app.call(&mut v, "POST", "/api/auth/verify/resend", Some(json!({"email":EMAIL})));
+        assert_eq!(s, 200);
+        let token = last_token(&app);
+        app.call(&mut v, "POST", "/api/auth/verify", Some(json!({"token":token})));
+        let mut fresh = app.client();
+        assert_eq!(login(&mut app, &mut fresh, "Victim123!x"), 200);
+    }
+
+    #[test]
+    fn login_locks_after_ten_failures() {
+        let mut app = TestApp::new();
+        let mut c = app.client();
+        signup(&mut app, &mut c, "Victim123!x");
+        for _ in 0..10 {
+            assert_eq!(login(&mut app, &mut c, "wrong-password1!"), 401);
+        }
+        assert_eq!(login(&mut app, &mut c, "Victim123!x"), 429);
+        app.now += 15 * 60_000;
+        assert_eq!(login(&mut app, &mut c, "Victim123!x"), 200);
+    }
+
+    #[test]
+    fn sessions_expire_after_fourteen_days() {
+        let mut app = TestApp::new();
+        let mut c = app.client();
+        signup(&mut app, &mut c, "Victim123!x");
+        assert_eq!(login(&mut app, &mut c, "Victim123!x"), 200);
+        app.now += 13 * 86_400_000;
+        assert!(!me(&mut app, &mut c).is_null());
+        app.now += 2 * 86_400_000;
+        assert!(me(&mut app, &mut c).is_null());
     }
 }
 

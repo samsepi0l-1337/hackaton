@@ -385,9 +385,26 @@ impl DurableObject for GilApp {
             self.persist(kv).await?;
             return Response::from_json(&serde_json::json!({ "ok": true }));
         }
+        // 요청 본문은 JSON 뿐이다. 너무 큰 본문은 읽기 전에 거절한다.
+        const MAX_BODY_BYTES: usize = 1024 * 1024;
+        if req
+            .headers()
+            .get("content-length")
+            .ok()
+            .flatten()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .is_some_and(|n| n > MAX_BODY_BYTES)
+        {
+            return Response::from_json(&serde_json::json!({"error":{"code":"too_large","message":"요청이 너무 커요"}}))
+                .map(|r| r.with_status(413));
+        }
         let body = match req.method() {
             Method::Get | Method::Head => None,
-            _ => req.text().await.ok().filter(|s| !s.is_empty()),
+            _ => req
+                .text()
+                .await
+                .ok()
+                .filter(|s| !s.is_empty() && s.len() <= MAX_BODY_BYTES),
         };
         let core_req = Req {
             method: req.method().to_string(),

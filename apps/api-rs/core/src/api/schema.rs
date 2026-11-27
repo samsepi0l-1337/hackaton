@@ -358,6 +358,7 @@ fn schema(kind: &str) -> Option<Spec> {
             req("expiresAt", time()),
             req("sentAt", time()),
             req("attempts", nonneg()),
+            opt("pendingHash", st(10, usize::MAX)),
         ]),
         "Recovery" => obj(vec![
             req("hash", st(10, usize::MAX)),
