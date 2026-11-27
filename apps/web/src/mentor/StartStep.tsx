@@ -25,6 +25,7 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
   const [open, setOpen] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [custom, setCustom] = useState(exploration?.customProblem ?? '');
+  const [customOpen, setCustomOpen] = useState(exploration?.origin === 'custom');
   const [reason, setReason] = useState(exploration?.selectionReason ?? '');
   const interestsKey = (start.interests ?? []).join(',');
   const region = start.reviewRegion && start.reviewRegion !== '미정' ? start.reviewRegion : undefined;
@@ -72,7 +73,7 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
               <blockquote className="quote">{p.sourceExcerpt ?? '공개 가능한 원문 발췌가 없어요. 출처에서 확인이 필요해요.'}{p.checkedAt && <div>검수일 {p.checkedAt}</div>}</blockquote>
             )}
             <div className="row">
-              <button className="btn primary" aria-pressed={sel} onClick={() => onExploration({ problemId: p.id, origin: 'card', customProblem: null }, p)}>{sel ? '선택한 문제' : '이 문제 탐색하기'}</button>
+              <button className="btn primary" aria-pressed={sel} onClick={() => { setCustomOpen(false); onExploration({ problemId: p.id, origin: 'card', customProblem: null }, p); }}>{sel ? '선택한 문제' : '이 문제 탐색하기'}</button>
               <button className="btn" aria-expanded={open === p.id} onClick={() => setOpen(open === p.id ? null : p.id)}>{open === p.id ? '근거 닫기' : '근거 보기'}</button>
             </div>
           </article>
@@ -80,14 +81,14 @@ function ProblemCards({ start, exploration, problem, onExploration }: {
       })}
       {note && <p className="muted" role="status">{note}</p>}
       <div className="chips">
-        <Chip selected={origin === 'custom'} onClick={() => onExploration({ problemId: null, origin: 'custom', customProblem: custom || null }, null)}>직접 적기</Chip>
+        <Chip selected={customOpen} onClick={() => { setCustomOpen(true); if (custom.trim()) onExploration({ problemId: null, origin: 'custom', customProblem: custom }, null); }}>직접 적기</Chip>
         <Chip onClick={() => load(true)}>다른 문제 보기</Chip>
-        <Chip selected={origin === 'hold'} onClick={() => onExploration({ problemId: null, origin: 'hold', customProblem: null }, null)}>아직 탐색 중</Chip>
+        <Chip selected={origin === 'hold'} onClick={() => { setCustomOpen(false); onExploration({ problemId: null, origin: 'hold', customProblem: null }, null); }}>아직 탐색 중</Chip>
       </div>
-      {origin === 'custom' && (
+      {customOpen && (
         <Field label="직접 생각한 문제" hint="사용자가 적은 내용으로 저장되고, 외부 자료로 검증되기 전이에요.">
           <textarea className="input" rows={3} maxLength={IDEA_MAX_V2} value={custom} onChange={(e) => setCustom(e.target.value)}
-            onBlur={() => onExploration({ problemId: null, origin: 'custom', customProblem: custom.trim() || null }, null)} />
+            onBlur={() => { const text = custom.trim(); if (text) onExploration({ problemId: null, origin: 'custom', customProblem: text }, null); }} />
           <Counter n={custom.length} max={IDEA_MAX_V2} />
         </Field>
       )}
