@@ -4,9 +4,12 @@ import type { ApiError, ConsultQuota, ErrorCode, FieldError } from '@gil/shared'
 import { localAiHeaderValue } from '../lib/localAi';
 import type {
   AuthResponse, ExploreChatRequest, ExploreChatResponse, ExploreEventType, ExploreFeedbackRequest, ExploreOptionsResponse,
-  ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, StartRequest,
+  ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
+  VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
 import type { RegionalContextCard, ResourceCard, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
+
+export const AUTH_GATE_EVENT = 'gil:auth-gate';
 
 export class ApiClientError extends Error {
   code: ErrorCode | 'network';
@@ -45,7 +48,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   try { data = text ? JSON.parse(text) : null; } catch { /* 본문이 JSON이 아님 */ }
   if (!res.ok) {
     const err = (data as ApiError | null)?.error;
-    throw new ApiClientError(res.status, err?.code ?? 'bad_request', err?.message ?? `요청에 실패했어요 (${res.status})`, err?.fields, err?.quota);
+    const code = err?.code ?? 'bad_request';
+    // 로그인·인증 상태가 서버와 어긋나면 화면이 같은 방식으로 안내하도록 알린다.
+    if (path.startsWith('/api/explore') && (code === 'unauthorized' || code === 'email_unverified' || code === 'password_change_required')) {
+      window.dispatchEvent(new CustomEvent(AUTH_GATE_EVENT, { detail: code }));
+    }
+    throw new ApiClientError(res.status, code, err?.message ?? `요청에 실패했어요 (${res.status})`, err?.fields, err?.quota);
   }
   return data as T;
 }
@@ -64,7 +72,12 @@ const qs = (o: Record<string, string | undefined>) => {
 };
 
 export const api = {
-  signup: (b: SignupRequest) => post<AuthResponse>(ROUTES.signup, b),
+  signup: (b: SignupRequest) => post<SignupResponse>(ROUTES.signup, b),
+  verifyEmail: (b: VerifyEmailRequest) => post<AuthResponse>(ROUTES.verifyEmail, b),
+  resendVerification: (email: string) => post<{ ok: true }>(ROUTES.resendVerification, { email }),
+  forgotPassword: (email: string) => post<{ ok: true; message: string }>(ROUTES.forgotPassword, { email }),
+  changePassword: (b: ChangePasswordRequest) => post<{ ok: true }>(ROUTES.changePassword, b),
+  typeTest: (b: TypeTestRequest) => post<TypeTestResponse>(ROUTES.typeTest, b),
   login: (b: LoginRequest) => post<AuthResponse>(ROUTES.login, b),
   logout: () => post<{ ok: true }>(ROUTES.logout),
   me: () => get<{ user: User | null }>(ROUTES.me),

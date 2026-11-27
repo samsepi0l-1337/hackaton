@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 const MENU = [
   { to: '/mentor', label: '창업 준비' },
   { to: '/programs', label: '지역 지원 살펴보기' },
+  { to: '/test', label: '창업 유형 테스트' },
 ];
 
 export function Layout() {

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
+import { useAuth } from '../components/AuthContext';
 import { useAsync } from '../hooks/useAsync';
 import { coverageLine } from '../lib/coverage';
 import { QuotaLine } from '../mentor/Quota';
@@ -7,9 +8,11 @@ import { readStore } from '../mentor/storage';
 
 export function Home() {
   const opts = useAsync(() => api.exploreOptions(), []);
-  const sess = useAsync(() => api.exploreSession(), []);
+  const { user } = useAuth();
+  const ready = !!user?.emailVerified && !user.mustChangePassword;
+  const sess = useAsync(() => (ready ? api.exploreSession() : Promise.resolve(null)), [ready]);
   const o = opts.data;
-  const quota = sess.data?.quota ?? readStore().quota;
+  const quota = ready ? sess.data?.quota ?? readStore().quota : null;
   return (
     <div className="container stack">
       <section className="hero stack">
@@ -20,7 +23,15 @@ export function Home() {
           {opts.loading ? '제공 지역을 확인하는 중이에요.' : o ? coverageLine(o.coverage) : '제공 지역 정보를 불러오지 못했어요. 창업 준비는 그대로 시작할 수 있어요.'}
         </p>
         <QuotaLine quota={quota} />
-        <Link className="btn primary" to="/mentor">창업 준비 시작하기</Link>
+        {user ? <Link className="btn primary" to="/mentor">창업 준비 시작하기</Link> : (
+          <div className="stack">
+            <p>창업 준비는 가입하고 이메일을 인증한 뒤 쓸 수 있어요. 계정 1개로 일주일에 3번 상담할 수 있어요.</p>
+            <div className="row">
+              <Link className="btn primary" to="/signup?next=%2Fmentor">창업 준비 시작하기 (가입)</Link>
+              <Link className="btn" to="/login?next=%2Fmentor">이미 계정이 있어요</Link>
+            </div>
+          </div>
+        )}
       </section>
 
       <section>
