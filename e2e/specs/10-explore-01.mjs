@@ -30,6 +30,7 @@ await step('readiness choices, 200-character idea, interests and region coverage
       eq(await page.evaluate(() => document.querySelector('textarea[aria-label="하고 싶은 일"]').value.length), 200, '200 characters accepted');
     }
   }
+  await page.evaluate((interest) => [...document.querySelectorAll('button.chip')].find((b) => b.textContent.trim() === interest)?.scrollIntoView({ block: 'center' }), options.interests[0]);
   await page.click(`text="${options.interests[0]}"`);
   assert(await page.evaluate((interest) => [...document.querySelectorAll('button.chip[aria-pressed="true"]')].some((b) => b.textContent.trim() === interest), options.interests[0]), 'interest selected');
   await waitForSession((session) => session.start.interests?.includes(options.interests[0]) === true, 'interest autosaved');

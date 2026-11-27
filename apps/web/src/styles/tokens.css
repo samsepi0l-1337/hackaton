@@ -1,6 +1,6 @@
 /* 디자인 토큰. 색·글꼴·간격·모서리는 여기서만 바꾼다. */
 :root {
-  --color-bg: #f6f7f9;
+  --color-bg: #f7f9fc;
   --color-surface: #ffffff;
   --color-text: #1b1f27;
   --color-muted: #667085;
@@ -15,9 +15,13 @@
   --color-ok: #067647;
   --color-ok-soft: #e7f6ee;
 
-  --font-base: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --portal-blue: #2568e9;
+  --portal-ink: #192b42;
+  --panel-line: #d5e1f3;
+
+  --font-base: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-size-sm: 13px;
-  --font-size-base: 15px;
+  --font-size-base: 16px;
   --font-size-lg: 18px;
   --font-size-xl: 24px;
   --font-size-hero: 26px;

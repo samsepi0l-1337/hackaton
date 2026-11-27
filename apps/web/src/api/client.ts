@@ -7,7 +7,7 @@ import type {
   ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
   BasicProfile, BufsFeedbackResponse, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
-import type { LikesResponse, RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
+import type { HomeResponse, LikesResponse,RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
 
 export const AUTH_GATE_EVENT = 'gil:auth-gate';
 
@@ -107,6 +107,21 @@ export const api = {
   /** 통계용 이벤트. 실패해도 화면 흐름을 막지 않는다. 대화 원문은 보내지 않는다. */
   track: (type: ExploreEventType, resourceId?: string) => { post<{ ok: true }>(ROUTES.events, { type, resourceId }).catch(() => {}); },
 
+  home: async () => {
+    const d = await get<unknown>(ROUTES.home);
+    const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
+    const str = (v: unknown) => typeof v === 'string';
+    const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+    const rowOk = (c: unknown) => {
+      if (!obj(c) || !obj(c.program)) return false;
+      const p = c.program;
+      return str(p.id) && str(p.title) && str(p.agency) && str(p.url) && str(p.category) && (p.region === null || str(p.region))
+        && (c.dDay === null || num(c.dDay));
+    };
+    const ok = obj(d) && num(d.openCount) && num(d.closingThisWeek) && Array.isArray(d.closingSoon) && d.closingSoon.every(rowOk);
+    if (!ok) throw new ApiClientError(0, 'network', '서버 응답을 읽지 못했어요. 잠시 후 다시 시도해 주세요.');
+    return d as unknown as HomeResponse;
+  },
   resources: (q: ResourceQuery) => get<{ items: ResourceCard[] }>(ROUTES.resources + qs({ ...q })),
   resource: (id: string) => get<ResourceCard>(ROUTES.resource(id)),
   likes: () => get<LikesResponse>(ROUTES.likes),

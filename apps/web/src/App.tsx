@@ -7,7 +7,7 @@ import { Programs } from './pages/Programs';
 import { ProgramDetail } from './pages/ProgramDetail';
 import { Forgot, Login, Signup, Verify } from './pages/Auth';
 import { MentorGate } from './components/MentorGate';
-import { Admin, Bufs, Licenses, Me, Mentor, NotFound, TypeTest } from './lazyPages';
+import { Admin, Bufs, Guide, Licenses, Me, Mentor, NotFound, TypeTest } from './lazyPages';
 
 function ScrollTop() {
   const { pathname } = useLocation();
@@ -30,7 +30,8 @@ export function App() {
           <Route path="/verify" element={<Verify />} />
           <Route path="/forgot" element={<Forgot />} />
           <Route path="/test" element={<TypeTest />} />
-          <Route path="/me" element={<RequireAuth><Me /></RequireAuth>} />
+          <Route path="/guide" element={<Guide />} />
+          <Route path="/me"element={<RequireAuth><Me /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
           <Route path="/bufs" element={<Bufs />} />
           <Route path="/licenses" element={<Licenses />} />

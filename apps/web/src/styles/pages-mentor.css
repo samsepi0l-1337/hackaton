@@ -1,0 +1,29 @@
+/* /mentor 상담 흐름: 공통 규칙은 pages-programs.css. 여기에는 상담 흐름에만 필요한 규칙을 둔다. */
+.mentor-page .choice-card { color: var(--portal-ink); }
+.mentor-page h2 + .muted, .mentor-page h1 + .muted { margin-top: 0; }
+
+/* 단계 표시 */
+.mentor-page .progress-steps { gap: 4px; margin: 0 0 var(--space-4); }
+.mentor-page .progress-steps li { font-size: 13px; padding: 8px 4px; border-bottom: 3px solid #e1e8f0; color: #566a80; }
+.mentor-page .progress-steps li.done { border-bottom-color: var(--portal-blue); color: var(--portal-ink); }
+.mentor-page .progress-steps li.current { border-bottom-color: var(--portal-blue); color: #1859b8; font-weight: 700; }
+
+/* 패널 */
+.mentor-page .problem-card.selected { border: 2px solid var(--portal-blue); }
+.mentor-page details.card > summary { font-weight: 700; }
+.mentor-page .summary-item { border-top: 1px solid #e7edf3; }
+.mentor-page .plain-list li + li { margin-top: 8px; }
+
+/* 배지: 출처 */
+.mentor-page .badge.prov-user { background: var(--color-ok-soft); color: var(--color-ok); }
+.mentor-page .badge.prov-ai, .mentor-page .badge.prov-unknown { background: var(--color-warn-soft); color: var(--color-warn); }
+
+/* 대화 */
+.mentor-page .chat { gap: 12px; }
+.mentor-page .bubble { border-radius: 14px; line-height: 1.6; }
+.mentor-page .bubble.mentor { background: #fff; border: 1px solid var(--panel-line); box-shadow: 0 3px 9px #183e6508; }
+.mentor-page .bubble.user { background: var(--portal-blue); color: #fff; }
+
+/* 하단 고정 줄 */
+.mentor-page .bottom-bar { background: #fff; border-top: 1px solid var(--panel-line); }
+.mentor-page .bottom-bar-inner { max-width: var(--content-width); }

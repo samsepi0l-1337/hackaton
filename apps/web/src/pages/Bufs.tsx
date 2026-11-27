@@ -5,6 +5,7 @@ import { api, ApiClientError } from '../api/client';
 import { TextField } from '../components/TextField';
 import { CardSkeletons, ErrorState } from '../components/States';
 import { errMessage } from '../lib/format';
+import '../styles/pages-account.css';
 
 const PAGE = 20;
 const yn = (v: boolean | null) => (v === null ? '-' : v ? '예' : '아니오');
@@ -40,7 +41,7 @@ function Login({ onDone }: { onDone: () => void }) {
     } finally { setBusy(false); }
   }
   return (
-    <div className="container" style={{ maxWidth: 440 }}>
+    <div className="container account-page narrow">
       <h1>관리자</h1>
       <form className="card" onSubmit={submit} noValidate>
         <TextField label="관리자 비밀번호" type="password" autoComplete="current-password" value={password} onChange={setPassword} error={err} />
@@ -71,7 +72,7 @@ function Board({ onLogout }: { onLogout: () => void }) {
   const s = data?.summary;
   const last = data ? Math.min(offset + PAGE, data.total) : 0;
   return (
-    <div className="container stack">
+    <div className="container stack account-page">
       <div className="row between"><h1 style={{ margin: 0 }}>의견 모아보기</h1><button className="btn" onClick={logout}>로그아웃</button></div>
       {error ? <ErrorState error={error} onRetry={() => setTick((t) => t + 1)} /> : !data || !s ? <CardSkeletons count={2} /> : (
         <>
@@ -116,6 +117,6 @@ export function Bufs() {
   const check = useCallback(() => { setError(null); api.bufsMe().then((r) => setAdmin(r.admin), (e) => { setAdmin(false); setError(e); }); }, []);
   useEffect(check, [check]);
   const out = useCallback(() => setAdmin(false), []);
-  if (admin === null) return <div className="container"><CardSkeletons count={2} /></div>;
-  return admin ? <Board onLogout={out} /> : <>{error ? <div className="container"><ErrorState error={error} onRetry={check} /></div> : null}<Login onDone={() => setAdmin(true)} /></>;
+  if (admin === null) return <div className="container account-page"><CardSkeletons count={2} /></div>;
+  return admin ? <Board onLogout={out} /> : <>{error ? <div className="container account-page narrow"><ErrorState error={error} onRetry={check} /></div> : null}<Login onDone={() => setAdmin(true)} /></>;
 }

@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import { useAuth } from '../components/AuthContext';
 import { BottomBar } from '../components/BottomBar';
 import { loadLocalTest, saveLocalTest } from '../lib/typeTestStorage';
+import '../styles/pages-account.css';
 
 function ResultView({ result }: { result: TypeResult }) {
   const hasScores = TYPE_AXES.some((a) => result.axisScores[a.axis].left + result.axisScores[a.axis].right > 0);
@@ -76,7 +77,7 @@ export function TypeTest() {
 
   if (phase === 'start') {
     return (
-      <div className="container stack">
+      <div className="container stack account-page test-page">
         <h1>창업 유형 테스트</h1>
         <p>12문항 · 약 1분. 로그인 없이 할 수 있어요. 재미·참고용이며 자격 판정에 쓰지 않아요.</p>
         {saved && isValidTypeCode(saved.code) && <div className="card"><p>지난 결과: <strong>{saved.code}</strong></p><button className="btn small" onClick={() => { setResult(scoreTypeTest(saved.answers)); setPhase('result'); }}>결과 보기</button></div>}
@@ -88,7 +89,7 @@ export function TypeTest() {
   if (phase === 'quiz') {
     const q = TYPE_QUESTIONS[idx]!;
     return (
-      <div className="container stack">
+      <div className="container stack account-page test-page">
         <div className="row between"><span>{idx + 1}/{TYPE_QUESTIONS.length}</span><button className="btn small ghost" disabled={idx === 0} onClick={() => setIdx(idx - 1)}>이전</button></div>
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={TYPE_QUESTIONS.length} aria-valuenow={idx + 1}><div style={{ width: `${((idx + 1) / TYPE_QUESTIONS.length) * 100}%` }} /></div>
         <h2>{q.text}</h2>
@@ -100,8 +101,8 @@ export function TypeTest() {
   }
 
   return (
-    <div className="container stack">
-      {result && <ResultView result={result} />}
+    <div className="container stack account-page test-page">
+      {result &&<ResultView result={result} />}
       {error && <p className="error-text" role="alert">{error}</p>}
       <p className="muted">재미·참고용이며 자격 판정에 쓰지 않아요.{!user && ' 결과는 이 기기에 저장했어요.'}</p>
       <div className="row">

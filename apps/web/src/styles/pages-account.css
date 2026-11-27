@@ -1,0 +1,35 @@
+/* 계정·인증·테스트·관리자 화면: 공통 규칙은 pages-programs.css. 여기에는 이 화면들에만 필요한 규칙을 둔다. */
+/* 폭은 다른 상세 화면과 같은 .container(--content-width)를 쓴다. */
+.container.account-page.narrow { max-width: 480px; }
+.container.test-page { max-width: 760px; }
+
+/* 내 정보 */
+.container.me-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.container.me-page > * { margin: 0; min-width: 0; }
+.container.me-page > h1, .container.me-page > .me-wide { grid-column: 1 / -1; }
+.container.me-page > h1 { margin-bottom: 0; }
+
+/* 유형 테스트 */
+.account-page .hero { background: #e6f3fe; border: 1px solid var(--panel-line); border-radius: 12px; padding: 28px 24px; }
+.account-page .hero h1 { margin-bottom: 4px; }
+.account-page .progress { height: 8px; background: #e7edf3; }
+.account-page .progress > div { background: var(--portal-blue); }
+.account-page .option-btn { border: 1px solid var(--panel-line); border-radius: 12px; background: #fff; color: var(--portal-ink); font-size: 17px; font-weight: 650; padding: 16px 20px; box-shadow: none; transition: background-color .12s, border-color .12s; }
+.account-page .option-btn:hover { background: #edf4ff; border-color: #92b9eb; color: #155bc1; }
+.account-page .option-btn:active { background: #dbe8fd; }
+.account-page .option-btn.selected { background: #e8f0fe; border-color: var(--portal-blue); }
+.account-page .axis .bar { background: #e7edf3; }
+.account-page .axis .bar > span { background: var(--portal-blue); }
+
+/* 통계·표 */
+.account-page .stat { padding: 24px; }
+.account-page .stat .num { font-size: 32px; font-weight: 800; color: #185dbd; letter-spacing: -.04em; }
+.account-page .bufs-table table { background: #fff; border: 1px solid var(--panel-line); border-radius: 12px; }
+.account-page .bufs-table th { background: #f2f6fb; color: #4d5e72; font-weight: 700; }
+
+/* 대화상자 */
+.sheet { border-radius: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .account-page .option-btn { transition: none; }
+}

@@ -24,7 +24,7 @@ await step('logged-in heart toggles on and off', async () => {
   await newAccount('browse');
   await go('/');
   await page.waitForSelector('header a[href="/me"]');
-  await page.click('header nav.nav a[href="/programs"]');
+  await page.click('header .account-actions a[href="/programs"]');
   await page.waitForSelector('article .heart');
   await page.click('article .heart >> nth=0');
   await page.waitForFunction(() => document.querySelector('article .heart')?.getAttribute('aria-pressed') === 'true' && !document.querySelector('article .heart')?.disabled);

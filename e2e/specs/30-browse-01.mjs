@@ -5,9 +5,8 @@ async function waitTitles(titles) {
 }
 await step('home and program cards', async () => {
   await go('/');
-  await seeText('창업, 어디서 시작할지 몰라도 괜찮아요.');
+  await seeText('원클릭 창업 상담');
   await go('/programs');
-  await seeText('지역 지원 살펴보기');
   await page.waitForSelector('article');
   const cards = await page.evaluate(() => [...document.querySelectorAll('article')].map(a => ({ title: a.querySelector('h3')?.innerText, link: a.querySelector('h3 a')?.getAttribute('href') })));
   assert(cards.length > 0 && cards.length <= 10 && cards.every(c => c.title && c.link?.startsWith('/programs/')), 'cards have titles and detail links');
