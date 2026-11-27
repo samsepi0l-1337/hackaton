@@ -55,6 +55,7 @@ pub trait Ports {
         body: &serde_json::Value,
     ) -> Option<Result<HttpResp, String>>;
     /// Workers AI 바인딩 (route 모드, `env.AI.run(model, input, options)`). 바인딩이 없으면 None.
+    /// options 의 "__timeout_ms" 는 어댑터가 꺼내 시간 제한으로 쓴다 (지나면 Err("timeout")). 바인딩이 있으면 env["AI"] = "1".
     async fn ai_run(
         &self,
         model: &str,
