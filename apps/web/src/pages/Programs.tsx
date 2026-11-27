@@ -6,11 +6,14 @@ import { api } from '../api/client';
 import { RecruitBadge } from '../components/ResourceView';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 
+const PAGE_SIZE = 10;
+
 export function Programs() {
   const [sp, setSp] = useSearchParams();
   const type = (RESOURCE_TYPES as readonly string[]).includes(sp.get('type') ?? '') ? (sp.get('type') as ResourceType) : undefined;
   const stage = READINESS_OPTIONS.find((o) => o.value === sp.get('stage'))?.value as ReadinessStage | undefined;
   const q = sp.get('q') ?? '';
+  const pageParam = Math.max(1, Math.floor(Number(sp.get('page')) || 1));
   const [qText, setQText] = useState(q);
   const [items, setItems] = useState<ResourceCard[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -29,9 +32,17 @@ export function Programs() {
   function update(patch: Record<string, string | undefined>) {
     const n = new URLSearchParams(sp);
     for (const [k, v] of Object.entries(patch)) { if (v) n.set(k, v); else n.delete(k); }
+    if (!('page' in patch)) n.delete('page');
     setSp(n);
   }
   const filtered = type || stage || q;
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const page = Math.min(pageParam, totalPages);
+  const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  function goPage(n: number) {
+    update({ page: n > 1 ? String(n) : undefined });
+    window.scrollTo({ top: 0 });
+  }
 
   return (
     <div className="container stack">
@@ -67,7 +78,7 @@ export function Programs() {
       )}
       {state === 'ready' && (
         <div className="grid cols-2">
-          {items.map(({ resource: r }) => (
+          {pageItems.map(({ resource: r }) => (
             <article key={r.id} className="card stack">
               <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /></div>
               <h3 style={{ margin: 0 }}><Link to={`/programs/${encodeURIComponent(r.id)}`}>{r.title}</Link></h3>
@@ -78,6 +89,15 @@ export function Programs() {
             </article>
           ))}
         </div>
+      )}
+      {state === 'ready' && totalPages > 1 && (
+        <nav className="row" aria-label="페이지" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button className="btn small" disabled={page <= 1} onClick={() => goPage(page - 1)}>이전</button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+            <button key={n} className={`btn small${n === page ? ' primary' : ''}`} aria-current={n === page ? 'page' : undefined} onClick={() => goPage(n)}>{n}</button>
+          ))}
+          <button className="btn small" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>다음</button>
+        </nav>
       )}
     </div>
   );
