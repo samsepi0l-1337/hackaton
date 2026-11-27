@@ -184,7 +184,7 @@ pub fn extract_fields(input: &str) -> Vec<Value> {
 mod tests {
     use super::*;
     fn fixture(name: &str) -> &'static str {
-        let source = include_str!("../../../../../api/test/docs-fixtures.ts");
+        let source = include_str!("fixtures/docs-fixtures.ts");
         source
             .split(&format!("export const {name} = `"))
             .nth(1)

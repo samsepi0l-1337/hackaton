@@ -1,3 +1,0 @@
-[test]
-# apps/api 에서 `bun test` 를 직접 돌려도 루트와 같은 테스트 자료(픽스처)를 넣는다
-preload = ["../../packages/shared/test/setup-fixtures.ts"]

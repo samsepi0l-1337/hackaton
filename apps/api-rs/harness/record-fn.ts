@@ -1,5 +1,5 @@
 // 함수 골든 기록: TS 테스트 실행 중 packages/shared/src 의 export 호출 (입력, 출력) 을 모은다.
-// 사용: GIL_RECORD_FN=<out dir> bun test --preload ./apps/api-rs/harness/record-fn.ts packages apps/api
+// 사용: GIL_RECORD_FN=<out dir> bun test --preload ./apps/api-rs/harness/record-fn.ts packages
 import { afterAll, mock } from 'bun:test';
 import { readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';

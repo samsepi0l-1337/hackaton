@@ -1,9 +1,11 @@
 // doc-worker 컨테이너를 띄우는 Durable Object (Cloudflare Containers, Durable Object Container API).
 // 공식 get-started 예시 구조를 따른다. 양식 내려받기 때문에 인터넷을 켠다.
 import { DurableObject } from 'cloudflare:workers';
-import { DOC_WORKER_PORT } from '@gil/shared';
-import type { Bindings } from './env';
-import type { DocWorkerClient } from './docs/pipeline';
+// Keep in sync with packages/shared/src/cloudflare.ts.
+const DOC_WORKER_PORT = 8080;
+type Bindings = { DOC_WORKER_INTERNET?: string };
+type DocWorkerClient = { fetch(path: string, body: unknown): Promise<Response> };
+
 
 const INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000; // 2분 쉬면 멈춤 → 비용 0
 const READY_ATTEMPTS = 100;
