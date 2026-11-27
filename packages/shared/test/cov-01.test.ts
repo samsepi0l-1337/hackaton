@@ -57,7 +57,6 @@ test('type code validation rejects malformed or unknown codes', () => {
   expect(isValidTypeCode(null)).toBe(false);
 });
 
-// BUG: invalid month throws RangeError rather than returning false.
-test.skip('date validation rejects an invalid month without throwing', () => {
+test('date validation rejects an invalid month without throwing', () => {
   expect(isValidIsoDate('2025-13-01')).toBe(false);
 });
