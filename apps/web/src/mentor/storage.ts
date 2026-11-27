@@ -9,7 +9,8 @@ import type {
  */
 const KEY = 'gil.explore.v2';
 const KEY_V1 = 'gil.explore.v1';
-const PREFIX = 'gil.';
+// 창업 준비 기록만 지운다. 유형 검사 결과(gil.typeTest)·브라우저 AI 설정(gil.localai.off)은 계정과 무관하다.
+const PREFIX = 'gil.explore.';
 export const MAX_MESSAGES = 100;
 const MAX_BYTES = 400_000;
 

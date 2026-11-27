@@ -28,7 +28,9 @@ test('program listing filters stages and ages and applies profile verdict', () =
   expect(ids({ stage: 'pre' })).toEqual(['a', 'c']);
   expect(ids({ stage: '1to3' })).toEqual(['b', 'c']);
   expect(ids({ age: 25 })).toEqual(['a', 'c']);
-  expect(listPrograms(programs, { verdict: 'eligible' }, now, DEMO_PROFILE).items.every((c) => c.eligibility?.verdict === 'eligible')).toBe(true);
+  const eligible = listPrograms(programs, { verdict: 'eligible' }, now, DEMO_PROFILE).items;
+  expect(eligible.length).toBeGreaterThan(0); // 빈 목록이면 every 는 늘 true 라 아무것도 검사하지 않는다.
+  expect(eligible.every((c) => c.eligibility?.verdict === 'eligible')).toBe(true);
 });
 
 test('date validation accepts leap day and rejects non-leap day and malformed dates', () => {

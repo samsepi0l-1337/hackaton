@@ -118,7 +118,9 @@ describe('F18·F20 공고 목록', () => {
     expect([...ds].sort((a, b) => a - b)).toEqual(ds);
   });
   test('상시 필터, 검색, 판정 필터', () => {
-    expect(listPrograms(programs, { due: 'always' }, NOW, null).items.every((c) => c.dDay === null)).toBe(true);
+    const always = listPrograms(programs, { due: 'always' }, NOW, null).items;
+    expect(always.length).toBeGreaterThan(0); // 빈 목록이면 every 는 늘 true 다.
+    expect(always.every((c) => c.dDay === null)).toBe(true);
     expect(listPrograms(programs, { q: '관광' }, NOW, null).items.map((c) => c.program.id)).toContain('T-0014');
     const v = listPrograms(programs, { verdict: 'check' }, NOW, DEMO_PROFILE);
     expect(v.items.map((c) => c.program.id)).toEqual(['T-0009']);

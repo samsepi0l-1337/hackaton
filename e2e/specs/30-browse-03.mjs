@@ -7,7 +7,7 @@ await step('type test answers all questions and saves result locally', async () 
     await page.click('.option-btn >> nth=0');
   }
   await seeText('내 창업 유형');
-  assert(await page.evaluate(() => localStorage.length > 0), 'result saved to local storage');
+  assert(await page.evaluate(() => !!localStorage.getItem('gil.typeTest')), 'result saved to local storage');
   await go('/test');
   await seeText('지난 결과');
   await page.click('text=결과 보기');
