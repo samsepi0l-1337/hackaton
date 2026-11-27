@@ -35,6 +35,7 @@ export interface PipelineDeps {
 }
 
 export const SUMMARY_TIMEOUT_MS = 10_000;
+export const MAX_SUMMARY_ATTEMPTS = 3;
 
 export type FormResult =
   | { attachment: Attachment; parsed: ParsedDocument; fields: ExtractedField[]; summary: string | null; cached: boolean }
@@ -106,9 +107,10 @@ export async function readAnnouncementForm(env: Bindings, deps: PipelineDeps, pa
   if (hit) {
     const parsed: ParsedDocument = { fileName: hit.fileName, kind: hit.kind, text: hit.text, fields: hit.fields, warnings: hit.warnings };
     let summary = hit.summary;
-    if (summary === null && deps.summarize) {
+    const attempts = hit.summaryAttempts ?? 0;
+    if (summary === null && deps.summarize && attempts < MAX_SUMMARY_ATTEMPTS) {
       summary = await summarizeSafe(deps, parsed);
-      if (summary !== null) saveSafe(deps, { ...hit, summary });
+      saveSafe(deps, summary !== null ? { ...hit, summary } : { ...hit, summaryAttempts: attempts + 1 });
     }
     return { attachment, parsed, fields: parsed.fields, summary, cached: true };
   }
@@ -133,6 +135,7 @@ export async function readAnnouncementForm(env: Bindings, deps: PipelineDeps, pa
     fields: parsed.fields.slice(0, 200).map((f) => ({ ...f, label: f.label.slice(0, 300) })),
     warnings: parsed.warnings.slice(0, 20).map((w) => w.slice(0, 300)),
     summary,
+    summaryAttempts: summary === null ? 1 : 0,
     parsedAt: (deps.now?.() ?? new Date()).toISOString(),
   });
   return { attachment, parsed, fields: parsed.fields, summary, cached: false };
