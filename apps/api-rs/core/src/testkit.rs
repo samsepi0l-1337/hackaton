@@ -62,6 +62,19 @@ impl Ports for FakePorts {
         self.mails.borrow_mut().push(mail.clone());
         None
     }
+    /// 가상 시간: ms 번 poll 될 때까지 Pending. 짧은 대기가 먼저 끝나므로 시간 제한 경쟁이 결정적이다.
+    async fn sleep(&self, ms: u64) {
+        let mut left = ms;
+        std::future::poll_fn(|cx| {
+            if left == 0 {
+                return std::task::Poll::Ready(());
+            }
+            left -= 1;
+            cx.waker().wake_by_ref();
+            std::task::Poll::Pending
+        })
+        .await
+    }
     /// 결정적 난수 (테스트마다 같은 순서).
     fn random_bytes(&self, n: usize) -> Vec<u8> {
         (0..n)
@@ -207,6 +220,19 @@ pub fn block_on<F: std::future::Future>(f: F) -> F::Output {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn timeout_shorter_wins() {
+        let p = FakePorts::default();
+        let fast = block_on(crate::time::timeout(&p, 10, async {
+            p.sleep(3).await;
+            1
+        }));
+        let slow = block_on(crate::time::timeout(&p, 10, async {
+            p.sleep(200).await;
+            1
+        }));
+        assert_eq!((fast, slow), (Some(1), None));
+    }
     #[test]
     fn health_and_unknown_route() {
         let mut app = TestApp::new();

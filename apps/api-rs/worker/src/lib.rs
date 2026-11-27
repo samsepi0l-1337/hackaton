@@ -230,6 +230,9 @@ impl Ports for WorkerPorts {
         }
         Some(call_promise(&b, "send", &[msg.into()]).await.map(|_| ()))
     }
+    async fn sleep(&self, ms: u64) {
+        Delay::from(std::time::Duration::from_millis(ms)).await;
+    }
     fn random_bytes(&self, n: usize) -> Vec<u8> {
         let mut b = vec![0u8; n];
         getrandom::getrandom(&mut b).expect("getrandom");
