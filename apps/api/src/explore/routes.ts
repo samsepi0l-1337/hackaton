@@ -3,14 +3,15 @@
 // (예전 비회원 기록 `explore:g-*` 는 읽기만 하고 쓰지 않는다.)
 import type { Context, Hono } from 'hono';
 import {
-  CONDITION_NOTE, CONTEXTS, activeResources, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, LOCAL_AI_HEADER, LOCAL_AI_TASKS, buildFieldQuestions, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
+  CONDITION_NOTE, CONTEXTS, RESOURCE_SORTS, type ResourceSort, activeResources, EXPLORE_DATA_VERSION, INDUSTRY_TAGS, LOCAL_AI_HEADER, LOCAL_AI_TASKS, buildFieldQuestions, INTEREST_EXTRA, PROBLEMS, READINESS_OPTIONS, RESOURCES, RESOURCE_TYPES,
   REVIEW_REGIONS, applySummaryEdit, buildPrep, buildRegional, buildSummary, checkConditions, coverageByRegion, coverageNote,
   problemOf, problemsFor, reasonFor, recommendResources, validateStart,
   type Exploration, type ExploreResultResponse, type FieldQuestion, type LocalAiTask, type ExploreSession, type PrepItem, type ReadinessStage,
   type RegionalContextCard, type Resource, type ResourceCard, type StartProfile, type SummaryEdit, type SummaryV2, type UserConditions,
 } from '@gil/shared';
-import { conditionsFromProfile } from '../auth';
+import { conditionsFromProfile, sha256Hex } from '../auth';
 import { maskEmail } from '../bufs';
+import { DEFAULT_SORT, sortCards } from './sort';
 import { createLimiter, exploreAi, problemContext } from './ai';
 import { CLOSING, MAX_QUESTIONS, OPENING, QUESTIONS, planQuestions, ruleSuggestions } from './chat';
 import type { ExploreState } from '../db/schema';
@@ -558,30 +559,48 @@ export function mountExplore(app: Hono<AppEnv>, opts: { clock: () => Date; resou
     const b = await body(c);
     if (!(EVENT_TYPES as readonly string[]).includes(b.type as string)) throw bad('type 값이 올바르지 않아요');
     const { s } = open(c);
+    if (b.type === 'resource_link') { // 공식 안내 링크를 누른 것도 그 자료를 본 것으로 센다 (같은 사람 6시간 1회).
+      const id = str(b.resourceId, 120);
+      if (id && resourcesNow().some((x) => x.id === id)) await countView(c, id);
+    }
     bump(s, b.type as string); // 횟수만 센다. 원문 대화·자유 입력은 받지 않는다.
     touch(s, c);
     return c.json({ ok: true });
   });
 
   // ---- F18 목록·상세 ----
+  /** 보는 사람 구분: 로그인 사용자 id, 아니면 IP+UA 의 SHA-256. 원문 IP 는 저장하지 않는다. */
+  const viewerOf = async (c: Ctx): Promise<string> => {
+    const u = c.get('user');
+    if (u) return `u:${u.id}`;
+    const ip = c.req.header('cf-connecting-ip')?.trim() || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
+    return `h:${await sha256Hex(`view:${ip}|${c.req.header('user-agent') ?? ''}`)}`;
+  };
+  const countView = async (c: Ctx, id: string) => c.get('store').recordView(id, await viewerOf(c), c.get('now'));
+
   app.get('/api/resources', (c) => {
     const type = c.req.query('type'), stage = c.req.query('stage'), q = c.req.query('q')?.trim().toLowerCase();
     if (type && !(RESOURCE_TYPES as readonly string[]).includes(type)) throw bad('type 값이 올바르지 않아요');
     if (stage && !READINESS_OPTIONS.some((o) => o.value === stage)) throw bad('stage 값이 올바르지 않아요');
+    const sortQ = c.req.query('sort');
+    if (sortQ && !(RESOURCE_SORTS as readonly string[]).includes(sortQ)) throw bad('sort 값이 올바르지 않아요');
+    const sort: ResourceSort = (sortQ as ResourceSort | undefined) ?? DEFAULT_SORT;
     const a = readActor(c);
     const s = a ? c.get('store').explore(a.id) : undefined;
-    const items = resourcesNow()
-      .filter((r) => (!type || r.type === type) && (!stage || r.stages.includes(stage as ReadinessStage))
+    const counts = c.get('store').viewCounts();
+    const cards = resourcesNow()
+      .filter((r) => (!type || r.type === type || r.capabilityTags.includes(type)) && (!stage || r.stages.includes(stage as ReadinessStage))
         && (!q || [r.title, r.agency, r.content, ...r.capabilityTags].some((x) => x.toLowerCase().includes(q))))
-      .map((r) => cardFor(r, s, c.get('now'), defaultsOf(c)));
-    return c.json({ items });
+      .map((r) => ({ ...cardFor(r, s, c.get('now'), defaultsOf(c)), views: counts.get(r.id) ?? 0 }));
+    return c.json({ items: sortCards(cards, sort, c.get('now')) });
   });
 
-  app.get('/api/resources/:id', (c) => {
+  app.get('/api/resources/:id', async (c) => {
     const r = resourcesNow().find((x) => x.id === c.req.param('id'));
     if (!r) throw new HttpError(404, 'not_found', '경로를 찾을 수 없어요');
+    await countView(c, r.id);
     const a = readActor(c);
-    return c.json(cardFor(r, a ? c.get('store').explore(a.id) : undefined, c.get('now'), defaultsOf(c)));
+    return c.json({ ...cardFor(r, a ? c.get('store').explore(a.id) : undefined, c.get('now'), defaultsOf(c)), views: c.get('store').viewCount(r.id) });
   });
 }
 

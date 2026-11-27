@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { READINESS_OPTIONS, RESOURCE_TYPES } from '@gil/shared';
-import type { ReadinessStage, ResourceCard, ResourceType } from '@gil/shared';
+import { READINESS_OPTIONS, RESOURCE_SORTS, RESOURCE_SORT_LABEL, RESOURCE_TYPES, dDay, dDayLabel } from '@gil/shared';
+import type { ReadinessStage, ResourceCard, ResourceSort, ResourceType } from '@gil/shared';
 import { api } from '../api/client';
 import { RecruitBadge } from '../components/ResourceView';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
@@ -12,6 +12,7 @@ export function Programs() {
   const [sp, setSp] = useSearchParams();
   const type = (RESOURCE_TYPES as readonly string[]).includes(sp.get('type') ?? '') ? (sp.get('type') as ResourceType) : undefined;
   const stage = READINESS_OPTIONS.find((o) => o.value === sp.get('stage'))?.value as ReadinessStage | undefined;
+  const sort: ResourceSort = (RESOURCE_SORTS as readonly string[]).includes(sp.get('sort') ?? '') ? (sp.get('sort') as ResourceSort) : 'deadline';
   const q = sp.get('q') ?? '';
   const pageParam = Math.max(1, Math.floor(Number(sp.get('page')) || 1));
   const [qText, setQText] = useState(q);
@@ -21,11 +22,11 @@ export function Programs() {
 
   const load = useCallback(() => {
     setState('loading');
-    api.resources({ type, stage, q: q || undefined }).then(
+    api.resources({ type, stage, q: q || undefined, sort }).then(
       (r) => { setItems(r.items); setState('ready'); },
       (e) => { setErr(e); setState('error'); },
     );
-  }, [type, stage, q]);
+  }, [type, stage, q, sort]);
   useEffect(load, [load]);
   useEffect(() => setQText(q), [q]);
 
@@ -36,6 +37,7 @@ export function Programs() {
     setSp(n);
   }
   const filtered = type || stage || q;
+  const now = new Date();
   const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   const page = Math.min(pageParam, totalPages);
   const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -69,7 +71,12 @@ export function Programs() {
           </select>
         </div>
       </div>
-      {filtered && <button className="btn small ghost" onClick={() => setSp(new URLSearchParams())}>조건 모두 지우기</button>}
+      <div className="row" role="group" aria-label="정렬" style={{ flexWrap: 'wrap' }}>
+        {RESOURCE_SORTS.map((s) => (
+          <button key={s} type="button" className={`btn small${s === sort ? ' primary' : ''}`} aria-pressed={s === sort} onClick={() => update({ sort: s === 'deadline' ? undefined : s })}>{RESOURCE_SORT_LABEL[s]}</button>
+        ))}
+      </div>
+      {filtered && <button className="btn small ghost" onClick={() => setSp(sort === 'deadline' ? new URLSearchParams() : new URLSearchParams({ sort }))}>조건 모두 지우기</button>}
 
       {state === 'loading' && <CardSkeletons count={3} />}
       {state === 'error' && <ErrorState error={err} onRetry={load} />}
@@ -78,16 +85,22 @@ export function Programs() {
       )}
       {state === 'ready' && (
         <div className="grid cols-2">
-          {pageItems.map(({ resource: r }) => (
+          {pageItems.map(({ resource: r, views }) => {
+            const d = r.recruitStatus === 'closed' ? -1 : dDay(r.endDate, now);
+            return (
             <article key={r.id} className="card stack">
               <div className="row"><span className="tag">{r.type}</span><RecruitBadge status={r.recruitStatus} /></div>
               <h3 style={{ margin: 0 }}><Link to={`/programs/${encodeURIComponent(r.id)}`}>{r.title}</Link></h3>
               <p className="muted">{r.agency}</p>
               <p>{r.content}</p>
+              <p className="muted">
+                {r.endDate && <span className="badge">{dDayLabel(d)}</span>} {r.startDate && `등록 ${r.startDate} · `}{r.endDate ? `마감 ${r.endDate}` : '마감일 확인 필요'} · 조회 {views ?? 0}
+              </p>
               <p className="muted">확인일 {r.checkedAt ?? '확인 필요'}{r.test && ' · 팀 검수 전 테스트 자료'}</p>
               <Link className="btn small" to={`/programs/${encodeURIComponent(r.id)}`}>자세히</Link>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
       {state === 'ready' && totalPages > 1 && (

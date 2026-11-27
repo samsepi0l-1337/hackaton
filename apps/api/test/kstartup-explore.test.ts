@@ -10,6 +10,7 @@ const item = (n: number, o: Partial<KStartupItem> = {}): KStartupItem => ({
   pbanc_rcpt_end_dt: '20261231', rcrt_prgs_yn: 'Y', biz_enyy: '예비창업자', biz_trgt_age: '만 20세 이상 ~ 만 39세 이하', aply_trgt: '일반인',
   support_ctnt: '멘토링 제공', detl_pg_url: `https://www.k-startup.go.kr/${n}`, ...o,
 });
+const B = { supt_biz_clsfc: '사업화' }; // 지원사업 유형으로 분류되는 공고
 const real = (...items: KStartupItem[]): Resource[] => items.map((i) => kstartupToResource(i, NOW)!);
 
 // 창업 준비는 로그인 필요 (2026-11-27): 탐색 테스트는 데모 계정(인증 완료)으로 로그인한다.
@@ -33,7 +34,7 @@ describe('/api/resources 와 실제 지원사업', () => {
   });
 
   test('수집 후에는 테스트 지원사업을 빼고 실제 공고와 교육·상담·공간을 함께 보여 준다', async () => {
-    const { c } = world(real(item(1), item(2, { rcrt_prgs_yn: 'N' })));
+    const { c } = world(real(item(1, B), item(2, { rcrt_prgs_yn: 'N', ...B })));
     const all = (await c.get('/api/resources')).body.items.map((x: any) => x.resource);
     expect(all.some((r: Resource) => r.id === 'rs-kstartup-pre')).toBe(false);
     expect(all.filter((r: Resource) => r.type === '지원사업').map((r: Resource) => r.id).sort()).toEqual(['ks-1', 'ks-2']);
@@ -43,7 +44,7 @@ describe('/api/resources 와 실제 지원사업', () => {
   });
 
   test('필터(type·stage·q)와 상세', async () => {
-    const { c } = world(real(item(1), item(3, { biz_enyy: '3년미만', biz_pbanc_nm: '창업 도약 패키지' })));
+    const { c } = world(real(item(1, B), item(3, { biz_enyy: '3년미만', biz_pbanc_nm: '창업 도약 패키지', ...B })));
     const sup = (await c.get('/api/resources?type=지원사업')).body.items;
     expect(sup).toHaveLength(2);
     const idea = (await c.get('/api/resources?type=지원사업&stage=has_idea')).body.items.map((x: any) => x.resource.id);

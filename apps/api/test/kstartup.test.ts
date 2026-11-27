@@ -1,6 +1,6 @@
 // K-Startup 실제 공고 수집 (F8). 실제 네트워크는 부르지 않고 가짜 fetch 를 쓴다.
 import { describe, expect, test } from 'bun:test';
-import type { KStartupItem } from '@gil/shared';
+import { kstartupToResource, type KStartupItem } from '@gil/shared';
 import { fetchAnnouncements, normalizeKey, MAX_PAGES, NO_KEY_ERROR, PER_PAGE, type FetchLike } from '../src/kstartup/client';
 import { createKStartupStore } from '../src/kstartup/store';
 import { runSync } from '../src/kstartup/sync';
@@ -193,5 +193,18 @@ describe('POST /api/admin/kstartup/sync', () => {
     const r = await (await team(t)).post('/api/admin/kstartup/sync');
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ ok: false, error: NO_KEY_ERROR, total: 0 });
+  });
+});
+
+describe('sync 유형 갱신', () => {
+  const mk = () => ({ store: createKStartupStore(memoryKv()), now: NOW });
+  test('예전 유형으로 저장된 같은 id 는 새 유형으로 덮어쓴다', async () => {
+    const { store, now } = mk();
+    const f = server({ 부산: [sn(1)], 전국: [] }).fetch;
+    await runSync({ store, env, now, fetch: f });
+    const cur = store.resources()[0]!;
+    store.save([{ ...cur, type: '교육' }]);
+    await runSync({ store, env, now, fetch: f });
+    expect(store.resources()[0]!.type).toBe(kstartupToResource(sn(1), now)!.type);
   });
 });

@@ -7,7 +7,7 @@ import type {
   ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
   BasicProfile, BufsFeedbackResponse, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
-import type { RegionalContextCard, ResourceCard, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
+import type { RegionalContextCard, ResourceCard, ResourceSort, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
 
 export const AUTH_GATE_EVENT = 'gil:auth-gate';
 
@@ -63,7 +63,7 @@ const post = <T>(p: string, b?: unknown) => request<T>('POST', p, b ?? {});
 const put = <T>(p: string, b: unknown) => request<T>('PUT', p, b);
 const del = <T>(p: string) => request<T>('DELETE', p);
 
-export interface ResourceQuery { type?: ResourceType; stage?: ReadinessStage; q?: string }
+export interface ResourceQuery { type?: ResourceType; stage?: ReadinessStage; q?: string; sort?: ResourceSort }
 const qs = (o: Record<string, string | undefined>) => {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(o)) if (v) sp.set(k, v);

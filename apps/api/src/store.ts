@@ -9,7 +9,7 @@ import {
   type BasicProfile, type PlanItem, type Program, type User,
 } from '@gil/shared';
 import { hashLegacyPassword } from './password';
-import { ApplicationSchema, BasicProfileSchema, BufsLockSchema, BufsSessionSchema, FeedbackRecordSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, RecoverySchema, SessionSchema, UserSchema, VerifySchema, type ExploreState, type FeedbackRecord, type RecoveryRecord, type VerifyRecord } from './db/schema';
+import { ApplicationSchema, BasicProfileSchema, BufsLockSchema, BufsSessionSchema, FeedbackRecordSchema, ExploreStateSchema, MentorStateSchema, QuotaSchema, RecoverySchema, SessionSchema, UserSchema, VerifySchema, ViewsSchema, type ExploreState, type FeedbackRecord, type RecoveryRecord, type VerifyRecord } from './db/schema';
 
 export interface UserRecord extends User { passwordHash: string }
 
@@ -88,6 +88,12 @@ export interface Store {
   getApplication(id: string): Application | undefined;
   saveApplication(a: Application): void;
   /** 이번 요청에서 읽거나 바꾼 레코드를 검사해 저장한다. */
+  /** 지원 자료 조회 수 (KV `views:<resourceId>`). */
+  viewCount(resourceId: string): number;
+  viewCounts(): Map<string, number>;
+  /** 같은 보는 사람(viewer 해시)은 자료마다 VIEW_WINDOW_MS 안에 한 번만 센다. 센 경우 true. */
+  recordView(resourceId: string, viewer: string, now: Date): boolean;
+
   flush(): void;
 }
 
@@ -112,6 +118,9 @@ export function memoryKv(): KvLike & { data: Map<string, unknown> } {
   };
 }
 
+/** 같은 사람이 같은 자료를 다시 봐도 이 시간 안에는 조회 수를 올리지 않는다. */
+export const VIEW_WINDOW_MS = 6 * 60 * 60 * 1000;
+
 export class DbError extends Error {}
 
 const K = {
@@ -130,6 +139,7 @@ const K = {
   feedback: (id: string) => `feedback:${id}`,
   bufsLock: (h: string) => `bufslock:${h}`,
   bufs: (t: string) => `bufs:${t}`,
+  views: (id: string) => `views:${id}`,
   limitHits: 'meta:limitHits',
   seeded: 'meta:seeded',
   purged: 'meta:purged-test-v1',
@@ -200,6 +210,8 @@ export async function createStore(now: Date, kv: KvLike = memoryKv(), opts: Stor
     if (u && !u.emailVerified) { u.emailVerified = true; kv.put(K.user(u.id), check(UserSchema, u, K.user(u.id))); }
   }
 
+  /** 조회 중복 방지 표 (viewer 해시만 둔다). 프로세스 메모리라 재시작하면 비워진다. */
+  const seenViews = new Map<string, number>();
   const store: Store = {
     programs: seedPrograms(now),
     agencies: SEED_AGENCIES,
@@ -326,6 +338,25 @@ export async function createStore(now: Date, kv: KvLike = memoryKv(), opts: Stor
       return r.success ? r.data : [];
     },
     setQuota(key, times) { kv.put(K.quota(key), check(QuotaSchema, times, K.quota(key))); },
+    viewCount(id) {
+      const r = ViewsSchema.safeParse(kv.get(K.views(id)));
+      return r.success ? r.data : 0;
+    },
+    viewCounts() {
+      const out = new Map<string, number>();
+      for (const [k, v] of kv.list({ prefix: 'views:' })) { const r = ViewsSchema.safeParse(v); if (r.success) out.set(k.slice('views:'.length), r.data); }
+      return out;
+    },
+    recordView(id, viewer, now) {
+      const t = now.getTime();
+      const key = `${id}|${viewer}`;
+      if ((seenViews.get(key) ?? 0) > t) return false;
+      if (seenViews.size > 20_000) for (const [k, until] of seenViews) if (until <= t) seenViews.delete(k);
+      seenViews.set(key, t + VIEW_WINDOW_MS);
+      const prev = ViewsSchema.safeParse(kv.get(K.views(id)));
+      kv.put(K.views(id), check(ViewsSchema, (prev.success ? prev.data : 0) + 1, K.views(id)));
+      return true;
+    },
     limitHits: () => kv.get<number>(K.limitHits) ?? 0,
     addLimitHit() { kv.put(K.limitHits, (kv.get<number>(K.limitHits) ?? 0) + 1); },
     explore(id) {
