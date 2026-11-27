@@ -9,18 +9,20 @@ await step('signup password checklist, confirm mismatch, consent required and in
   await page.fill('input[type=password] >> nth=1', 'different');
   await seeText('두 비밀번호가 달라요');
   assert((await bodyText()).includes('✗ 규칙:'), 'weak password checklist');
-  assert(await page.evaluate(() => document.querySelector('form button.primary').disabled), 'invalid signup disabled');
+  // 버튼은 막지 않고, 누르면 무엇이 빠졌는지 보여 준다.
+  await page.click(signupButton);
+  await seeText('이메일 형식이 올바르지 않아요');
+  await seeText('개인정보 안내에 동의해 주세요');
+  await seeText('아래 비밀번호 조건을 모두 맞춰 주세요');
   await page.fill('input[type=password] >> nth=0', password);
   await page.fill('input[type=password] >> nth=1', password);
   await seeText('두 비밀번호가 같아요');
   await seeText('✓ 규칙:');
-  assert(await page.evaluate(() => document.querySelector('form button.primary').disabled), 'invalid email and missing consent disabled');
   await page.fill('input[type=email]', email);
-  assert(await page.evaluate(() => document.querySelector('form button.primary').disabled), 'consent required');
+  await page.click(signupButton);
+  await seeText('개인정보 안내에 동의해 주세요');
+  assert(!(await bodyText()).includes('인증 메일을 보냈어요'), 'consent required');
   await page.evaluate(() => document.querySelector('input[type=checkbox]').click());
-  await page.fill('input[type=email]', 'invalid');
-  assert(await page.evaluate(() => document.querySelector('form button.primary').disabled), 'invalid email disabled with valid password and consent');
-  await page.fill('input[type=email]', email);
   assert(!(await page.evaluate(() => document.querySelector('form button.primary').disabled)), 'valid signup enabled');
 });
 await step('signup and verify by link token', async () => {

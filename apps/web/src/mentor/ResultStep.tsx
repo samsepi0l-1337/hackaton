@@ -80,9 +80,25 @@ function ConditionForm({ initial, fromSaved, onSave, onClose }: { initial?: User
   // '부산 외'는 부산 구·군이 아니라 따로 고르는 항목이다.
   const picked = residence === OUTSIDE_BUSAN ? { region: OUTSIDE_BUSAN, district: undefined } : splitRegionText(residence);
 
+  const sheet = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  // 열면 대화상자에 포커스, Esc 로 닫기, 닫으면 원래 자리로 포커스를 돌려준다.
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    sheet.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busyRef.current) { e.preventDefault(); close.current(); } };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); before?.focus?.(); };
+  }, []);
+
   async function submit() {
     const c: UserConditions = {};
-    if (ageUnknown) c.age = 'unknown'; else if (age.trim() && Number.isFinite(Number(age))) c.age = Number(age);
+    const n = Number(age);
+    if (!ageUnknown && age.trim() && !(Number.isInteger(n) && n >= 0 && n <= 120)) { setErr('나이는 0~120 사이 정수로 적어 주세요'); return; }
+    if (ageUnknown) c.age = 'unknown'; else if (age.trim()) c.age = n;
     if (residence) c.residence = residence;
     if (affiliation) c.affiliation = affiliation;
     if (biz) c.hasBusiness = biz === 'unknown' ? 'unknown' : biz === 'true';
@@ -91,7 +107,7 @@ function ConditionForm({ initial, fromSaved, onSave, onClose }: { initial?: User
   }
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="내 조건 확인">
-      <div className="sheet stack">
+      <div className="sheet stack" ref={sheet} tabIndex={-1} style={{ outline: 'none' }}>
         <h2 style={{ margin: 0 }}>내 조건 확인</h2>
         <p className="muted">지원 경로의 조건과 비교할 때만 써요.{initial ? (fromSaved ? ' 지금 결과에 쓴 조건을 채웠어요. 바꿔도 돼요.' : ' 내 정보에 저장한 기본 정보를 먼저 채웠어요. 바꿔도 돼요.') : ''} 모르면 '모름'을 골라도 되고, 건너뛰어도 요약과 준비 안내는 그대로예요.</p>
         <Field label="만 나이">

@@ -94,7 +94,7 @@ export function TypeTest() {
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={TYPE_QUESTIONS.length} aria-valuenow={idx + 1}><div style={{ width: `${((idx + 1) / TYPE_QUESTIONS.length) * 100}%` }} /></div>
         <h2>{q.text}</h2>
         {q.options.map((o) => (
-          <button key={o.letter} className={`option-btn${answers[q.id] === o.letter ? ' selected' : ''}`} onClick={() => pick(o.letter)}>{o.text}</button>
+          <button key={o.letter} className={`option-btn${answers[q.id] === o.letter ? ' selected' : ''}`} aria-pressed={answers[q.id] === o.letter} onClick={() => pick(o.letter)}>{o.text}</button>
         ))}
       </div>
     );
