@@ -5,7 +5,7 @@ import { localAiHeaderValue } from '../lib/localAi';
 import type {
   AuthResponse, ExploreChatRequest, ExploreChatResponse, ExploreEventType, ExploreFeedbackRequest, ExploreOptionsResponse,
   ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
-  VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
+  BasicProfile, BufsFeedbackResponse, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
 import type { RegionalContextCard, ResourceCard, ResourceType, ReadinessStage, Stats, SummaryV2, User, UserConditions } from '@gil/shared';
 
@@ -77,6 +77,12 @@ export const api = {
   resendVerification: (email: string) => post<{ ok: true }>(ROUTES.resendVerification, { email }),
   forgotPassword: (email: string) => post<{ ok: true; message: string }>(ROUTES.forgotPassword, { email }),
   changePassword: (b: ChangePasswordRequest) => post<{ ok: true }>(ROUTES.changePassword, b),
+  myProfile: () => get<{ profile: BasicProfile }>(ROUTES.myProfile),
+  saveMyProfile: (profile: Partial<BasicProfile>) => put<{ profile: BasicProfile }>(ROUTES.myProfile, { profile }),
+  bufsLogin: (password: string) => post<{ ok: true }>(ROUTES.bufsLogin, { password }),
+  bufsLogout: () => post<{ ok: true }>(ROUTES.bufsLogout),
+  bufsMe: () => get<{ admin: boolean }>(ROUTES.bufsMe),
+  bufsFeedback: (limit: number, offset: number) => get<BufsFeedbackResponse>(ROUTES.bufsFeedback + qs({ limit: String(limit), offset: String(offset) })),
   typeTest: (b: TypeTestRequest) => post<TypeTestResponse>(ROUTES.typeTest, b),
   login: (b: LoginRequest) => post<AuthResponse>(ROUTES.login, b),
   logout: () => post<{ ok: true }>(ROUTES.logout),

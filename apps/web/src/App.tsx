@@ -7,6 +7,7 @@ import { Programs } from './pages/Programs';
 import { ProgramDetail } from './pages/ProgramDetail';
 import { Mentor } from './pages/Mentor';
 import { Forgot, Login, Signup, Verify } from './pages/Auth';
+import { Bufs } from './pages/Bufs';
 import { TypeTest } from './pages/TypeTest';
 import { MentorGate } from './components/MentorGate';
 import { Me } from './pages/Me';
@@ -36,6 +37,7 @@ export function App() {
           <Route path="/test" element={<TypeTest />} />
           <Route path="/me" element={<RequireAuth><Me /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
+          <Route path="/bufs" element={<Bufs />} />
           <Route path="/licenses" element={<Licenses />} />
           <Route path="*" element={<NotFound />} />
         </Route>

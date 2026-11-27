@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { checkPassword, scoreTypeTest } from '@gil/shared';
+import { BUSAN_DISTRICTS, OCCUPATIONS, RESIDENCE_OPTIONS, checkPassword, scoreTypeTest } from '@gil/shared';
+import type { BasicProfile } from '@gil/shared';
 import { api, ApiClientError } from '../api/client';
 import { useAuth } from '../components/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PasswordChecklist } from '../components/PasswordChecklist';
-import { TextField } from '../components/TextField';
+import { Field, TextField } from '../components/TextField';
 import { VerifyPanel } from '../components/VerifyPanel';
 import { useAsync } from '../hooks/useAsync';
 import { errMessage } from '../lib/format';
@@ -54,6 +55,81 @@ function PasswordSection({ notice }: { notice: boolean }) {
   );
 }
 
+const UNKNOWN = 'unknown';
+
+function ProfileSection() {
+  const [loaded, setLoaded] = useState(false);
+  const [age, setAge] = useState('');
+  const [ageUnknown, setAgeUnknown] = useState(false);
+  const [residence, setResidence] = useState('');
+  const [biz, setBiz] = useState('');
+  const [occ, setOcc] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  // null 은 저장 전(또는 모름). 모름과 선택 안 함은 서버에서 모두 null 이므로 화면에서는 '선택 안 함'으로 보인다.
+  function fill(p: BasicProfile) {
+    setAge(p.age === null ? '' : String(p.age)); setAgeUnknown(false);
+    setResidence(p.residence ?? ''); setBiz(p.hasBusiness === null ? '' : String(p.hasBusiness)); setOcc(p.occupation ?? '');
+  }
+  useEffect(() => { api.myProfile().then((r) => fill(r.profile), () => {}).finally(() => setLoaded(true)); }, []);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setErr(''); setSaved(false);
+    const n = Number(age);
+    if (!ageUnknown && age.trim() && !(Number.isInteger(n) && n >= 0 && n <= 120)) { setErr('나이는 0~120 사이 숫자로 적어 주세요'); return; }
+    const profile: Partial<BasicProfile> = {
+      age: ageUnknown || !age.trim() ? null : n,
+      residence: residence && residence !== UNKNOWN ? residence : null,
+      hasBusiness: biz === 'true' ? true : biz === 'false' ? false : null,
+      occupation: occ && occ !== UNKNOWN ? occ : null,
+    };
+    setBusy(true);
+    try { const r = await api.saveMyProfile(profile); fill(r.profile); setSaved(true); } catch (x) { setErr(errMessage(x)); } finally { setBusy(false); }
+  }
+
+  return (
+    <section id="profile" className="card stack">
+      <h2 style={{ margin: 0 }}>기본 정보 (선택)</h2>
+      <p className="muted" style={{ margin: 0 }}>적지 않아도 돼요. 저장하면 결과 화면의 '내 조건 확인'에 기본값으로 채워져요. 지원 경로 조건과 비교하는 참고용이고, 최종 자격 판단이 아니에요.</p>
+      <form className="stack" onSubmit={submit} noValidate>
+        <Field label="만 나이">
+          <input className="input" type="number" min={0} max={120} inputMode="numeric" value={age} disabled={ageUnknown || !loaded} onChange={(e) => setAge(e.target.value)} />
+          <label className="check"><input type="checkbox" checked={ageUnknown} onChange={(e) => setAgeUnknown(e.target.checked)} />모름</label>
+        </Field>
+        <Field label="거주지">
+          <select className="input" value={residence} disabled={!loaded} onChange={(e) => setResidence(e.target.value)}>
+            <option value="">선택 안 함</option>
+            <optgroup label="부산 구·군">{BUSAN_DISTRICTS.map((d) => <option key={d} value={d}>부산 {d}</option>)}</optgroup>
+            {RESIDENCE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            <option value={UNKNOWN}>모름</option>
+          </select>
+        </Field>
+        <Field label="사업자등록">
+          <select className="input" value={biz} disabled={!loaded} onChange={(e) => setBiz(e.target.value)}>
+            <option value="">선택 안 함</option>
+            <option value="true">있음</option>
+            <option value="false">없음</option>
+            <option value={UNKNOWN}>모름</option>
+          </select>
+        </Field>
+        <Field label="현재 직군">
+          <select className="input" value={occ} disabled={!loaded} onChange={(e) => setOcc(e.target.value)}>
+            <option value="">선택 안 함</option>
+            {OCCUPATIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            <option value={UNKNOWN}>모름</option>
+          </select>
+        </Field>
+        {err && <p className="error-text" role="alert">{err}</p>}
+        {saved && <p role="status">저장했어요.</p>}
+        <div><button className="btn primary" disabled={busy || !loaded}>{busy ? '저장 중...' : '저장'}</button></div>
+      </form>
+    </section>
+  );
+}
+
 export function Me() {
   const { user, logout, setUser } = useAuth();
   const nav = useNavigate();
@@ -86,6 +162,8 @@ export function Me() {
       </section>
 
       <PasswordSection notice={new URLSearchParams(loc.search).get('notice') === 'password'} />
+
+      <ProfileSection />
 
       <section className="card stack">
         <h2 style={{ margin: 0 }}>이번 주 상담</h2>
