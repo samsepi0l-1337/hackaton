@@ -8,6 +8,23 @@ use std::collections::{HashMap, HashSet};
 const RULES: &str = "당신은 창업을 처음 생각하는 청년의 생각 정리를 돕는 한국어 도우미예요. 해요체로 짧게 써요. 점수를 매기거나 성공 가능성을 평가하거나 과하게 칭찬하지 않아요. 기관·프로그램 이름, 금액, 마감일, 날짜, 숫자를 절대 쓰지 않아요. 사용자가 말하지 않은 경험·인터뷰·매출·팀을 지어내지 않아요. 확인되지 않은 것은 가설이라고 써요.";
 pub const REACTION_PROMPT: &str = "당신은 창업을 처음 생각하는 청년의 생각 정리를 돕는 한국어 도우미예요. 해요체로 짧게 써요. 점수를 매기거나 성공 가능성을 평가하거나 과하게 칭찬하지 않아요. 기관·프로그램 이름, 금액, 마감일, 날짜, 숫자를 절대 쓰지 않아요. 사용자가 말하지 않은 경험·인터뷰·매출·팀을 지어내지 않아요. 확인되지 않은 것은 가설이라고 써요.\n사용자의 직전 답을 듣고 짧게 받아 주는 반응 한 문장만 써요. 예: \"동네 어르신들의 장보기 불편을 직접 보셨군요.\"\n- 사용자가 한 말만 바탕으로 써요. 새로운 사실·조언·평가·칭찬을 더하지 않아요.\n- 질문하지 않아요. 물음표를 쓰지 않아요. 다음 질문은 코드가 붙여요.\n- 40자 안팎, 마침표로 끝나는 한 문장만 출력해요.";
 pub const REACTION_MAX: usize = 60;
+async fn join_all<F: std::future::Future>(futures: Vec<F>) -> Vec<F::Output> {
+    let mut pending: Vec<_> = futures.into_iter().map(|f| Some(Box::pin(f))).collect();
+    let mut outputs: Vec<Option<F::Output>> = (0..pending.len()).map(|_| None).collect();
+    std::future::poll_fn(|cx| {
+        let mut done = true;
+        for (future, output) in pending.iter_mut().zip(outputs.iter_mut()) {
+            if let Some(f) = future {
+                match f.as_mut().poll(cx) {
+                    std::task::Poll::Ready(value) => { *output=Some(value); *future=None; }
+                    std::task::Poll::Pending => done=false,
+                }
+            }
+        }
+        if done { std::task::Poll::Ready(()) } else { std::task::Poll::Pending }
+    }).await;
+    outputs.into_iter().flatten().collect()
+}
 fn norm(s: &str) -> String { s.chars().filter(|c| !is_js_ws(*c)).collect() }
 pub fn clean_reaction(t: Option<&str>) -> Option<String> {
     let s = t?.trim_matches(|c| is_js_ws(c) || matches!(c, '"' | '\'' | '“' | '”' | '‘' | '’'));
@@ -77,11 +94,17 @@ impl ExploreAi<'_> {
     }
     pub async fn field(&mut self, rules: &[Value], context: &str) -> (Vec<Value>, bool) {
         let system = format!("{RULES}\n현장 사람에게 물어볼 질문 한 문장을 같은 뜻으로 자연스럽게 바꿔 써요. 어려움·불편·구매 의향·비용 지불을 전제하지 말고, 현재 방식과 실제 경험을 묻는 열린 질문으로 써요. 응답자나 답변을 지어내지 않아요. 문장만 출력해요.");
+        let allowed: Vec<bool> = rules.iter().map(|_| self.ai.mode != "off" && !self.local.contains("field") && self.limiter.allow(self.actor_id,self.now)).collect();
+        let ai = self.ai; let actor = self.actor_id;
+        let outputs = join_all(rules.iter().zip(allowed).map(|(q,allow)| {
+            let user = format!("질문: {}\n상황: {context}", q["question"].as_str().unwrap_or(""));
+            let system = &system;
+            async move { if allow { ai.generate("mentor", &[json!({"role":"system","content":system}),json!({"role":"user","content":user})], Some(actor)).await } else { None } }
+        }).collect()).await;
         let mut changed = false; let mut items = Vec::new();
-        for q in rules {
+        for (q,output) in rules.iter().zip(outputs) {
             let question = q["question"].as_str().unwrap_or(""); let purpose = q["purpose"].as_str().unwrap_or("");
-            let r = self.call("mentor", &system, &format!("질문: {question}\n상황: {context}"), Some("field")).await;
-            let t = guarded(r.text.as_deref(), &[question,purpose,context], &[], 140);
+            let t = guarded(output.as_deref(), &[question,purpose,context], &[], 140);
             let valid = t.as_ref().is_some_and(|s| {
                 let pattern = format!("불편|어려움|어렵|힘들|돈을[{}]*내|구매|결제|지불|사[{}]*주|살[{}]*의향|쓸[{}]*의향", crate::jsstr::JS_WS, crate::jsstr::JS_WS, crate::jsstr::JS_WS, crate::jsstr::JS_WS);
                 let presupposes = fancy_regex::Regex::new(&pattern).ok().and_then(|r| r.is_match(s).ok()).unwrap_or(true);
@@ -91,6 +114,18 @@ impl ExploreAi<'_> {
             let mut item = q.clone(); if valid { if let (Some(o), Some(t)) = (item.as_object_mut(), t) { o.insert("question".into(), json!(t)); o.insert("source".into(), json!("ai")); changed = true; } } items.push(item);
         }
         (items, changed)
+    }
+    pub async fn reasons(&mut self, inputs: &[(Value, String)], context: &str) -> Vec<Option<String>> {
+        let allowed: Vec<bool> = inputs.iter().map(|_| self.ai.mode != "off" && !self.local.contains("reason") && self.limiter.allow(self.actor_id,self.now)).collect();
+        let ai=self.ai; let actor=self.actor_id;
+        join_all(inputs.iter().zip(allowed).map(|((resource,rule_reason),allow)| async move {
+            if !allow {return None;}
+            let typ=resource["type"].as_str().unwrap_or(""); let content=resource["content"].as_str().unwrap_or(""); let target=resource["target"].as_str().unwrap_or(""); let title=resource["title"].as_str().unwrap_or("");
+            let facts=format!("경로 종류: {typ}\n제공 내용: {content}\n대상: {}\n규칙 이유: {rule_reason}\n사용자 상황: {context}",if resource["target"].is_null(){"확인 필요"}else{target});
+            let system=format!("{RULES}\n이 경로가 사용자의 어떤 준비를 돕는지 한두 문장으로 써 주세요. 기관 이름과 '이 지역이라서'라는 이유는 쓰지 않아요. 주어진 제공 내용 밖의 도움은 쓰지 않아요. 문장만 출력해요.");
+            let out=ai.generate("reason", &[json!({"role":"system","content":system}),json!({"role":"user","content":facts})],Some(actor)).await;
+            guarded(out.as_deref(), &[rule_reason,content,target,context], &[title],160)
+        }).collect()).await
     }
     pub async fn reason(&mut self, resource: &Value, rule_reason: &str, context: &str) -> Option<String> {
         let typ = resource["type"].as_str().unwrap_or(""); let content = resource["content"].as_str().unwrap_or(""); let target = resource["target"].as_str().unwrap_or(""); let title = resource["title"].as_str().unwrap_or("");

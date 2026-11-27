@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 pub async fn options(cx: &mut Cx<'_>, _req: &Req) -> HResult {
     let interests: Vec<_> = explore::INDUSTRY_TAGS.iter().chain(explore::INTEREST_EXTRA.iter()).copied().collect();
-    let active = kstartup_resource::active_resources(&data::resources(), cx.now);
+    let active = kstartup_resource::active_resources(&crate::api::explore::state::resources_now(cx), cx.now);
     Resp::ok(json!({"readiness":explore::READINESS_OPTIONS,"interests":interests,"regions":explore::REVIEW_REGIONS,"coverage":explore_rules::coverage_by_region(&data::problems(), &active, &data::contexts()),"dataVersion":explore::EXPLORE_DATA_VERSION,"privacy":"입력한 내용은 이 서비스 서버에 저장되고, 문장 정리를 위해 외부 AI(Upstage Solar)로 전송될 수 있어요. 내 계정에 저장되어 다른 기기에서도 이어져요. \"처음부터 다시\"를 누르면 서버에 저장된 내 탐색 기록이 지워지고, 익명 집계(횟수)만 남아요."}))
 }
 pub async fn problems(_cx: &mut Cx<'_>, req: &Req) -> HResult {
@@ -69,8 +69,9 @@ pub async fn put_exploration(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let id=actor_id(cx)?; let b=req.json_object()?; let mut s=open(cx,&id)?;
     let cur=s["exploration"].clone(); let mut next=if cur.is_null(){new_exploration()}else{cur.clone()};
     if b.contains_key("origin")||b.contains_key("problemId")||b.contains_key("customProblem") {
-        let inferred=if b.get("problemId").is_some_and(|v|v.as_str().is_some_and(|s|!s.is_empty())){"card"}else if b.get("customProblem").is_some_and(|v|v.as_str().is_some_and(|s|!s.is_empty())){"custom"}else{cur["origin"].as_str().unwrap_or("hold")};
-        let origin=b.get("origin").filter(|v|!v.is_null()).and_then(Value::as_str).unwrap_or(inferred);
+        let truthy=|v: &Value| match v { Value::Null=>false, Value::Bool(b)=>*b, Value::Number(n)=>n.as_f64().is_some_and(|n|n!=0.0), Value::String(s)=>!s.is_empty(), _=>true };
+        let inferred=if b.get("problemId").is_some_and(truthy){"card"}else if b.get("customProblem").is_some_and(truthy){"custom"}else{cur["origin"].as_str().unwrap_or("hold")};
+        let origin=match b.get("origin") {None|Some(Value::Null)=>inferred,Some(Value::String(s))=>s.as_str(),Some(_)=>return Err(bad("origin 값이 올바르지 않아요"))};
         match origin {
             "card" => {let id=b.get("problemId").and_then(Value::as_str).or_else(||cur["problemId"].as_str()).unwrap_or(""); if id.is_empty()||!data::problems().iter().any(|p|p["id"]==id){return Err(bad("없거나 바뀐 문제 카드예요. 다른 카드를 고르거나 직접 입력해 주세요"));} next["origin"]=json!("card");next["problemId"]=json!(id);next["customProblem"]=Value::Null;},
             "custom" => {let t=if let Some(v)=b.get("customProblem"){text(v,300)}else{cur["customProblem"].as_str().map(str::to_owned)}.ok_or_else(||bad("직접 입력할 문제를 적어 주세요"))?;next["origin"]=json!("custom");next["problemId"]=Value::Null;next["customProblem"]=json!(t);},

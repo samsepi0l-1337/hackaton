@@ -5,7 +5,7 @@ use crate::api::store::Store;
 use crate::app::Cx;
 use crate::http::{HResult, HttpError, Req, Resp};
 use crate::jsstr::js_trim;
-use crate::shared::{data, explore, explore_rules, likes as shared_likes};
+use crate::shared::{explore, explore_rules, likes as shared_likes};
 use serde_json::{json, Value};
 
 fn actor(cx: &Cx<'_>) -> Option<String> {
@@ -109,7 +109,7 @@ pub async fn post_events(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let event = b.get("type").and_then(Value::as_str).filter(|s| ["start", "chat_done", "result", "resource_link", "regional_expand", "feedback"].contains(s)).ok_or_else(|| bad("type 값이 올바르지 않아요"))?;
     let mut state = open(cx, &id)?;
     if event == "resource_link" {
-        if let Some(resource_id) = b.get("resourceId").and_then(|v| text(v, 120)).filter(|id| data::resources().iter().any(|r| r["id"] == *id)) {
+        if let Some(resource_id) = b.get("resourceId").and_then(|v| text(v, 120)).filter(|id| crate::api::explore::state::resources_now(cx).iter().any(|r| r["id"] == *id)) {
             let who = viewer(cx, req);
             Store::new(cx.kv, cx.now).record_view(&resource_id, &who, cx.now).map_err(|_| bad("요청을 처리하지 못했어요"))?;
         }
@@ -142,7 +142,7 @@ pub async fn list(cx: &mut Cx<'_>, req: &Req) -> HResult {
         .as_deref()
         .and_then(|id| Store::new(cx.kv, cx.now).explore(id));
     let default = defaults(cx, user.as_deref());
-    let resources = data::resources();
+    let resources = crate::api::explore::state::resources_now(cx);
     let liked = ids(cx);
     let prefs = profile(&liked, &resources);
     let counts = Store::new(cx.kv, cx.now).view_counts();
@@ -198,7 +198,7 @@ pub async fn list(cx: &mut Cx<'_>, req: &Req) -> HResult {
 }
 /// GET /api/resources/:id
 pub async fn detail(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
-    let r = data::resources()
+    let r = crate::api::explore::state::resources_now(cx)
         .into_iter()
         .find(|r| r["id"] == id)
         .ok_or_else(|| HttpError::not_found("경로를 찾을 수 없어요"))?;
@@ -223,12 +223,12 @@ pub async fn detail(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
 /// GET /api/likes
 pub async fn likes(cx: &mut Cx<'_>, _req: &Req) -> HResult {
     require_user(cx)?;
-    Resp::ok(likes_body(&ids(cx), &data::resources()))
+    Resp::ok(likes_body(&ids(cx), &crate::api::explore::state::resources_now(cx)))
 }
 /// PUT /api/likes/:id
 pub async fn put_like(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     let user = require_user(cx)?;
-    let resources = data::resources();
+    let resources = crate::api::explore::state::resources_now(cx);
     if !resources.iter().any(|r| r["id"] == id) {
         return Err(HttpError::not_found("경로를 찾을 수 없어요"));
     }
@@ -251,3 +251,28 @@ pub async fn put_like(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
         .map_err(|_| bad("요청을 처리하지 못했어요"))?;
     Resp::ok(likes_body(&chosen, &resources))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{api::kstartup::store, app::Cx, testkit::{block_on, TestApp}};
+
+    #[test]
+    fn collected_resource_detail_and_like() {
+        let mut app = TestApp::new();
+        let mut resource = data_for_test();
+        resource["id"] = json!("ks-owned-test");
+        store::save(&mut app.kv, &[resource]);
+        let mut cx = Cx { env: &app.env, kv: &mut app.kv, ports: &app.ports, opts: &app.opts, now: app.now, user: Some(json!({"id":"u-test"})) };
+        let req = Req::default();
+        let detail = block_on(super::detail(&mut cx, &req, "ks-owned-test"));
+        assert_eq!(detail.ok().map(|r| r.status), Some(200));
+        let req = Req { body: Some(json!({"liked":true}).to_string()), ..Req::default() };
+        let liked = block_on(super::put_like(&mut cx, &req, "ks-owned-test"));
+        assert_eq!(liked.ok().map(|r| r.status), Some(200));
+    }
+    fn data_for_test() -> Value {
+        crate::shared::data::resources().into_iter().next().unwrap_or(Value::Null)
+    }
+}
+

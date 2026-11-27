@@ -3,7 +3,7 @@ use crate::api::{ai::{solar::create_text_ai,tasks::create_ai_tasks}, app::common
 use crate::app::Cx;
 use crate::http::{HResult,HttpError,Req,Resp};
 use crate::jsstr::iso;
-use crate::shared::{data,explore_rules as rules,likes::{self,LikeProfile}};
+use crate::shared::{explore_rules as rules,likes::{self,LikeProfile}};
 use serde_json::{json,Map,Value};
 
 fn context(cx: &mut Cx<'_>, id: &str, resources: &[Value]) -> (Value, Option<LikeProfile>) {
@@ -14,7 +14,7 @@ fn context(cx: &mut Cx<'_>, id: &str, resources: &[Value]) -> (Value, Option<Lik
     (defaults,(!ids.is_empty()).then(||likes::like_profile(&liked)))
 }
 fn result(cx: &mut Cx<'_>, id: &str, s: &Value) -> Value {
-    let resources=data::resources(); let (defaults,prefs)=context(cx,id,&resources); compute_result(s,cx.now,&resources,&defaults,prefs.as_ref())
+    let resources=crate::api::explore::state::resources_now(cx); let (defaults,prefs)=context(cx,id,&resources); compute_result(s,cx.now,&resources,&defaults,prefs.as_ref())
 }
 fn summary(s: &Value) -> Value { if s["summary"].is_null(){rules::build_summary(&json!({"start":s["start"],"exploration":s["exploration"],"answers":s["answers"]}))}else{s["summary"].clone()} }
 async fn rank(cx: &Cx<'_>, s: &Value, resources: &[Value], defaults: &Value, prefs: Option<&LikeProfile>, limiter: &mut Limiter, id: &str) -> Option<Value> {
@@ -40,11 +40,13 @@ pub async fn post_summary(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let summary=rules::build_summary(&json!({"start":s["start"],"exploration":s["exploration"],"answers":s["answers"],"aiFill":fill}));
     let regional=rules::build_regional(&json!({"start":s["start"],"exploration":s["exploration"],"now":cx.now,"aiHypothesis":hypothesis}))["card"].clone();
     let had=!s["summary"].is_null();let prep_reset=had&&s["prepDone"].as_object().is_some_and(|m|!m.is_empty());if had{s["prepDone"]=json!({});}s["summary"]=summary.clone();s["regional"]=regional.clone();
-    let resources=data::resources();let (defaults,prefs)=context(cx,&id,&resources);let ranked=rank(cx,&s,&resources,&defaults,prefs.as_ref(),ai.limiter,&id).await;
+    let resources=crate::api::explore::state::resources_now(cx);let (defaults,prefs)=context(cx,&id,&resources);let ranked=rank(cx,&s,&resources,&defaults,prefs.as_ref(),ai.limiter,&id).await;
     let mut input=json!({"readiness":s["start"]["readiness"],"problemId":s["exploration"]["problemId"],"direction":s["exploration"]["direction"],"reviewRegion":s["start"]["reviewRegion"],"conditions":rules::merge_conditions(&s["start"]["conditions"],&defaults),"now":cx.now,"resources":resources,"relevance":ranked});
     if let Some(p)=prefs.as_ref(){input["likes"]=json!({"count":p.count,"caps":{"$map":p.caps},"industries":{"$map":p.industries},"types":{"$map":p.types},"agencies":{"$map":p.agencies},"ids":{"$set":p.ids}});}
     let rec=rules::recommend_resources(&input);let mut reasons=Map::new();
-    for r in rec["items"].as_array().into_iter().flatten(){let resource=&r["resource"];let rule=rules::reason_for(resource,s["start"]["readiness"].as_str(),r["linked"]==true);if let Some(t)=ai.reason(resource,&rule,&ctx).await{if let Some(id)=resource["id"].as_str(){reasons.insert(id.into(),json!(t));}}}
+    let reason_inputs: Vec<_> = rec["items"].as_array().into_iter().flatten().map(|r| (r["resource"].clone(),rules::reason_for(&r["resource"],s["start"]["readiness"].as_str(),r["linked"]==true))).collect();
+    let outputs=ai.reasons(&reason_inputs,&ctx).await;
+    for ((resource,_),output) in reason_inputs.iter().zip(outputs) { if let (Some(id),Some(t))=(resource["id"].as_str(),output) { reasons.insert(id.into(),json!(t)); } }
     limiter.save(&mut cx.kv.scratch);
     s["ai"]=json!({"sig":ai_sig(&s),"reasons":reasons,"rank":ranked});s["step"]=json!("summary");touch(&mut s,cx.now);save(cx,&id,&s)?;
     Resp::ok(json!({"summary":summary,"regional":regional,"prepReset":prep_reset,"failed":failed}))
@@ -67,7 +69,7 @@ pub async fn get_result(cx: &mut Cx<'_>, req: &Req) -> HResult {
     if saved{bump(&mut s,"result");s["step"]=json!("result");touch(&mut s,cx.now);}
     let mut limiter=Limiter::load(cx.opts.explore_ai_limit.unwrap_or(40) as usize,&cx.kv.scratch);
     if saved && !s["summary"].is_null() && (s["ai"]["sig"]!=ai_sig(&s)||s["ai"]["rank"].is_null()) {
-        let resources=data::resources();let (defaults,prefs)=context(cx,&id,&resources);
+        let resources=crate::api::explore::state::resources_now(cx);let (defaults,prefs)=context(cx,&id,&resources);
         if let Some(r)=rank(cx,&s,&resources,&defaults,prefs.as_ref(),&mut limiter,&id).await{let reasons=if s["ai"]["sig"]==ai_sig(&s){s["ai"]["reasons"].clone()}else{json!({})};s["ai"]=json!({"sig":ai_sig(&s),"reasons":reasons,"rank":r});touch(&mut s,cx.now);}
     }
     let mut out=result(cx,&id,&s);
@@ -89,14 +91,20 @@ pub async fn put_prep(cx: &mut Cx<'_>, req: &Req) -> HResult {
     s["prepDone"][prep_id]=json!(done);touch(&mut s,cx.now);save(cx,&id,&s)?;Resp::ok(json!({"prep":result(cx,&id,&s)["prep"]}))
 }
 fn pair(v: &Value) -> Option<Value> {
-    let mut out=Map::new();for key in ["before","after"]{if let Some(n)=v.get(key).and_then(Value::as_f64).filter(|n|(1.0..=5.0).contains(n)){out.insert(key.into(),json!(n));}}
+    let mut out=Map::new();for key in ["before","after"]{if let Some(v)=v.get(key).filter(|v|v.as_f64().is_some_and(|n|(1.0..=5.0).contains(&n))){out.insert(key.into(),v.clone());}}
     (!out.is_empty()).then_some(Value::Object(out))
 }
 pub async fn post_feedback(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let id=actor_id(cx)?;let b=req.json_object()?;let mut s=open(cx,&id)?;let mut feedback=Map::new();
-    for key in ["helpful","directionClear","foundRegionalPath"]{if let Some(v)=b.get(key).filter(|v|v.is_boolean()){feedback.insert(key.into(),v.clone());}}
-    for (key,max) in [("reason",500),("wantToExplore",500),("pathName",200)]{if let Some(t)=b.get(key).and_then(|v|text(v,max)){feedback.insert(key.into(),json!(t));}}
-    for key in ["knowWhatToPrepare","regionIntent"]{if let Some(v)=b.get(key).and_then(pair){feedback.insert(key.into(),v);}}
+    for key in ["helpful","reason","directionClear","wantToExplore","foundRegionalPath","pathName","knowWhatToPrepare","regionIntent"] {
+        let value=match key {
+            "helpful"|"directionClear"|"foundRegionalPath"=>b.get(key).filter(|v|v.is_boolean()).cloned(),
+            "reason"|"wantToExplore"=>b.get(key).and_then(|v|text(v,500)).map(|v|json!(v)),
+            "pathName"=>b.get(key).and_then(|v|text(v,200)).map(|v|json!(v)),
+            _=>b.get(key).and_then(pair),
+        };
+        if let Some(v)=value {feedback.insert(key.into(),v);}
+    }
     feedback.insert("at".into(),json!(iso(cx.now)));s["feedback"]=Value::Object(feedback);bump(&mut s,"feedback");touch(&mut s,cx.now);
     let f=&s["feedback"];let bytes=cx.ports.random_bytes(16);let mut bytes:Vec<u8>=bytes.into_iter().take(16).collect();bytes.resize(16,0);bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;let h=hex::encode(bytes);let fid=format!("fb-{}-{}-{}-{}-{}",&h[0..8],&h[8..12],&h[12..16],&h[16..20],&h[20..32]);
     let email=cx.user.as_ref().and_then(|u|u["email"].as_str()).map(mask_email).unwrap_or_default();

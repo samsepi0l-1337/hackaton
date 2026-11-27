@@ -7,6 +7,10 @@ use crate::shared::{data, explore::{self, EXPLORE_DATA_VERSION}, explore_rules a
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 
+pub fn resources_now(cx: &Cx<'_>) -> Vec<Value> {
+    kstartup_resource::merge_resources(&data::resources(), &crate::api::kstartup::store::resources(cx.kv))
+}
+
 pub fn require_verified(cx: &Cx<'_>) -> Result<Value, HttpError> {
     let user = require_user(cx)?;
     if user["emailVerified"] != true { return Err(HttpError::new(403,"email_unverified","이메일 인증을 마치면 창업 준비를 시작할 수 있어요")); }
