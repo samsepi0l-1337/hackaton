@@ -13,10 +13,14 @@ await step('signup password checklist, confirm mismatch, consent required and in
   await page.fill('input[type=password] >> nth=0', password);
   await page.fill('input[type=password] >> nth=1', password);
   await seeText('두 비밀번호가 같아요');
+  await seeText('✓ 규칙:');
   assert(await page.evaluate(() => document.querySelector('form button.primary').disabled), 'invalid email and missing consent disabled');
   await page.fill('input[type=email]', email);
   assert(await page.evaluate(() => document.querySelector('form button.primary').disabled), 'consent required');
   await page.evaluate(() => document.querySelector('input[type=checkbox]').click());
+  await page.fill('input[type=email]', 'invalid');
+  assert(await page.evaluate(() => document.querySelector('form button.primary').disabled), 'invalid email disabled with valid password and consent');
+  await page.fill('input[type=email]', email);
   assert(!(await page.evaluate(() => document.querySelector('form button.primary').disabled)), 'valid signup enabled');
 });
 await step('signup and verify by link token', async () => {
@@ -28,6 +32,8 @@ await step('signup and verify by link token', async () => {
   const me = await api('GET', '/api/auth/me');
   eq(me.body.user.email, email, 'link verified account');
   eq(me.body.user.emailVerified, true, 'link verification');
+  await go('/me');
+  await seeText('이메일 인증 완료');
 });
 await step('duplicate email is rejected on signup', async () => {
   await go('/signup');

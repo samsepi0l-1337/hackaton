@@ -18,6 +18,8 @@ await step('logout and RequireAuth redirects to login and back via next', async 
   await go('/me');
   await seeText(account.email);
   await page.click('text=로그아웃');
+  await page.waitForFunction(() => location.pathname === '/', undefined, { timeout: 10000 });
+  await seeText('로그인');
   await go('/me?from=e2e');
   await page.waitForFunction(() => location.pathname === '/login', undefined, { timeout: 10000 });
   eq(new URL(await page.url()).searchParams.get('next'), '/me?from=e2e', 'next preserved');
@@ -30,6 +32,7 @@ await step('logout and RequireAuth redirects to login and back via next', async 
 await step('change password from me', async () => {
   await changePassword(account.password, changed);
   await page.click('text=로그아웃');
+  await page.waitForFunction(() => location.pathname === '/', undefined, { timeout: 10000 });
   await login(account.email, account.password);
   await seeText('이메일 또는 비밀번호가 맞지 않아요');
   await page.fill('input[type=password]', changed);
@@ -48,6 +51,7 @@ await step('me basic profile edit persists after reload', async () => {
 });
 await step('forgot recovery password forces password change', async () => {
   await page.click('text=로그아웃');
+  await page.waitForFunction(() => location.pathname === '/', undefined, { timeout: 10000 });
   await go('/forgot');
   await page.fill('input[type=email]', account.email);
   await page.click('form button.primary');
