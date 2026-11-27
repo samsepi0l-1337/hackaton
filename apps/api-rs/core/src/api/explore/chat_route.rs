@@ -28,7 +28,7 @@ pub async fn chat(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let sig=json!([message,skip,unknown]).to_string();
     let duplicate=has_answer && (b.get("questionIndex").and_then(Value::as_f64).is_some_and(|n|n < index as f64) || (!message.is_empty() && s["lastBody"]["sig"]==sig && s["lastBody"]["at"].as_str().and_then(parse_ms).is_some_and(|t|cx.now-t<2000)));
     let done=s["finished"]==true||index>=MAX_QUESTIONS; let at=iso(cx.now);
-    let raw=create_text_ai(cx.env,cx.ports); let mut limiter=Limiter::new(cx.opts.explore_ai_limit.unwrap_or(40) as usize,3_600_000); let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)}; let mut failed=false;
+    let raw=create_text_ai(cx.env,cx.ports); let mut limiter=Limiter::load(cx.opts.explore_ai_limit.unwrap_or(40) as usize,&cx.kv.scratch); let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)}; let mut failed=false;
     if !done && !duplicate {
         if s["messages"].as_array().is_some_and(Vec::is_empty) {
             if s["counted"]!=true { if !exempt {record_consult(&mut Store::new(cx.kv,cx.now),&keys,cx.now,cfg).map_err(|_|bad("요청을 처리하지 못했어요"))?;}s["counted"]=json!(true); }
@@ -54,6 +54,7 @@ pub async fn chat(cx: &mut Cx<'_>, req: &Req) -> HResult {
         let mut avoid=rejected; avoid.extend(items.clone());items.extend(chat::rule_suggestions(&s["start"],&ex,&avoid,None));items.truncate(2);ex["suggestions"]=json!(items);
         if ex["directionStatus"]=="hold"||ex["directionStatus"]=="ai_suggested"{ex["directionStatus"]=json!("ai_suggested");}s["exploration"]=ex;
     }
+    limiter.save(&mut cx.kv.scratch);
     touch(&mut s,cx.now);save(cx,&id,&s)?;
     Resp::ok(json!({"messages":s["messages"],"questionIndex":s["questionIndex"],"done":s["finished"]==true||s["questionIndex"].as_u64().unwrap_or(0)>=MAX_QUESTIONS as u64,"suggestions":s["exploration"]["suggestions"].as_array().cloned().unwrap_or_default(),"failed":failed}))
 }

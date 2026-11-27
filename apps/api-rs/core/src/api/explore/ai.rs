@@ -22,6 +22,13 @@ pub fn clean_reaction(t: Option<&str>) -> Option<String> {
 pub struct Limiter { max: usize, window_ms: i64, hits: HashMap<String, Vec<i64>> }
 impl Limiter {
     pub fn new(max: usize, window_ms: i64) -> Self { Self { max, window_ms, hits: HashMap::new() } }
+    pub fn load(max: usize, scratch: &std::collections::BTreeMap<String, Value>) -> Self {
+        let hits = scratch.get("explore:ai-limiter").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+        Self { max, window_ms: 3_600_000, hits }
+    }
+    pub fn save(&self, scratch: &mut std::collections::BTreeMap<String, Value>) {
+        scratch.insert("explore:ai-limiter".into(), json!(self.hits));
+    }
     pub fn allow(&mut self, id: &str, now: i64) -> bool {
         let recent = self.hits.entry(id.into()).or_default(); recent.retain(|t| now - *t < self.window_ms);
         if recent.len() >= self.max { return false; }

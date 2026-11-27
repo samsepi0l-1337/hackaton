@@ -17,8 +17,8 @@ fn result(cx: &mut Cx<'_>, id: &str, s: &Value) -> Value {
     let resources=data::resources(); let (defaults,prefs)=context(cx,id,&resources); compute_result(s,cx.now,&resources,&defaults,prefs.as_ref())
 }
 fn summary(s: &Value) -> Value { if s["summary"].is_null(){rules::build_summary(&json!({"start":s["start"],"exploration":s["exploration"],"answers":s["answers"]}))}else{s["summary"].clone()} }
-async fn rank(cx: &Cx<'_>, s: &Value, resources: &[Value], defaults: &Value, prefs: Option<&LikeProfile>) -> Option<Value> {
-    let tasks=create_ai_tasks(cx.env,cx.ports); if !tasks.decide_enabled{return None;}
+async fn rank(cx: &Cx<'_>, s: &Value, resources: &[Value], defaults: &Value, prefs: Option<&LikeProfile>, limiter: &mut Limiter, id: &str) -> Option<Value> {
+    let tasks=create_ai_tasks(cx.env,cx.ports); if !tasks.decide_enabled || !limiter.allow(id,cx.now) {return None;}
     let start=&s["start"];let ex=&s["exploration"];
     let conditions=rules::merge_conditions(&start["conditions"],defaults);
     let pref=prefs.map(|p|json!({"count":p.count,"caps":{"$map":p.caps},"industries":{"$map":p.industries},"types":{"$map":p.types},"agencies":{"$map":p.agencies},"ids":{"$set":p.ids}})).unwrap_or(Value::Null);
@@ -35,16 +35,17 @@ async fn rank(cx: &Cx<'_>, s: &Value, resources: &[Value], defaults: &Value, pre
 pub async fn post_summary(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let id=actor_id(cx)?;let mut s=open(cx,&id)?;let errors=rules::validate_start(&s["start"]);if !errors.is_empty(){return Err(bad_fields("시작 정보를 먼저 입력해 주세요",json!(errors)));}
     let base=rules::build_summary(&json!({"start":s["start"],"exploration":s["exploration"],"answers":s["answers"]}));
-    let raw=create_text_ai(cx.env,cx.ports);let mut limiter=Limiter::new(cx.opts.explore_ai_limit.unwrap_or(40) as usize,3_600_000);let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)};
+    let raw=create_text_ai(cx.env,cx.ports);let mut limiter=Limiter::load(cx.opts.explore_ai_limit.unwrap_or(40) as usize,&cx.kv.scratch);let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)};
     let ctx=ai_context(&s);let (fill,hypothesis,failed)=ai.fill(&ctx,&user_texts(&s),base["target"]["provenance"]=="unknown",base["value"]["provenance"]=="unknown").await;
     let summary=rules::build_summary(&json!({"start":s["start"],"exploration":s["exploration"],"answers":s["answers"],"aiFill":fill}));
     let regional=rules::build_regional(&json!({"start":s["start"],"exploration":s["exploration"],"now":cx.now,"aiHypothesis":hypothesis}))["card"].clone();
     let had=!s["summary"].is_null();let prep_reset=had&&s["prepDone"].as_object().is_some_and(|m|!m.is_empty());if had{s["prepDone"]=json!({});}s["summary"]=summary.clone();s["regional"]=regional.clone();
-    let resources=data::resources();let (defaults,prefs)=context(cx,&id,&resources);let ranked=rank(cx,&s,&resources,&defaults,prefs.as_ref()).await;
+    let resources=data::resources();let (defaults,prefs)=context(cx,&id,&resources);let ranked=rank(cx,&s,&resources,&defaults,prefs.as_ref(),ai.limiter,&id).await;
     let mut input=json!({"readiness":s["start"]["readiness"],"problemId":s["exploration"]["problemId"],"direction":s["exploration"]["direction"],"reviewRegion":s["start"]["reviewRegion"],"conditions":rules::merge_conditions(&s["start"]["conditions"],&defaults),"now":cx.now,"resources":resources,"relevance":ranked});
     if let Some(p)=prefs.as_ref(){input["likes"]=json!({"count":p.count,"caps":{"$map":p.caps},"industries":{"$map":p.industries},"types":{"$map":p.types},"agencies":{"$map":p.agencies},"ids":{"$set":p.ids}});}
     let rec=rules::recommend_resources(&input);let mut reasons=Map::new();
     for r in rec["items"].as_array().into_iter().flatten(){let resource=&r["resource"];let rule=rules::reason_for(resource,s["start"]["readiness"].as_str(),r["linked"]==true);if let Some(t)=ai.reason(resource,&rule,&ctx).await{if let Some(id)=resource["id"].as_str(){reasons.insert(id.into(),json!(t));}}}
+    limiter.save(&mut cx.kv.scratch);
     s["ai"]=json!({"sig":ai_sig(&s),"reasons":reasons,"rank":ranked});s["step"]=json!("summary");touch(&mut s,cx.now);save(cx,&id,&s)?;
     Resp::ok(json!({"summary":summary,"regional":regional,"prepReset":prep_reset,"failed":failed}))
 }
@@ -64,15 +65,17 @@ pub async fn put_summary(cx: &mut Cx<'_>, req: &Req) -> HResult {
 pub async fn get_result(cx: &mut Cx<'_>, req: &Req) -> HResult {
     let id=actor_id(cx)?;let saved=Store::new(cx.kv,cx.now).explore(&id).is_some();let mut s=peek(cx,&id);
     if saved{bump(&mut s,"result");s["step"]=json!("result");touch(&mut s,cx.now);}
+    let mut limiter=Limiter::load(cx.opts.explore_ai_limit.unwrap_or(40) as usize,&cx.kv.scratch);
     if saved && !s["summary"].is_null() && (s["ai"]["sig"]!=ai_sig(&s)||s["ai"]["rank"].is_null()) {
         let resources=data::resources();let (defaults,prefs)=context(cx,&id,&resources);
-        if let Some(r)=rank(cx,&s,&resources,&defaults,prefs.as_ref()).await{let reasons=if s["ai"]["sig"]==ai_sig(&s){s["ai"]["reasons"].clone()}else{json!({})};s["ai"]=json!({"sig":ai_sig(&s),"reasons":reasons,"rank":r});touch(&mut s,cx.now);}
+        if let Some(r)=rank(cx,&s,&resources,&defaults,prefs.as_ref(),&mut limiter,&id).await{let reasons=if s["ai"]["sig"]==ai_sig(&s){s["ai"]["reasons"].clone()}else{json!({})};s["ai"]=json!({"sig":ai_sig(&s),"reasons":reasons,"rank":r});touch(&mut s,cx.now);}
     }
     let mut out=result(cx,&id,&s);
     if saved && s["fieldQ"]["sig"]!=field_sig(&s) && !local_tasks(req).contains("field") {
-        let raw=create_text_ai(cx.env,cx.ports);let mut limiter=Limiter::new(cx.opts.explore_ai_limit.unwrap_or(40) as usize,3_600_000);let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)};
+        let raw=create_text_ai(cx.env,cx.ports);let mut ai=ExploreAi{ai:&raw,limiter:&mut limiter,actor_id:&id,now:cx.now,local:local_tasks(req)};
         let (items,changed)=ai.field(&rule_field_questions(&s,&out["summary"]),&ai_context(&s)).await;if changed{s["fieldQ"]=json!({"sig":field_sig(&s),"items":items});out["fieldQuestions"]=json!(items);}
     }
+    limiter.save(&mut cx.kv.scratch);
     if saved{save(cx,&id,&s)?;}Resp::ok(out)
 }
 pub async fn put_conditions(cx: &mut Cx<'_>, req: &Req) -> HResult {
