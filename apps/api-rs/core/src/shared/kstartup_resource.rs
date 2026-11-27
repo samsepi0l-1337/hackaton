@@ -1,22 +1,32 @@
 //! TS 원본: packages/shared/src/kstartup-resource.ts
 use super::{
-    date::kst_date, eligibility::parse_age_ranges, explore::INDUSTRY_TAGS, kstartup::to_iso,
+    date::kst_date,
+    eligibility::{parse_age_ranges, AgeRanges},
+    explore::INDUSTRY_TAGS,
+    kstartup::to_iso,
 };
+use crate::jsstr::{is_js_ws, JS_WS};
 use serde_json::{json, Map, Value};
+use std::sync::LazyLock;
 
-fn ws(c: char) -> bool {
-    c.is_whitespace() || c == '\u{feff}'
-}
+static TEXT_RE: LazyLock<Option<regex::Regex>> =
+    LazyLock::new(|| regex::Regex::new(r"<[^>]*>|&nbsp;").ok());
+static REGISTERED_RE: LazyLock<Option<regex::Regex>> = LazyLock::new(|| {
+    regex::Regex::new(&format!(
+        r"[0-9]+[{JS_WS}]*년[{JS_WS}]*(미만|이내|이하|이상)"
+    ))
+    .ok()
+});
 fn text(v: Option<&Value>) -> Option<String> {
     let v = v?;
     if v.is_number() {
         return Some(v.to_string());
     }
     let s = v.as_str()?;
-    let re = regex::Regex::new(r"<[^>]*>|&nbsp;").ok()?;
+    let re = TEXT_RE.as_ref()?;
     let replaced = re.replace_all(s, " ");
     let result = replaced
-        .split(ws)
+        .split(is_js_ws)
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
@@ -24,14 +34,17 @@ fn text(v: Option<&Value>) -> Option<String> {
 }
 fn clip(s: &str, n: usize) -> String {
     if crate::jsstr::len16(s) > n {
-        format!("{}…", crate::jsstr::take16(s, n - 1).trim_end_matches(ws))
+        format!(
+            "{}…",
+            crate::jsstr::take16(s, n - 1).trim_end_matches(is_js_ws)
+        )
     } else {
         s.to_owned()
     }
 }
 fn tokens(s: &str) -> Vec<&str> {
     s.split([',', '·', '/'])
-        .map(|s| s.trim_matches(ws))
+        .map(|s| s.trim_matches(is_js_ws))
         .filter(|s| !s.is_empty())
         .collect()
 }
@@ -62,8 +75,8 @@ pub fn enyy_of(raw: Option<&str>) -> (Vec<&'static str>, Option<&'static str>) {
         return (vec!["has_idea", "preparing"], Some("any"));
     }
     let pre = list.iter().any(|s| s.contains("예비"));
-    let registered = regex::Regex::new(r"[0-9]+[\s\u{feff}]*년[\s\u{feff}]*(미만|이내|이하|이상)")
-        .ok()
+    let registered = REGISTERED_RE
+        .as_ref()
         .is_some_and(|re| list.iter().any(|s| re.is_match(s)));
     let stages = if pre {
         vec!["has_idea", "preparing"]
@@ -170,10 +183,10 @@ fn number(n: f64) -> Value {
 fn conditions_of(item: &Value) -> Value {
     let age = text(item.get("biz_trgt_age"));
     let ranges = parse_age_ranges(age.as_deref());
-    let span = if ranges == "open" {
-        Some((0.0, f64::INFINITY))
-    } else {
-        contiguous(&ranges_value(&ranges))
+    let span = match ranges {
+        Some(AgeRanges::Open) => Some((0.0, f64::INFINITY)),
+        Some(AgeRanges::Ranges(ranges)) => contiguous(&ranges),
+        None => None,
     };
     let mut c = Map::new();
     if let Some((lo, hi)) = span {
