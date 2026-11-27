@@ -12,8 +12,8 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 | 공통 패키지(타입·계약·규칙·테스트 데이터) | 완료 (#5) |
 | API (메모리 저장소) | 완료 (#6) |
 | 목업 웹 | 완료 (#8) |
-| 국내 AI (Upstage Solar·Decide·Document Parse) + AI Gateway | 진행 중 |
-| Cloudflare Containers doc-worker | 진행 중 |
+| 국내 AI (Upstage Solar·Decide·Document Parse) + AI Gateway | 구현 완료 (#11, #12), 실제 키 확인 남음 |
+| Cloudflare Containers doc-worker | 구현·로컬 통합 완료, 실제 공고 확인은 배포 후 |
 | 배포 | 시작 전 (아래 5절 선행 조건) |
 
 ## 1. 공통·기반
@@ -84,9 +84,9 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] `apps/doc-worker/`: 컨테이너 이미지(linux/amd64), `/health` `/discover` `/download` `/fill`, SSRF 차단
 - [x] 합성 DOCX·HWPX로 fill 동작 (팀 모의 양식으로 다시 확인 필요)
 - [x] 로컬 Docker로 실행 테스트 (amd64 빌드, /health·/fill)
-- [ ] API 연결: `DocWorker` Durable Object(`ctx.container`), `lite` 인스턴스, 비활성 2분 후 종료, `enableInternet: true`
-- [ ] 흐름: 지원서 생성 → `/discover` → `/download` → Document Parse → 양식 항목. 실패하면 모의 양식
-- [ ] `wrangler dev`로 Worker → DO → 컨테이너 통합 실행
+- [x] API 연결: `DocWorker` Durable Object(`ctx.container`), `lite` 인스턴스, 비활성 2분 후 종료, `enableInternet` (로컬은 `DOC_WORKER_INTERNET=0`)
+- [x] 흐름: 지원서 생성 → `/discover` → `/download` → Document Parse → 양식 항목. 실패하면 모의 양식 (30초 제한)
+- [x] `wrangler dev`로 Worker → DO → 컨테이너 통합 실행 (로컬은 인터넷 켜기가 403으로 실패해 끄고 확인. 배포 환경에서 인터넷 켠 채로 다시 확인)
 - [ ] 실제 공고 1건에서 내려받기 → 항목 추출 (F16 완료 조건)
 
 ## 5. 배포 (선행 조건)

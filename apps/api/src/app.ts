@@ -13,6 +13,7 @@ import {
 import { hashPassword, randomToken, verifyPassword } from './password';
 import type { Bindings } from './env';
 import { createAiTasks } from './ai/tasks';
+import { readAnnouncementForm, type DocWorkerClient } from './docs/pipeline';
 import { createStore, emptyMentor, type MentorState, type Store, type UserRecord } from './store';
 
 export interface AppOptions {
@@ -23,6 +24,8 @@ export interface AppOptions {
   env?: Bindings;
   /** 테스트용: AI 호출에 쓸 fetch. */
   fetch?: typeof fetch;
+  /** 공고 양식을 읽을 doc-worker 클라이언트. 없으면 모의 양식. (Workers: DOC_WORKER Durable Object) */
+  docWorkerFor?: (env: Bindings) => DocWorkerClient | null;
 }
 
 type Env = { Bindings: Bindings; Variables: { store: Store; user: UserRecord | null; now: Date; ai: ReturnType<typeof createAiTasks> } };
@@ -33,6 +36,13 @@ class HttpError extends Error {
 }
 const bad = (m: string) => new HttpError(400, 'bad_request', m);
 const notFound = (m = '찾을 수 없어요') => new HttpError(404, 'not_found', m);
+
+const FORM_TIMEOUT_MS = 30_000;
+/** 신원 정보 항목: AI가 채우지 않는다. */
+const IDENTITY_RE = /(성명|이름|대표자|연락처|전화|휴대|이메일|e-?mail|주소|생년월일)/i;
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -421,12 +431,30 @@ export function createApp(opts: AppOptions = {}) {
       market: s?.customer || [pr.customerType, pr.customerAges?.join('·'), pr.customerDesc].filter(Boolean).join(' / '),
       plan: '',
     };
-    const ruleFields: FormField[] = MOCK_FORM_FIELDS.map((f) => ({ ...f, value: f.identity ? '' : trunc(prefill[f.key] ?? '', f.maxLength) }));
+    let ruleFields: FormField[] = MOCK_FORM_FIELDS.map((f) => ({ ...f, value: f.identity ? '' : trunc(prefill[f.key] ?? '', f.maxLength) }));
+    let channel: Application['channel'] = 'mock';
+    let formFileName = `application-form-${program.id}.txt`;
+    // F16 단계 1: 공고 첨부 양식을 doc-worker 로 내려받고 Document Parse 로 항목을 읽는다. 실패하면 모의 양식.
+    const env = { ...opts.env, ...(c.env ?? {}) } as Bindings;
+    const docWorker = program.url ? opts.docWorkerFor?.(env) ?? null : null;
+    if (docWorker) {
+      const form = await withTimeout(readAnnouncementForm(env, { docWorker, fetch: opts.fetch }, program.url), FORM_TIMEOUT_MS);
+      if (form && 'fields' in form && form.fields.length > 0) {
+        ruleFields = form.fields.map((x, i) => ({
+          key: `f${i + 1}`, label: x.label, maxLength: x.maxLength, required: x.required,
+          identity: IDENTITY_RE.test(x.label) || undefined, value: '',
+        }));
+        channel = 'web';
+        formFileName = form.attachment.name;
+      } else {
+        console.warn(`[form] ${program.id} 양식 읽기 실패, 모의 양식을 씁니다: ${form && 'error' in form ? form.error : '시간 초과'}`);
+      }
+    }
     const fields = await c.get('ai').draft(ruleFields, pr, program, u.id);
     const at = c.get('now').toISOString();
     const a: Application = {
-      id: `app-${crypto.randomUUID()}`, userId: u.id, programId: program.id, status: 'drafting', channel: 'mock',
-      formFileName: `application-form-${program.id}.txt`, fields, approval: null, receiptNo: null, receiptImageUrl: null,
+      id: `app-${crypto.randomUUID()}`, userId: u.id, programId: program.id, status: 'drafting', channel,
+      formFileName, fields, approval: null, receiptNo: null, receiptImageUrl: null,
       failReason: null, retries: 0, history: [{ status: 'drafting', at }], createdAt: at, updatedAt: at,
     };
     store.saveApplication(a);
