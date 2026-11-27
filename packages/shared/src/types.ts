@@ -141,6 +141,10 @@ export interface User {
   email: string;
   isTeam: boolean;
   createdAt: string;
+  /** 이메일 인증을 마쳤는지. 창업 준비는 인증 후에만 쓸 수 있다. 없으면 false 로 본다 */
+  emailVerified?: boolean;
+  /** 복구 비밀번호로 로그인했으면 true → 새 비밀번호를 정할 때까지 다른 기능을 막는다 */
+  mustChangePassword?: boolean;
 }
 
 export type ApplicationStatus = keyof typeof APPLICATION_STATUS_LABEL;

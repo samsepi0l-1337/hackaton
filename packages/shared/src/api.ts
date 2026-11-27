@@ -21,7 +21,10 @@ export type ErrorCode =
   | 'conflict' // 409 이미 가입한 이메일, 중복 제출
   | 'closed' // 409 마감 지남
   | 'approval_required' // 409 승인 없이 제출
-  | 'limit'; // 429 상담 횟수 초과 (error.quota 포함)
+  | 'limit' // 429 상담 횟수 초과 (error.quota 포함)
+  | 'email_unverified' // 403 이메일 인증 전 (창업 준비 불가)
+  | 'password_change_required' // 403 복구 비밀번호로 로그인함 → 새 비밀번호를 먼저 정해야 함
+  | 'too_many'; // 429 인증 메일·복구 메일 요청이 너무 잦음
 
 export interface ApiError {
   error: { code: ErrorCode; message: string; fields?: FieldError[]; quota?: ConsultQuota };
@@ -34,11 +37,16 @@ export const ROUTES = {
   program: (id: string) => `/api/programs/${encodeURIComponent(id)}`, // GET → ProgramDetailResponse
   categories: '/api/programs/categories', // GET → { categories: string[] }
 
-  signup: '/api/auth/signup', // POST SignupRequest → AuthResponse (201)
+  signup: '/api/auth/signup', // POST SignupRequest → SignupResponse (201). 로그인은 인증 후
   login: '/api/auth/login', // POST LoginRequest → AuthResponse
   logout: '/api/auth/logout', // POST → { ok: true }
   me: '/api/auth/me', // GET → { user: User | null }
   account: '/api/me', // DELETE → { ok: true } 계정과 모든 데이터 삭제
+  verifyEmail: '/api/auth/verify', // POST VerifyEmailRequest → AuthResponse (인증 후 로그인 상태)
+  resendVerification: '/api/auth/verify/resend', // POST { email } → { ok: true } (1분 1회, 계정 존재를 드러내지 않음)
+  forgotPassword: '/api/auth/forgot', // POST { email } → { ok: true, message: FORGOT_PASSWORD_NOTICE } (항상 같은 응답)
+  changePassword: '/api/auth/password', // POST ChangePasswordRequest → { ok: true } (다른 세션 종료)
+  kstartupSync: '/api/admin/kstartup/sync', // POST → KStartupSyncResponse (팀 계정, 실제 공고 수집)
 
   session: '/api/mentor/session', // GET → MentorSession, DELETE → 새 상담 시작
   profile: '/api/mentor/profile', // PUT ProfileUpdateRequest → ProfileUpdateResponse (자동 저장)
@@ -59,7 +67,8 @@ export const ROUTES = {
   stats: '/api/admin/stats', // GET → Stats (팀 계정만)
 
   // ---- 개정 기획(PR #7): 비회원 탐색 흐름 ----
-  // 로그인 없이 쓴다. 첫 쓰기 요청 때 게스트 기록과 쿠키 sid 를 만든다 (현재 기기 = 이 쿠키).
+  // 2026-11-27 변경: 로그인(이메일 인증 완료) 필요. 미로그인 401 unauthorized, 미인증 403 email_unverified.
+  // options·problems·resources 는 로그인 없이 읽을 수 있다. 상담 횟수는 계정 id 로만 센다.
   exploreOptions: '/api/explore/options', // GET → ExploreOptionsResponse
   problems: '/api/explore/problems', // GET ?interests=AI,조선·해양&region=부산 → ProblemsResponse (최대 3개)
   explore: '/api/explore/session', // GET → ExploreSession, DELETE → 초기화 (서버 기록·쿠키 삭제)
@@ -178,7 +187,14 @@ export interface HomeResponse {
 }
 
 // ---- 인증 ----
-export interface SignupRequest { email: string; password: string; consent: boolean }
+/** 2회 입력한 비밀번호가 같고 규칙(checkPassword)을 지켜야 한다. 가입 후 인증 메일을 보낸다 (아직 로그인 아님). */
+export interface SignupRequest { email: string; password: string; passwordConfirm?: string /* 서버가 필수로 검사 */; consent: boolean }
+export interface SignupResponse { ok: true; email: string; verificationSent: boolean }
+/** 메일의 링크(token) 또는 이메일 + 6자리 code */
+export interface VerifyEmailRequest { token?: string; email?: string; code?: string }
+/** 복구 비밀번호로 로그인한 직후에는 currentPassword 대신 그 복구 비밀번호를 넣는다 */
+export interface ChangePasswordRequest { currentPassword: string; newPassword: string; newPasswordConfirm: string }
+export interface KStartupSyncResponse { ok: boolean; fetchedAt: string; added: number; updated: number; closed: number; total: number; error: string | null }
 export interface LoginRequest { email: string; password: string }
 export interface AuthResponse { user: User }
 
