@@ -190,16 +190,31 @@ impl Ports for WorkerPorts {
         options: &Value,
     ) -> Option<std::result::Result<Value, String>> {
         let ai = js_get(self.env.as_ref(), "AI")?;
+        // core 는 시간 제한을 options.__timeout_ms 로 넘긴다 (바인딩에는 넘기지 않는다).
+        let mut opts = options.clone();
+        let timeout = opts
+            .as_object_mut()
+            .and_then(|o| o.remove("__timeout_ms"))
+            .and_then(|v| v.as_u64());
         let args = [
             JsValue::from_str(model),
             from_json(input).ok()?,
-            from_json(options).ok()?,
+            from_json(&opts).ok()?,
         ];
-        Some(
-            call_promise(&ai, "run", &args)
-                .await
-                .map(|v| to_json(&v).unwrap_or(Value::Null)),
-        )
+        let run = call_promise(&ai, "run", &args);
+        let res = match timeout {
+            Some(ms) => {
+                let delay = Delay::from(std::time::Duration::from_millis(ms));
+                futures::pin_mut!(run);
+                futures::pin_mut!(delay);
+                match futures::future::select(run, delay).await {
+                    futures::future::Either::Left((r, _)) => r,
+                    futures::future::Either::Right(_) => Err("timeout".to_string()),
+                }
+            }
+            None => run.await,
+        };
+        Some(res.map(|v| to_json(&v).unwrap_or(Value::Null)))
     }
     async fn send_email(&self, from: &str, m: &Mail) -> Option<std::result::Result<(), String>> {
         let b = js_get(self.env.as_ref(), "EMAIL")?;
