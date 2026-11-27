@@ -28,6 +28,8 @@ export interface DevMailer extends Mailer {
   readonly sent: MailMessage[];
 }
 
+const e2eMailLog = () => (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.E2E_MAIL_LOG === '1';
+
 /** 개발용. 받는 사람과 제목만 한 줄로 로그에 남긴다. quiet 이면 로그도 없다. */
 export function createDevMailer(opts: { quiet?: boolean } = {}): DevMailer {
   const sent: MailMessage[] = [];
@@ -41,6 +43,8 @@ export function createDevMailer(opts: { quiet?: boolean } = {}): DevMailer {
       // 개발 전용(바인딩 없음): 로컬에서 바로 눌러 볼 수 있게 인증 링크만 보여 준다. 코드·복구 비밀번호는 남기지 않는다.
       const link = m.text.match(/https?:\/\/\S*\/verify\?token=\S+/)?.[0];
       if (link) console.log(`[mail:dev][DEV ONLY - 운영에서는 나오지 않음] verify link: ${link}`);
+      // E2E 러너만 켠다 (E2E_MAIL_LOG=1). 인증 코드·복구 비밀번호가 담긴 본문을 남긴다. Workers 에는 process 가 없어 꺼진다.
+      if (e2eMailLog()) console.log(`[mail:e2e] to=${m.to} body=${JSON.stringify(m.text)}`);
     },
   };
 }

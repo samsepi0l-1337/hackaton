@@ -17,7 +17,7 @@ done
 
 # /bufs 관리자 비밀번호 (E2E 전용, 실제 값 아님). prelude 의 ADMIN_PASSWORD 와 같다.
 ADMIN_HASH=$(cd "$ROOT/apps/api" && bun -e "import { hashLegacyPassword } from './src/password'; console.log(await hashLegacyPassword('e2e-admin-pass-1234'))")
-(cd "$ROOT/apps/api" && exec env -i PATH="$PATH" HOME="$HOME" PORT="$API_PORT" AI_MODE=off DECIDE_ENABLED=0 PASSWORD_PEPPER=e2e-pepper-not-a-secret ADMIN_PASSWORD_HASH="$ADMIN_HASH" bun src/server.ts >"$API_LOG" 2>&1) &
+(cd "$ROOT/apps/api" && exec env -i PATH="$PATH" HOME="$HOME" PORT="$API_PORT" AI_MODE=off DECIDE_ENABLED=0 PASSWORD_PEPPER=e2e-pepper-not-a-secret ADMIN_PASSWORD_HASH="$ADMIN_HASH" E2E_MAIL_LOG=1 bun src/server.ts >"$API_LOG" 2>&1) &
 API_PID=$!
 (cd "$ROOT/apps/web" && WEB_PORT="$WEB_PORT" API_URL="http://127.0.0.1:$API_PORT" exec bunx vite --host 127.0.0.1 --strictPort >"$OUT/web.log" 2>&1) &
 WEB_PID=$!

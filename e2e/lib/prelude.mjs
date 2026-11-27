@@ -42,6 +42,17 @@ async function lastVerifyLink(email) {
   }
   throw new Error('인증 링크를 로그에서 찾지 못함: ' + email);
 }
+/** E2E 러너(E2E_MAIL_LOG=1)가 API 로그에 남긴 email 의 마지막 메일 본문. 인증 코드·복구 비밀번호를 여기서 읽는다. */
+async function lastMailBody(email) {
+  const lines = (await fs.readFile(API_LOG, 'utf8')).split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(/^\[mail:e2e\] to=(\S+) body=(.*)$/);
+    if (m && m[1] === email) return JSON.parse(m[2]);
+  }
+  throw new Error('메일 본문을 로그에서 찾지 못함: ' + email);
+}
+/** 마지막 인증 메일의 6자리 코드. */
+const lastVerifyCode = async (email) => (await lastMailBody(email)).match(/\b(\d{6})\b/)?.[1] ?? null;
 const uniqueEmail = (tag) => `e2e-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 /** 회원가입 + 메일 인증까지 끝낸 계정 (API 로 처리, 화면 흐름은 auth spec 에서 따로 본다). */
 async function newAccount(tag, password = 'E2e-pass-1234!') {
