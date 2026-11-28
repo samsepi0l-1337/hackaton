@@ -19,7 +19,8 @@ export type FocusSession = ExploreSession & { focus?: FocusInfo | null };
 export interface PolishSuggestion { key: string; before: string; after: string }
 export interface PolishResponse { suggestions: PolishSuggestion[]; remaining: number }
 export type ExportFormat = 'docx' | 'hwpx';
-export interface ExportResponse { fileName: string; mimeType: string; fileBase64: string; source: 'form' | 'standard' | 'standard_form_fields'; format: ExportFormat }
+export interface ExportResponse { fileName: string; mimeType: string; fileBase64: string; source: 'form' | 'standard' | 'standard_form_fields'; format: ExportFormat | 'pptx' }
+export interface FormFillResponse { fileName: string; mimeType: string; fileBase64: string; filled: string[]; format: string }
 export interface ApplicationQuota { used: number; limit: number | null; remaining: number | null; resetAt: string | null; blocked: boolean }
 
 export class ApiClientError extends Error {
@@ -146,5 +147,6 @@ export const api = {
   approveApplication: (id: string) => post<ApplicationView>(ROUTES.approve(id), { confirm: true } satisfies ApproveRequest),
   retryApplication: (id: string) => post<ApplicationView>(ROUTES.retry(id)),
   polishApplication: (id: string, values: Record<string, string>) => post<PolishResponse>(`${ROUTES.application(id)}/polish`, { values }),
+  fillMyForm: (id: string, fileName: string, fileBase64: string) => post<FormFillResponse>(`${ROUTES.application(id)}/form-fill`, { fileName, fileBase64 }),
   exportApplication: (id: string, format: ExportFormat) => get<ExportResponse>(`${ROUTES.application(id)}/export?format=${format}`),
 };

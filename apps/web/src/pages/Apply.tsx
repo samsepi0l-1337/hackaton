@@ -43,6 +43,7 @@ export function Apply() {
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const [exportMsg, setExportMsg] = useState('');
   const [exportErr, setExportErr] = useState('');
+  const [myForm, setMyForm] = useState<{ busy: boolean; msg: string; err: string }>({ busy: false, msg: '', err: '' });
 
   function adopt(a: ApplicationView) {
     setApp(a);
@@ -116,6 +117,23 @@ export function Apply() {
     } catch (x) {
       setExportErr(errMessage(x));
     } finally { setExporting(null); }
+  }
+  /** 사용자가 찾은 제출 양식(DOCX·HWPX·PPTX)을 올리면 지원서 내용을 채워 돌려준다. */
+  async function fillMine(file: File) {
+    if (!app) return;
+    setMyForm({ busy: true, msg: '', err: '' });
+    try {
+      if (file.size > 4 * 1024 * 1024) throw new Error('4MB 이하의 양식 파일을 올려 주세요.');
+      if (app.status === 'drafting') adopt(await api.updateApplication(app.id, { values }));
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      const r = await api.fillMyForm(app.id, file.name, btoa(bin));
+      saveFile(r.fileName, r.mimeType, r.fileBase64);
+      setMyForm({ busy: false, err: '', msg: `올린 양식에 ${r.filled.length}개 항목(${r.filled.join(', ')})을 채워 내려받았어요. 나머지 칸은 직접 확인해 주세요.` });
+    } catch (x) {
+      setMyForm({ busy: false, msg: '', err: x instanceof Error ? errMessage(x) : String(x) });
+    }
   }
   const printValues = app.fields.map((f) => ({ ...f, value: editable ? (values[f.key] ?? '') : f.value }));
 
@@ -244,6 +262,17 @@ export function Apply() {
         <p className="apply-note">HWPX는 한글 2014 이상에서 열려요. HWP 파일이 필요하면 한글에서 열고 'HWP로 저장'을 눌러 주세요. PDF는 인쇄 창에서 'PDF로 저장'을 골라 주세요.</p>
         {exportMsg && <p role="status" style={{ margin: 0 }}>{exportMsg}</p>}
         {exportErr && <p className="error-text" role="alert">{exportErr}</p>}
+        <div className="apply-myform">
+          <h3>내가 찾은 제출 양식에 채우기</h3>
+          <p className="muted">공고 사이트에서 받은 신청서 양식(DOCX·HWPX·PPTX)을 올리면, 항목 이름에 맞춰 지금까지 쓴 내용을 채워 돌려드려요. HWP·PDF·PPT 양식은 한글·워드·파워포인트에서 새 형식으로 저장한 뒤 올려 주세요.</p>
+          <label className="btn">
+            {myForm.busy ? '양식을 채우는 중...' : '양식 파일 올리기'}
+            <input type="file" accept=".docx,.hwpx,.pptx" className="sr-only" disabled={myForm.busy || busy}
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void fillMine(f); }} />
+          </label>
+          {myForm.msg && <p role="status" style={{ margin: 0 }}>{myForm.msg}</p>}
+          {myForm.err && <p className="error-text" role="alert">{myForm.err}</p>}
+        </div>
       </section>
 
       <article className="apply-print" aria-hidden="true">

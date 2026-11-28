@@ -42,3 +42,11 @@ await step('download button saves the draft and reports the form source', async 
   const a = await api('GET', '/api/applications/' + encodeURIComponent(appId));
   assert(a.body.fields.some((f) => f.value === '내려받기 전에 고친 문장'), 'draft saved before export');
 });
+
+await step('my form upload: unsupported type and doc-worker off are explained', async () => {
+  const hwp = await api('POST', `/api/applications/${encodeURIComponent(appId)}/form-fill`, { fileName: 'form.hwp', fileBase64: 'AAAA' });
+  eq(hwp.status, 422, 'hwp is rejected with a hint');
+  const off = await api('POST', `/api/applications/${encodeURIComponent(appId)}/form-fill`, { fileName: 'form.docx', fileBase64: 'UEsDBA==' });
+  eq(off.status, 503, 'local run has no doc-worker');
+  await seeText('내가 찾은 제출 양식에 채우기');
+});

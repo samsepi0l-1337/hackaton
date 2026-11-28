@@ -386,14 +386,15 @@ impl DurableObject for GilApp {
             return Response::from_json(&serde_json::json!({ "ok": true }));
         }
         // 요청 본문은 JSON 뿐이다. 너무 큰 본문은 읽기 전에 거절한다.
-        const MAX_BODY_BYTES: usize = 1024 * 1024;
+        // 양식 파일 업로드(base64, 4MB)만 더 큰 본문을 받는다.
+        let max_body: usize = if req.path().ends_with("/form-fill") { 6 * 1024 * 1024 } else { 1024 * 1024 };
         if req
             .headers()
             .get("content-length")
             .ok()
             .flatten()
             .and_then(|v| v.trim().parse::<usize>().ok())
-            .is_some_and(|n| n > MAX_BODY_BYTES)
+            .is_some_and(|n| n > max_body)
         {
             return Response::from_json(&serde_json::json!({"error":{"code":"too_large","message":"요청이 너무 커요"}}))
                 .map(|r| r.with_status(413));
@@ -404,7 +405,7 @@ impl DurableObject for GilApp {
                 .text()
                 .await
                 .ok()
-                .filter(|s| !s.is_empty() && s.len() <= MAX_BODY_BYTES),
+                .filter(|s| !s.is_empty() && s.len() <= max_body),
         };
         let core_req = Req {
             method: req.method().to_string(),
