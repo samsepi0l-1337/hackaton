@@ -14,7 +14,7 @@ Cloudflare Container 에서 도는 문서 작업 서버입니다. Python 3.12, �
 오류: `4xx/5xx` + `{ error: { code, message } }`. 코드는 `bad_request`, `unsupported`(HWP·PDF 채우기, 422), `fetch_failed`(502), `too_large`(413), `internal`.
 
 ## 한도와 보안
-- http/https 만 허용. 호스트를 풀어서 loopback, 사설망(10/8, 172.16/12, 192.168/16), 링크로컬(169.254/16), `::1`, `fc00::/7` 이면 거절. 리다이렉트마다 다시 검사.
+- http/https 만 허용. 호스트를 풀어서 공인 주소(`is_global`)가 아니면 거절한다: loopback, 사설망(10/8, 172.16/12, 192.168/16), 링크로컬(169.254/16), 공유 주소(100.64/10), 예약·멀티캐스트·미지정 주소, `::1`, `fc00::/7`, IPv4 로 매핑된 IPv6 도 같은 규칙. 리다이렉트마다 다시 검사.
 - 환경변수 `DOC_WORKER_ALLOW_PRIVATE=1` 은 테스트 전용 (기본 꺼짐).
 - 공고 페이지 5MB, 첨부 50MB, 요청 본문 80MB, 원본 서버 응답 10초.
 - 정규식으로 XML 을 고치므로 중첩 표는 채우지 못한다. 복잡한 양식은 `missing` 으로 나온다.

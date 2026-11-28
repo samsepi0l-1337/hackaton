@@ -11,7 +11,13 @@
 ## 지원서 작성 제한
 - `AppOpts.application_limit: Option<(횟수, 일수)>` (`core/src/app.rs`). 운영 Worker 는 `Some((2, 7))`, 즉 계정당 7일에 2회다 (`worker/src/lib.rs`). `None` 이면 제한이 없다.
 - `GET /api/applications/quota`: 로그인한 계정의 `{used, limit, remaining, resetAt, blocked}`. 제한이 없으면 `limit`·`remaining`·`resetAt` 이 null.
-- `POST /api/applications`: 제한을 넘으면 429 `application_limit`.
+- `POST /api/applications`: 제한을 넘으면 429 `application_limit`. 이메일 인증 전이면 403 `email_unverified`.
+- `POST /api/applications/:id/polish`: Solar 가 칸별 다듬은 글을 제안한다 (저장 안 함). 지원서당 5회(429 `polish_limit`), AI 가 꺼져 있으면 503 `ai_unavailable`.
+- `GET /api/applications/:id/export?format=docx|hwpx`: base64 JSON. DocWorker 가 켜져 있고 원본 양식이 같은 형식이면 원본 양식에 채우고(`source: "form"`), 아니면 표준 파일(`source: "standard"`).
+
+## 상담 채팅 횟수
+- 보낸 채팅(답·모르겠어요·건너뛰기) 1개가 1회, 한 주 12회다. 첫 질문은 세지 않는다. 달력 주(일요일 0시 KST)로 센다 (`core/src/api/explore/quota.rs` `week_start`, `chat_quota_config`). 저장 키는 `chat:<계정 id>`. 팀 계정은 제외한다.
+- `POST /api/explore/chat` 에 `{more:true}` 를 보내면 같은 상담에서 후속 질문을 이어 받는다 (최대 12문항, `chat.rs` `MAX_TOTAL_QUESTIONS`). 응답에 `quota`·`maxQuestions` 가 있다.
 
 ## 코드 규칙 (꼭 지킨다)
 골든이 JS 와 같은 결과를 기대한다. 아래 규칙을 어기면 골든 테스트가 깨진다.
