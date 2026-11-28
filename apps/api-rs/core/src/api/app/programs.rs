@@ -61,9 +61,29 @@ fn integer(req: &Req, key: &str) -> Result<Option<f64>, HttpError> {
     }
 }
 
+fn resource_program(r: &Value) -> Value {
+    json!({
+        "id": r["id"], "title": r["title"],
+        "agency": r["agency"].as_str().unwrap_or(""),
+        "url": r["url"].as_str().unwrap_or(""),
+        "category": r["type"].as_str().unwrap_or(""),
+        "region": r["regions"].as_array().and_then(|a| a.first()).and_then(Value::as_str),
+        "recruiting": r["recruitStatus"] != "closed",
+        "startDate": r["startDate"], "endDate": r["endDate"],
+        "registeredAt": r["startDate"].as_str().unwrap_or("1970-01-01"),
+        "tags": [], "target": r["target"], "bizYears": null, "targetAge": null,
+        "content": r["content"].as_str().unwrap_or("")
+    })
+}
+
 /// GET /api/home
 pub async fn home(cx: &mut Cx<'_>, _req: &Req) -> HResult {
-    let programs = Store::new(cx.kv, cx.now).programs();
+    let programs = if crate::api::kstartup::store::resources(cx.kv).is_empty() {
+        Store::new(cx.kv, cx.now).programs()
+    } else {
+        crate::api::explore::state::resources_now(cx)
+            .iter().map(resource_program).collect()
+    };
     Resp::ok(query::home_summary(&programs, cx.now))
 }
 
@@ -178,4 +198,52 @@ pub async fn type_test(cx: &mut Cx<'_>, req: &Req) -> HResult {
         saved = true;
     }
     Resp::ok(json!({"result": result, "saved": saved}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{api::kstartup::store, testkit::TestApp};
+
+    #[test]
+    fn home_uses_seeds_when_store_empty() {
+        let mut app = TestApp::new();
+        let mut client = app.client();
+        let (status, body, _) = app.call(&mut client, "GET", "/api/home", None);
+        assert_eq!(status, 200);
+        let cards = body["closingSoon"].as_array().unwrap();
+        assert!(!cards.is_empty());
+        assert!(cards.iter().all(|c| c["program"]["id"].as_str().unwrap().starts_with("T-")));
+    }
+
+    #[test]
+    fn home_uses_merged_resources_when_store_has_announcements() {
+        let mut app = TestApp::new();
+        let resource = |id, status| json!({
+            "id": id, "type": "지원사업", "title": "Announcement", "agency": "Agency",
+            "url": null, "target": null, "stages": [], "content": "Content",
+            "procedure": null, "prep": null, "regions": [], "affiliationLimit": null,
+            "costPeriod": null, "recruitStatus": status, "endDate": "2026-11-30",
+            "startDate": null, "checkedAt": null, "sourceExcerpt": null,
+            "industryTags": [], "capabilityTags": [], "contextIds": [],
+            "conditions": null, "test": false
+        });
+        store::save(&mut app.kv, &[resource("ks-open-home", "open"), resource("ks-closed-home", "closed")]);
+        assert_eq!(store::resources(&app.kv).len(), 2);
+        let static_open = crate::shared::data::resources().iter().filter(|r| {
+            r["type"] != "지원사업" && r["recruitStatus"] != "closed"
+                && !crate::shared::date::is_closed(r["endDate"].as_str(), app.now)
+        }).count();
+        let mut client = app.client();
+        let (status, body, _) = app.call(&mut client, "GET", "/api/home", None);
+        assert_eq!(status, 200);
+        assert_eq!(body["openCount"], json!(static_open + 1));
+        let cards = body["closingSoon"].as_array().unwrap();
+        let open = cards.iter().find(|c| c["program"]["id"] == "ks-open-home").unwrap();
+        assert_eq!(open["dDay"], 3);
+        assert!(cards.iter().all(|c| {
+            let id = c["program"]["id"].as_str().unwrap();
+            !id.starts_with("T-") && id != "ks-closed-home"
+        }));
+    }
 }
