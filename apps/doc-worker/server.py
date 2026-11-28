@@ -23,7 +23,7 @@ DOWNLOAD_MAX = 50 * 1024 * 1024
 BODY_MAX = 80 * 1024 * 1024  # base64 요청 본문
 UNZIP_MAX = 100 * 1024 * 1024  # 압축을 푼 양식 전체 크기 (압축 폭탄 방지)
 TIMEOUT = 10
-DOC_EXTS = ("hwpx", "hwp", "docx", "pdf")
+DOC_EXTS = ("hwpx", "hwp", "docx", "pptx", "pdf")
 
 
 class ApiError(Exception):
@@ -118,6 +118,8 @@ def kind_of(name, data=None):
                     return "hwpx"
                 if "word/document.xml" in names:
                     return "docx"
+                if "ppt/presentation.xml" in names:
+                    return "pptx"
             except zipfile.BadZipFile:
                 pass
     return "unknown"
@@ -391,6 +393,7 @@ def fill_table_xml(xml, values, spec):
 
 DOCX_SPEC = dict(tr="w:tr", tc="w:tc", t="w:t", p="w:p", run="w:r")
 HWPX_SPEC = dict(tr="hp:tr", tc="hp:tc", t="hp:t", p="hp:p", run="hp:run")
+PPTX_SPEC = dict(tr="a:tr", tc="a:tc", t="a:t", p="a:p", run="a:r")
 
 
 def fill_paragraphs_docx(xml, values, filled):
@@ -487,6 +490,50 @@ def fill_hwpx(data, values):
     return _rewrite_zip(data, edits), filled
 
 
+def fill_paragraphs_pptx(xml, values, filled):
+    """표 밖의 "라벨:" 문단 뒤에 값을 이어 붙인다 (슬라이드 글상자용)."""
+    pending = {norm(k): k for k in values if k not in filled and str(values[k]).strip()}
+    if not pending:
+        return xml
+    out, pos = [], 0
+    for m in re.finditer(r"<a:p(?:\s[^>]*)?>.*?</a:p>", xml, _CELL_FLAGS):
+        para = m.group(0)
+        text = _text_of(para, "a:t").strip()
+        key = norm(text)
+        if text and text[-1] in ":：" and key in pending:
+            orig = pending.pop(key)
+            run = f"<a:r><a:t> {xml_escape(str(values[orig]))}</a:t></a:r>"
+            end = para.rfind("<a:endParaRPr")
+            i = end if end != -1 else para.rfind("</a:p>")
+            para = para[:i] + run + para[i:]
+            filled.append(orig)
+        out.append(xml[pos:m.start()])
+        out.append(para)
+        pos = m.end()
+    out.append(xml[pos:])
+    return "".join(out)
+
+
+def fill_pptx(data, values):
+    z = _open_zip(data)
+    slides = sorted((n for n in z.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)), key=lambda n: int(re.search(r"(\d+)", n.rsplit("/", 1)[1]).group(1)))
+    if not slides:
+        raise ApiError(400, "bad_request", "PPTX 구조가 아닙니다")
+    edits, filled = {}, []
+    remaining = dict(values)
+    for n in slides:
+        xml = z.read(n).decode("utf-8")
+        xml, f = fill_table_xml(xml, remaining, PPTX_SPEC)
+        for k in f:
+            remaining.pop(k, None)
+        xml = fill_paragraphs_pptx(xml, remaining, f)
+        for k in f:
+            remaining.pop(k, None)
+        filled += f
+        edits[n] = xml.encode("utf-8")
+    return _rewrite_zip(data, edits), filled
+
+
 def fill(body):
     name, b64, values = body.get("fileName"), body.get("fileBase64"), body.get("values")
     if not isinstance(name, str) or not isinstance(b64, str) or not isinstance(values, dict):
@@ -499,11 +546,11 @@ def fill(body):
     values = {str(k): str(v) for k, v in values.items() if v is not None}
     kind = kind_of(name, data)
     if kind in ("hwp", "pdf"):
-        raise ApiError(422, "unsupported", f"{kind.upper()} 는 채우기를 지원하지 않습니다 (DOCX·HWPX 만)")
-    if kind not in ("docx", "hwpx"):
+        raise ApiError(422, "unsupported", f"{kind.upper()} 는 채우기를 지원하지 않습니다 (DOCX·HWPX·PPTX 만)")
+    if kind not in ("docx", "hwpx", "pptx"):
         raise ApiError(400, "bad_request", "알 수 없는 파일 형식입니다")
     try:
-        out, filled = (fill_docx if kind == "docx" else fill_hwpx)(data, values)
+        out, filled = {"docx": fill_docx, "hwpx": fill_hwpx, "pptx": fill_pptx}[kind](data, values)
     except zipfile.BadZipFile:
         raise ApiError(400, "bad_request", "손상된 파일입니다")
     missing = [k for k in values if k not in filled]

@@ -36,6 +36,25 @@ def docx_bytes():
     return buf.getvalue()
 
 
+def pptx_bytes():
+    A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+    slide = (
+        f'<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:p="p" {A}><p:cSld><p:spTree>'
+        '<p:graphicFrame><a:graphic><a:graphicData><a:tbl>'
+        '<a:tr h="1"><a:tc><a:txBody><a:p><a:r><a:t>성명</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>'
+        '<a:tc><a:txBody><a:p><a:endParaRPr lang="ko-KR"/></a:p></a:txBody><a:tcPr/></a:tc></a:tr>'
+        '</a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
+        '<p:sp><p:txBody><a:p><a:r><a:t>창업 아이템명 :</a:t></a:r><a:endParaRPr lang="ko-KR"/></a:p></p:txBody></p:sp>'
+        '</p:spTree></p:cSld></p:sld>'
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("ppt/presentation.xml", "<p:presentation xmlns:p=\"p\"/>")
+        z.writestr("ppt/slides/slide1.xml", slide)
+    return buf.getvalue()
+
+
 def hwpx_bytes():
     sec = (
         '<?xml version="1.0" encoding="UTF-8"?><hs:sec xmlns:hs="s" xmlns:hp="p">'
@@ -259,6 +278,14 @@ class EndpointTests(Base):
 class FillTests(Base):
     def fill(self, data, name, values):
         return post(self.w, "/fill", {"fileBase64": base64.b64encode(data).decode(), "fileName": name, "values": values})
+
+    def test_pptx_table_and_label_paragraph(self):
+        st, body = self.fill(pptx_bytes(), "a.pptx", {"성명": "홍길동", "창업 아이템명": "도시락 구독", "없는 칸": "x"})
+        self.assertEqual(st, 200)
+        self.assertEqual(sorted(body["filled"]), sorted(["성명", "창업 아이템명"]))
+        xml = zipfile.ZipFile(io.BytesIO(base64.b64decode(body["fileBase64"]))).read("ppt/slides/slide1.xml").decode()
+        self.assertIn("<a:t>홍길동</a:t>", xml)
+        self.assertIn("창업 아이템명 :</a:t></a:r><a:r><a:t> 도시락 구독</a:t></a:r><a:endParaRPr", xml)
 
     def test_docx(self):
         st, body = self.fill(docx_bytes(), "a.docx", {

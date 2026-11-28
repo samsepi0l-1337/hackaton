@@ -418,16 +418,20 @@ pub async fn export(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     if !["docx", "hwpx"].contains(&format) { return Err(HttpError::bad("format은 docx 또는 hwpx예요")); }
     let p = program(cx, a["programId"].as_str().unwrap_or("")).ok_or_else(|| HttpError::bad("요청을 처리하지 못했어요"))?;
     let mut values = Map::new();
-    let mut rows = Vec::new();
+    let (mut applicant, mut body) = (Vec::new(), Vec::new());
     for f in a["fields"].as_array().into_iter().flatten() {
         let key = f["key"].as_str().unwrap_or("");
         let label = f["label"].as_str().unwrap_or("");
         let value = match a["approval"]["values"].as_object() { Some(m) => m.get(key).and_then(Value::as_str).unwrap_or(""), None => f["value"].as_str().unwrap_or("") };
         if !value.trim().is_empty() { values.insert(label.into(), json!(value)); }
-        rows.push((label.to_owned(), if value.is_empty() && f["identity"] == true { "(직접 작성)".into() } else { value.into() }));
+        // 본인 정보 칸은 비어 있으면 손으로 쓸 수 있게 빈칸으로 둔다.
+        let row = (label.to_owned(), value.to_owned());
+        if f["identity"] == true { applicant.push(row) } else { body.push(row) }
     }
-    let mime = if format == "docx" { "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } else { "application/hwp+zip" };
-    if cx.env("DOC_WORKER") == Some("1") && a["formKind"] == format && a["formUrl"].as_str().is_some_and(|s| !s.is_empty()) {
+    let mime_of = mime_for;
+    // 공고 원본 양식이 채울 수 있는 형식(DOCX·HWPX·PPTX)이면, 고른 형식과 달라도 원본 양식에 채운다.
+    let form_kind = a["formKind"].as_str().unwrap_or("");
+    if cx.env("DOC_WORKER") == Some("1") && ["docx", "hwpx", "pptx"].contains(&form_kind) && a["formUrl"].as_str().is_some_and(|s| !s.is_empty()) {
         let ports = cx.ports;
         let attempt = async {
             let dl = ports.doc_worker("/download", &json!({"url":a["formUrl"],"referer":p["url"]})).await?.ok()?;
@@ -437,20 +441,86 @@ pub async fn export(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
             let filled = ports.doc_worker("/fill", &json!({"fileName":name,"fileBase64":data,"values":values})).await?.ok()?;
             if !filled.ok() { return None; }
             let filled = filled.json()?;
+            if filled["filled"].as_array().is_none_or(|x| x.is_empty()) { return None; }
             Some((filled["fileName"].as_str()?.to_owned(), filled["fileBase64"].as_str()?.to_owned()))
         };
         if let Some(Some((file_name, data))) = crate::time::timeout(ports, 30_000, attempt).await {
-            return Resp::ok(json!({"fileName":file_name,"mimeType":mime,"fileBase64":data,"source":"form"}));
+            return Resp::ok(json!({"fileName":file_name,"mimeType":mime_of(form_kind),"fileBase64":data,"source":"form","format":form_kind}));
         }
-        ports.log("warn", "[export] 양식 채우기 실패, 기본 양식을 씁니다");
+        ports.log("warn", "[export] 원본 양식 채우기 실패, 공통 양식을 씁니다");
     }
     let title = p["title"].as_str().unwrap_or("");
     let agency = p["agency"].as_str().unwrap_or("");
-    let date = DateTime::<Utc>::from_timestamp_millis(cx.now + 9 * 3_600_000).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
-    let footer = format!("해보까에서 작성한 초안입니다. 제출 전에 공고 원본 양식과 내용을 확인해 주세요. 작성일 {date}");
-    let data = if format == "docx" { super::export::standard_docx(title, agency, &rows, &footer) } else { super::export::standard_hwpx(title, agency, &rows, &footer) };
+    let date = DateTime::<Utc>::from_timestamp_millis(cx.now + 9 * 3_600_000).map(|d| format!("{}년 {}월 {}일", d.year(), d.month(), d.day())).unwrap_or_default();
+    let doc = super::export::ExportDoc { program: title, agency, date: &date, applicant: &applicant, body: &body };
+    let data = if format == "docx" { super::export::standard_docx(&doc) } else { super::export::standard_hwpx(&doc) };
     let clean: String = title.chars().take(40).map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
-    Resp::ok(json!({"fileName":format!("{clean} 지원서.{format}"),"mimeType":mime,"fileBase64":base64::engine::general_purpose::STANDARD.encode(data),"source":"standard"}))
+    // 원본 양식이 HWP·PDF 처럼 채울 수 없는 형식이면, 그 양식의 항목 이름으로 공통 양식을 만든다.
+    let source = if a["channel"] == "web" { "standard_form_fields" } else { "standard" };
+    Resp::ok(json!({"fileName":format!("{clean} 지원서.{format}"),"mimeType":mime_of(format),"fileBase64":base64::engine::general_purpose::STANDARD.encode(data),"source":source,"format":format}))
+}
+fn mime_for(kind: &str) -> &'static str {
+    match kind {
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        _ => "application/hwp+zip",
+    }
+}
+/// 공통 양식 항목 이름과 흔히 쓰는 다른 이름. 사용자가 올린 양식의 칸 이름이 달라도 채울 수 있게 한다.
+const LABEL_ALIASES: &[(&str, &[&str])] = &[
+    ("대표자 이름", &["성명", "대표자", "대표자명", "대표자 성명", "신청인", "신청자", "이름"]),
+    ("연락처", &["전화번호", "휴대전화", "휴대폰", "핸드폰", "연락처(휴대폰)", "전화"]),
+    ("이메일", &["e-mail", "email", "전자우편", "메일", "이메일 주소"]),
+    ("창업 아이템명", &["아이템명", "창업아이템", "사업명", "과제명", "아이템", "서비스명", "제품명"]),
+    ("문제 인식", &["문제인식", "추진 배경", "개발 동기", "창업 동기", "필요성", "배경 및 필요성"]),
+    ("해결 방안", &["실현 가능성", "실현가능성", "솔루션", "해결방안", "개발 방안", "아이템 개요", "사업 개요"]),
+    ("목표 시장과 고객", &["목표 시장", "목표시장", "시장 분석", "고객", "타깃 고객", "목표 고객"]),
+    ("사업화 계획", &["성장 전략", "성장전략", "사업화 전략", "추진 계획", "사업 추진 계획", "향후 계획"]),
+];
+/// POST /api/applications/:id/form-fill  { fileName, fileBase64 }
+/// 사용자가 찾은 제출 양식(DOCX·HWPX)에 지원서 내용을 채워 돌려준다.
+pub async fn form_fill(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
+    use base64::Engine;
+    let a = own(cx, id)?;
+    let b = req.json_object()?;
+    let name = b.get("fileName").and_then(Value::as_str).unwrap_or("");
+    let data = b.get("fileBase64").and_then(Value::as_str).unwrap_or("");
+    let lower = name.to_lowercase();
+    let kind = ["docx", "hwpx", "pptx"].into_iter().find(|k| lower.ends_with(&format!(".{k}"))).unwrap_or("");
+    if kind.is_empty() {
+        return Err(HttpError::new(422, "unsupported", "DOCX·HWPX·PPTX 양식만 채울 수 있어요. HWP·PDF·PPT 양식은 한글·워드·파워포인트에서 HWPX·DOCX·PPTX로 저장한 뒤 올려 주세요."));
+    }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|_| HttpError::bad("파일을 읽지 못했어요"))?;
+    if bytes.is_empty() || bytes.len() > 4 * 1024 * 1024 { return Err(HttpError::bad("4MB 이하의 양식 파일을 올려 주세요")); }
+    if cx.env("DOC_WORKER") != Some("1") { return Err(HttpError::new(503, "doc_worker_off", "지금은 양식 채우기를 쓸 수 없어요. 공통 양식으로 내려받아 주세요.")); }
+    let mut values = Map::new();
+    for f in a["fields"].as_array().into_iter().flatten() {
+        let key = f["key"].as_str().unwrap_or("");
+        let label = f["label"].as_str().unwrap_or("");
+        let value = match a["approval"]["values"].as_object() { Some(m) => m.get(key).and_then(Value::as_str).unwrap_or(""), None => f["value"].as_str().unwrap_or("") };
+        if value.trim().is_empty() { continue; }
+        values.insert(label.into(), json!(value));
+        for (base, alts) in LABEL_ALIASES {
+            if *base == label { for alt in *alts { values.entry(alt.to_string()).or_insert(json!(value)); } }
+        }
+    }
+    if values.is_empty() { return Err(HttpError::bad("채울 내용이 없어요. 지원서를 먼저 작성해 주세요")); }
+    let ports = cx.ports;
+    let call = async { ports.doc_worker("/fill", &json!({"fileName":name,"fileBase64":data,"values":values})).await?.ok() };
+    let res = crate::time::timeout(ports, 30_000, call).await.flatten().ok_or_else(|| HttpError::new(502, "fill_failed", "양식을 채우지 못했어요. 잠시 뒤 다시 시도해 주세요."))?;
+    let body = res.json().unwrap_or(Value::Null);
+    if !res.ok() {
+        return Err(HttpError::new(422, "fill_failed", body["error"]["message"].as_str().unwrap_or("양식을 채우지 못했어요")));
+    }
+    let filled: Vec<String> = body["filled"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect();
+    if filled.is_empty() {
+        return Err(HttpError::new(422, "no_match", "양식에서 채울 칸을 찾지 못했어요. 항목 이름 옆에 빈 칸이 있는 표 양식인지 확인해 주세요."));
+    }
+    // 채운 칸을 우리 항목 이름으로 돌려 보여 준다 (다른 이름으로 채운 경우 포함).
+    let ours: Vec<String> = a["fields"].as_array().into_iter().flatten().filter_map(|f| f["label"].as_str()).filter(|l| {
+        filled.iter().any(|x| x == l) || LABEL_ALIASES.iter().any(|(base, alts)| base == l && alts.iter().any(|alt| filled.iter().any(|x| x == alt)))
+    }).map(str::to_owned).collect();
+    Resp::ok(json!({"fileName":body["fileName"].as_str().unwrap_or(name),"mimeType":mime_for(kind),"fileBase64":body["fileBase64"],"filled":ours,"format":kind}))
 }
 /// POST /api/applications/:id/approve
 pub async fn approve(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
@@ -567,6 +637,33 @@ mod tests {
         assert_eq!(stored["polishCount"], 5, "count survives the stored-record check");
         assert_eq!(stored["fields"][1]["value"], "점심 도시락", "polish does not save values");
         assert_eq!(block_on(polish(&mut cx, &req, "a")).unwrap_err().status, 429);
+    }
+
+    #[test]
+    fn form_fill_uses_aliases_and_reports_filled_fields() {
+        let mut kv = MemKv::default();
+        let env = Env::from([("DOC_WORKER".into(), "1".into())]);
+        let opts = AppOpts::default(); let ports = FakePorts::default(); let now = 1_795_741_200_000;
+        *ports.doc_worker.borrow_mut() = Some(Box::new(|path, body| {
+            assert_eq!(path, "/fill");
+            // 사용자 양식의 칸 이름은 "성명"과 "사업명" 이다.
+            assert_eq!(body["values"]["성명"], "김해보");
+            assert_eq!(body["values"]["사업명"], "도시락 구독");
+            Ok(crate::ports::HttpResp { status: 200, headers: vec![], body: json!({"fileName":"form.hwpx","fileBase64":"UEsDBA==","filled":["성명","사업명"],"missing":[]}).to_string().into_bytes() })
+        }));
+        let fields = json!([{"key":"f1","label":"대표자 이름","maxLength":20,"required":true,"identity":true,"value":"김해보"},{"key":"f2","label":"창업 아이템명","maxLength":50,"required":true,"value":"도시락 구독"}]);
+        Store::new(&mut kv, now).save_application(json!({"id":"a","userId":"u","programId":"p","status":"drafting","channel":"mock","formFileName":"form","fields":fields,"approval":null,"receiptNo":null,"receiptImageUrl":null,"failReason":null,"retries":0,"history":[],"createdAt":iso(now),"updatedAt":iso(now)})).unwrap();
+        let mut cx = Cx { env: &env, kv: &mut kv, ports: &ports, opts: &opts, now, user: Some(json!({"id":"u"})) };
+        let bad = Req { body: Some(r#"{"fileName":"form.hwp","fileBase64":"AAAA"}"#.into()), ..Req::default() };
+        assert_eq!(block_on(form_fill(&mut cx, &bad, "a")).unwrap_err().status, 422);
+        let req = Req { body: Some(r#"{"fileName":"form.hwpx","fileBase64":"UEsDBA=="}"#.into()), ..Req::default() };
+        let r = block_on(form_fill(&mut cx, &req, "a")).unwrap();
+        let v: Value = serde_json::from_str(&r.body).unwrap();
+        assert_eq!(v["filled"], json!(["대표자 이름", "창업 아이템명"]));
+        assert_eq!(v["format"], "hwpx");
+        let env_off = Env::new();
+        let mut cx = Cx { env: &env_off, kv: cx.kv, ports: &ports, opts: &opts, now, user: Some(json!({"id":"u"})) };
+        assert_eq!(block_on(form_fill(&mut cx, &req, "a")).unwrap_err().status, 503);
     }
 
     #[test]
