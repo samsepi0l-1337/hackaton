@@ -38,7 +38,7 @@ await step('download button saves the draft and reports the form source', async 
   await page.fill('.apply-page form textarea >> nth=0', '내려받기 전에 고친 문장');
   await page.evaluate(() => document.querySelector('.apply-export').scrollIntoView({ block: 'center' }));
   await page.click('.apply-export button:has-text("워드(DOCX)")');
-  await seeText('표준 지원서 양식으로 내려받았어요');
+  await seeText('공통 양식(공문 형식)으로 내려받았어요');
   const a = await api('GET', '/api/applications/' + encodeURIComponent(appId));
   assert(a.body.fields.some((f) => f.value === '내려받기 전에 고친 문장'), 'draft saved before export');
 });

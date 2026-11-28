@@ -1,66 +1,233 @@
-//! Standard downloadable application documents.
+//! 내려받는 지원서 공통 양식 (공문 형식). 공고 원본 양식을 채울 수 없을 때 쓴다.
+//! 같은 문서 모델을 DOCX 와 HWPX 로 그린다.
 use super::zip::stored_zip;
+
+/// 공통 양식에 들어갈 내용. `applicant` 는 본인 정보 칸, `body` 는 사업 내용 칸이다.
+pub struct ExportDoc<'a> {
+    pub program: &'a str,
+    pub agency: &'a str,
+    /// 예: "2026년 11월 28일"
+    pub date: &'a str,
+    pub applicant: &'a [(String, String)],
+    pub body: &'a [(String, String)],
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Style { Title, Subtitle, Heading, Body, Center, Right, Recipient, Note }
+#[derive(Clone, Copy, PartialEq)]
+enum CellKind { Label, Value }
+enum Block { P(Style, String), Rule, Gap, Table(Vec<(String, String)>) }
+
+pub const DISCLAIMER: &str = "※ 해보까에서 작성한 초안입니다. 제출 전에 공고 원본 양식과 내용을 확인해 주세요.";
+
+fn blocks(d: &ExportDoc) -> Vec<Block> {
+    let mut b = vec![
+        Block::P(Style::Title, "창업지원사업 지원서".into()),
+        Block::P(Style::Subtitle, format!("「{}」", d.program)),
+        Block::Rule,
+        Block::Table(vec![
+            ("사업명".into(), d.program.into()),
+            ("주관기관".into(), d.agency.into()),
+            ("작성일".into(), d.date.into()),
+        ]),
+    ];
+    let mut n = 1;
+    if !d.applicant.is_empty() {
+        b.push(Block::P(Style::Heading, format!("{n}. 신청인 정보")));
+        b.push(Block::Table(d.applicant.to_vec()));
+        n += 1;
+    }
+    b.push(Block::P(Style::Heading, format!("{n}. 사업 내용")));
+    b.push(Block::Table(d.body.to_vec()));
+    b.push(Block::Gap);
+    b.push(Block::P(Style::Center, format!("위와 같이 「{}」에 지원하며, 작성한 내용이 사실임을 확인합니다.", d.program)));
+    b.push(Block::Gap);
+    b.push(Block::P(Style::Center, d.date.into()));
+    b.push(Block::Gap);
+    b.push(Block::P(Style::Right, "신청인                              (서명 또는 인)".into()));
+    b.push(Block::Gap);
+    b.push(Block::P(Style::Recipient, format!("{} 귀하", if d.agency.is_empty() { "주관기관" } else { d.agency })));
+    b.push(Block::Gap);
+    b.push(Block::P(Style::Note, DISCLAIMER.into()));
+    b
+}
 
 fn escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
 }
-fn word_para(text: &str) -> String {
-    format!("<w:p><w:r><w:rPr><w:rFonts w:ascii=\"맑은 고딕\" w:hAnsi=\"맑은 고딕\" w:eastAsia=\"맑은 고딕\"/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>", escape(text))
-}
-pub fn standard_docx(title: &str, agency: &str, rows: &[(String, String)], footer: &str) -> Vec<u8> {
-    let mut body = format!("{}{}<w:tbl><w:tblPr><w:tblBorders><w:top w:val=\"single\" w:sz=\"4\"/><w:left w:val=\"single\" w:sz=\"4\"/><w:bottom w:val=\"single\" w:sz=\"4\"/><w:right w:val=\"single\" w:sz=\"4\"/><w:insideH w:val=\"single\" w:sz=\"4\"/><w:insideV w:val=\"single\" w:sz=\"4\"/></w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w=\"2800\"/><w:gridCol w:w=\"6200\"/></w:tblGrid>", word_para(&format!("{title} 지원서")), word_para(agency));
-    for (label, value) in rows {
-        body.push_str("<w:tr>");
-        for cell in [label, value] {
-            body.push_str("<w:tc><w:tcPr/>");
-            for line in cell.split('\n') { body.push_str(&word_para(line)); }
-            body.push_str("</w:tc>");
-        }
-        body.push_str("</w:tr>");
+
+// ---------- DOCX ----------
+const FONT: &str = "맑은 고딕";
+/// (크기 half-pt, 굵게, 색, 정렬, 앞 간격, 뒤 간격) twip
+fn docx_style(s: Style) -> (u32, bool, &'static str, &'static str, u32, u32) {
+    match s {
+        Style::Title => (40, true, "000000", "center", 0, 120),
+        Style::Subtitle => (24, false, "333333", "center", 0, 160),
+        Style::Heading => (24, true, "000000", "left", 360, 120),
+        Style::Body => (20, false, "000000", "both", 0, 0),
+        Style::Center => (21, false, "000000", "center", 0, 0),
+        Style::Right => (21, false, "000000", "right", 0, 0),
+        Style::Recipient => (30, true, "000000", "left", 0, 0),
+        Style::Note => (17, false, "666666", "left", 0, 0),
     }
-    body.push_str("</w:tbl>"); body.push_str(&word_para(footer));
-    body.push_str("<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\"/></w:sectPr>");
+}
+fn docx_run(text: &str, size: u32, bold: bool, color: &str) -> String {
+    format!(
+        "<w:r><w:rPr><w:rFonts w:ascii=\"{FONT}\" w:hAnsi=\"{FONT}\" w:eastAsia=\"{FONT}\"/>{}<w:color w:val=\"{color}\"/><w:sz w:val=\"{size}\"/><w:szCs w:val=\"{size}\"/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r>",
+        if bold { "<w:b/>" } else { "" },
+        escape(text)
+    )
+}
+fn docx_para(s: Style, text: &str) -> String {
+    let (size, bold, color, jc, before, after) = docx_style(s);
+    format!("<w:p><w:pPr><w:spacing w:before=\"{before}\" w:after=\"{after}\" w:line=\"300\" w:lineRule=\"auto\"/><w:jc w:val=\"{jc}\"/></w:pPr>{}</w:p>", docx_run(text, size, bold, color))
+}
+fn docx_cell(kind: CellKind, text: &str, width: u32) -> String {
+    let shade = if kind == CellKind::Label { "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"EEF1F5\"/>" } else { "" };
+    let jc = if kind == CellKind::Label { "center" } else { "both" };
+    let mut out = format!("<w:tc><w:tcPr><w:tcW w:w=\"{width}\" w:type=\"dxa\"/>{shade}<w:vAlign w:val=\"center\"/></w:tcPr>");
+    for line in text.split('\n') {
+        out.push_str(&format!("<w:p><w:pPr><w:spacing w:before=\"40\" w:after=\"40\" w:line=\"300\" w:lineRule=\"auto\"/><w:jc w:val=\"{jc}\"/></w:pPr>{}</w:p>", docx_run(line, 20, kind == CellKind::Label, "000000")));
+    }
+    out.push_str("</w:tc>");
+    out
+}
+fn docx_table(rows: &[(String, String)]) -> String {
+    let (lw, vw) = (2400, 7238);
+    let b = "w:val=\"single\" w:sz=\"6\" w:space=\"0\" w:color=\"7F7F7F\"";
+    let mut t = format!("<w:tbl><w:tblPr><w:tblW w:w=\"{}\" w:type=\"dxa\"/><w:tblBorders><w:top {b}/><w:left {b}/><w:bottom {b}/><w:right {b}/><w:insideH {b}/><w:insideV {b}/></w:tblBorders><w:tblLayout w:type=\"fixed\"/><w:tblCellMar><w:top w:w=\"80\" w:type=\"dxa\"/><w:left w:w=\"140\" w:type=\"dxa\"/><w:bottom w:w=\"80\" w:type=\"dxa\"/><w:right w:w=\"140\" w:type=\"dxa\"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w=\"{lw}\"/><w:gridCol w:w=\"{vw}\"/></w:tblGrid>", lw + vw);
+    for (label, value) in rows {
+        t.push_str(&format!("<w:tr><w:trPr><w:trHeight w:val=\"440\"/></w:trPr>{}{}</w:tr>", docx_cell(CellKind::Label, label, lw), docx_cell(CellKind::Value, value, vw)));
+    }
+    t.push_str("</w:tbl>");
+    t
+}
+pub fn standard_docx(d: &ExportDoc) -> Vec<u8> {
+    let mut body = String::new();
+    for b in blocks(d) {
+        match b {
+            Block::P(s, text) => body.push_str(&docx_para(s, &text)),
+            Block::Rule => body.push_str("<w:p><w:pPr><w:pBdr><w:bottom w:val=\"single\" w:sz=\"12\" w:space=\"1\" w:color=\"1F3A6B\"/></w:pBdr><w:spacing w:before=\"0\" w:after=\"200\"/></w:pPr></w:p>"),
+            Block::Gap => body.push_str("<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\"/></w:pPr></w:p>"),
+            Block::Table(rows) => body.push_str(&docx_table(&rows)),
+        }
+    }
+    body.push_str("<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1418\" w:right=\"1134\" w:bottom=\"1418\" w:left=\"1134\" w:header=\"851\" w:footer=\"851\" w:gutter=\"0\"/></w:sectPr>");
     let doc = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>{body}</w:body></w:document>");
-    let types = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>";
-    let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>";
+    let types = b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>";
+    let rels = b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>";
     stored_zip(&[("[Content_Types].xml", types), ("_rels/.rels", rels), ("word/document.xml", doc.as_bytes())])
 }
 
-fn hwp_para(text: &str) -> String {
-    format!("<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\" pageBreak=\"0\" columnBreak=\"0\" merged=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>{}</hp:t></hp:run></hp:p>", escape(text))
-}
-pub fn standard_hwpx(title: &str, agency: &str, rows: &[(String, String)], footer: &str) -> Vec<u8> {
-    let version = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><hv:HCFVersion xmlns:hv=\"http://www.hancom.co.kr/hwpml/2011/version\" targetApplication=\"WORDPROCESSOR\" major=\"5\" minor=\"1\" micro=\"0\" buildNumber=\"1\"/>";
-    let container = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><container xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\" version=\"1.0\"><rootfiles><rootfile full-path=\"Contents/content.hpf\" media-type=\"application/hwpml-package+xml\"/></rootfiles></container>";
-    let manifest = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\"/>";
-    let content = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><opf:package xmlns:opf=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"bookid\"><opf:metadata/><opf:manifest><opf:item id=\"header\" href=\"header.xml\" media-type=\"application/xml\"/><opf:item id=\"section0\" href=\"section0.xml\" media-type=\"application/xml\"/></opf:manifest><opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/><opf:itemref idref=\"section0\" linear=\"yes\"/></opf:spine></opf:package>";
-    let header = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><hh:head xmlns:hh=\"http://www.hancom.co.kr/hwpml/2011/head\" xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" version=\"1.5\" secCnt=\"1\"><hh:beginNum page=\"1\" footnote=\"1\" endnote=\"1\" pic=\"1\" tbl=\"1\" equation=\"1\"/><hh:refList><hh:fontfaces itemCnt=\"1\"><hh:fontface lang=\"HANGUL\" fontCnt=\"1\"><hh:font id=\"0\" face=\"\xeb\xa7\x91\xec\x9d\x80 \xea\xb3\xa0\xeb\x94\x95\" type=\"TTF\" isEmbedded=\"0\"/></hh:fontface></hh:fontfaces><hh:borderFills itemCnt=\"1\"><hh:borderFill id=\"1\" threeD=\"0\" shadow=\"0\" centerLine=\"NONE\" breakCellSeparateLine=\"0\"><hh:slash type=\"NONE\"/><hh:backSlash type=\"NONE\"/><hh:leftBorder type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\"/><hh:rightBorder type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\"/><hh:topBorder type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\"/><hh:bottomBorder type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\"/><hh:diagonal type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\"/></hh:borderFill></hh:borderFills><hh:charProperties itemCnt=\"1\"><hh:charPr id=\"0\" height=\"1000\" textColor=\"#000000\" shadeColor=\"none\" useFontSpace=\"0\" useKerning=\"0\" symMark=\"NONE\" borderFillIDRef=\"1\"><hh:fontRef hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/><hh:ratio hangul=\"100\" latin=\"100\" hanja=\"100\" japanese=\"100\" other=\"100\" symbol=\"100\" user=\"100\"/><hh:spacing hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/><hh:relSz hangul=\"100\" latin=\"100\" hanja=\"100\" japanese=\"100\" other=\"100\" symbol=\"100\" user=\"100\"/><hh:offset hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/></hh:charPr></hh:charProperties><hh:paraProperties itemCnt=\"1\"><hh:paraPr id=\"0\" tabPrIDRef=\"0\" condense=\"0\" fontLineHeight=\"0\" snapToGrid=\"1\" suppressLineNumbers=\"0\" checked=\"0\"><hh:align horizontal=\"LEFT\" vertical=\"BASELINE\"/><hh:breakSetting breakLatinWord=\"KEEP_WORD\" breakNonLatinWord=\"KEEP_WORD\" widowOrphan=\"0\" keepWithNext=\"0\" keepLines=\"0\" pageBreakBefore=\"0\" lineWrap=\"BREAK\"/></hh:paraPr></hh:paraProperties><hh:styles itemCnt=\"1\"><hh:style id=\"0\" type=\"PARA\" name=\"Normal\" engName=\"Normal\" paraPrIDRef=\"0\" charPrIDRef=\"0\" nextStyleIDRef=\"0\" langID=\"1042\" lockForm=\"0\"/></hh:styles></hh:refList></hh:head>";
-    let mut section = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?><hs:sec xmlns:hs=\"http://www.hancom.co.kr/hwpml/2011/section\" xmlns:hp=\"http://www.hancom.co.kr/hwpml/2011/paragraph\" xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\"><hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\" pageBreak=\"0\" columnBreak=\"0\" merged=\"0\"><hp:run charPrIDRef=\"0\"><hp:secPr id=\"0\" textDirection=\"HORIZONTAL\" spaceColumns=\"1134\" tabStop=\"8000\" outlineShapeIDRef=\"0\" memoShapeIDRef=\"0\" textVerticalWidthHead=\"0\"><hp:pagePr landscape=\"WIDELY\" width=\"59528\" height=\"84188\" gutterType=\"LEFT_ONLY\"><hp:margin header=\"4252\" footer=\"4252\" gutter=\"0\" left=\"8504\" right=\"8504\" top=\"5668\" bottom=\"4252\"/></hp:pagePr></hp:secPr></hp:run></hp:p>");
-    section.push_str(&hwp_para(&format!("{title} 지원서"))); section.push_str(&hwp_para(agency));
-    section.push_str(&format!("<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:tbl id=\"1\" zOrder=\"0\" numberingType=\"TABLE\" textWrap=\"TOP_AND_BOTTOM\" textFlow=\"BOTH_SIDES\" lock=\"0\" dropcapstyle=\"None\" pageBreak=\"CELL\" repeatHeader=\"0\" rowCnt=\"{}\" colCnt=\"2\" cellSpacing=\"0\" borderFillIDRef=\"1\" noAdjust=\"0\"><hp:sz width=\"42000\" widthRelTo=\"ABSOLUTE\" height=\"{}\" heightRelTo=\"ABSOLUTE\" protect=\"0\"/><hp:pos treatAsChar=\"1\" affectLSpacing=\"0\" flowWithText=\"1\" allowOverlap=\"0\" holdAnchorAndSO=\"0\" vertRelTo=\"PARA\" horzRelTo=\"COLUMN\" vertAlign=\"TOP\" horzAlign=\"LEFT\" vertOffset=\"0\" horzOffset=\"0\"/><hp:outMargin left=\"0\" right=\"0\" top=\"0\" bottom=\"0\"/><hp:inMargin left=\"200\" right=\"200\" top=\"100\" bottom=\"100\"/>", rows.len(), rows.len()*2000));
-    for (i, (label, value)) in rows.iter().enumerate() {
-        section.push_str("<hp:tr>");
-        for (col, text) in [label, value].iter().enumerate() {
-            let width = if col == 0 { 12000 } else { 30000 };
-            section.push_str(&format!("<hp:tc name=\"\" header=\"0\" hasMargin=\"0\" protect=\"0\" editable=\"0\" dirty=\"0\" borderFillIDRef=\"1\"><hp:subList id=\"0\" textDirection=\"HORIZONTAL\" lineWrap=\"BREAK\" vertAlign=\"CENTER\" linkListIDRef=\"0\" linkListNextIDRef=\"0\" textWidth=\"0\" textHeight=\"0\" hasTextRef=\"0\" hasNumRef=\"0\">"));
-            for line in text.split('\n') { section.push_str(&hwp_para(line)); }
-            section.push_str(&format!("</hp:subList><hp:cellAddr colAddr=\"{col}\" rowAddr=\"{i}\"/><hp:cellSpan colSpan=\"1\" rowSpan=\"1\"/><hp:cellSz width=\"{width}\" height=\"2000\"/><hp:cellMargin left=\"200\" right=\"200\" top=\"100\" bottom=\"100\"/></hp:tc>"));
-        }
-        section.push_str("</hp:tr>");
+// ---------- HWPX (OWPML 2011) ----------
+// charPr id: 0 본문 10pt, 1 굵게 10pt, 2 제목 20pt, 3 부제 12pt, 4 소제목 12pt 굵게, 5 안내 8.5pt 회색, 6 귀하 15pt 굵게, 7 확인 문장 10.5pt
+// paraPr id: 0 양쪽, 1 가운데, 2 오른쪽, 3 소제목(앞 간격), 4 표 칸(가운데), 5 표 칸(양쪽), 6 제목 아래 선
+// borderFill id: 1 없음, 2 표 선, 3 표 선 + 회색 바탕, 4 아래 굵은 선
+fn hwp_style(s: Style) -> (u32, u32) {
+    match s {
+        Style::Title => (2, 1),
+        Style::Subtitle => (3, 1),
+        Style::Heading => (4, 3),
+        Style::Body => (0, 0),
+        Style::Center => (7, 1),
+        Style::Right => (7, 2),
+        Style::Recipient => (6, 0),
+        Style::Note => (5, 0),
     }
-    section.push_str("</hp:tbl></hp:run></hp:p>"); section.push_str(&hwp_para(footer)); section.push_str("</hs:sec>");
-    stored_zip(&[("mimetype", b"application/hwp+zip"), ("version.xml", version), ("META-INF/container.xml", container), ("META-INF/manifest.xml", manifest), ("Contents/content.hpf", content), ("Contents/header.xml", header), ("Contents/section0.xml", section.as_bytes())])
+}
+fn hwp_p(para: u32, chr: u32, text: &str) -> String {
+    format!("<hp:p id=\"0\" paraPrIDRef=\"{para}\" styleIDRef=\"0\" pageBreak=\"0\" columnBreak=\"0\" merged=\"0\"><hp:run charPrIDRef=\"{chr}\"><hp:t>{}</hp:t></hp:run></hp:p>", escape(text))
+}
+const TABLE_W: u32 = 48188; // A4 59528 - 좌우 여백 5670*2
+const LABEL_W: u32 = 11000;
+fn hwp_table(id: usize, rows: &[(String, String)]) -> String {
+    let row_h = 2200;
+    let mut t = format!("<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\" pageBreak=\"0\" columnBreak=\"0\" merged=\"0\"><hp:run charPrIDRef=\"0\"><hp:tbl id=\"{id}\" zOrder=\"{id}\" numberingType=\"TABLE\" textWrap=\"TOP_AND_BOTTOM\" textFlow=\"BOTH_SIDES\" lock=\"0\" dropcapstyle=\"None\" pageBreak=\"CELL\" repeatHeader=\"0\" rowCnt=\"{}\" colCnt=\"2\" cellSpacing=\"0\" borderFillIDRef=\"2\" noAdjust=\"0\"><hp:sz width=\"{TABLE_W}\" widthRelTo=\"ABSOLUTE\" height=\"{}\" heightRelTo=\"ABSOLUTE\" protect=\"0\"/><hp:pos treatAsChar=\"1\" affectLSpacing=\"0\" flowWithText=\"1\" allowOverlap=\"0\" holdAnchorAndSO=\"0\" vertRelTo=\"PARA\" horzRelTo=\"COLUMN\" vertAlign=\"TOP\" horzAlign=\"LEFT\" vertOffset=\"0\" horzOffset=\"0\"/><hp:outMargin left=\"0\" right=\"0\" top=\"0\" bottom=\"0\"/><hp:inMargin left=\"510\" right=\"510\" top=\"283\" bottom=\"283\"/>", rows.len(), rows.len() as u32 * row_h);
+    for (i, (label, value)) in rows.iter().enumerate() {
+        t.push_str("<hp:tr>");
+        for (col, text) in [label, value].iter().enumerate() {
+            let (w, fill, para, chr) = if col == 0 { (LABEL_W, 3, 4, 1) } else { (TABLE_W - LABEL_W, 2, 5, 0) };
+            t.push_str(&format!("<hp:tc name=\"\" header=\"0\" hasMargin=\"0\" protect=\"0\" editable=\"0\" dirty=\"0\" borderFillIDRef=\"{fill}\"><hp:subList id=\"\" textDirection=\"HORIZONTAL\" lineWrap=\"BREAK\" vertAlign=\"CENTER\" linkListIDRef=\"0\" linkListNextIDRef=\"0\" textWidth=\"0\" textHeight=\"0\" hasTextRef=\"0\" hasNumRef=\"0\">"));
+            for line in text.split('\n') { t.push_str(&hwp_p(para, chr, line)); }
+            t.push_str(&format!("</hp:subList><hp:cellAddr colAddr=\"{col}\" rowAddr=\"{i}\"/><hp:cellSpan colSpan=\"1\" rowSpan=\"1\"/><hp:cellSz width=\"{w}\" height=\"{row_h}\"/><hp:cellMargin left=\"510\" right=\"510\" top=\"283\" bottom=\"283\"/></hp:tc>"));
+        }
+        t.push_str("</hp:tr>");
+    }
+    t.push_str("</hp:tbl></hp:run></hp:p>");
+    t
+}
+fn hwp_header() -> String {
+    let langs = ["HANGUL", "LATIN", "HANJA", "JAPANESE", "OTHER", "SYMBOL", "USER"];
+    let mut fonts = String::new();
+    for l in langs { fonts.push_str(&format!("<hh:fontface lang=\"{l}\" fontCnt=\"1\"><hh:font id=\"0\" face=\"{FONT}\" type=\"TTF\" isEmbedded=\"0\"><hh:typeInfo familyType=\"FCAT_GOTHIC\" weight=\"6\" proportion=\"4\" contrast=\"0\" strokeVariation=\"1\" armStyle=\"1\" letterform=\"1\" midline=\"1\" xHeight=\"1\"/></hh:font></hh:fontface>")); }
+    let border = |t: &str, w: &str| format!("<hh:leftBorder type=\"{t}\" width=\"{w}\" color=\"#7F7F7F\"/><hh:rightBorder type=\"{t}\" width=\"{w}\" color=\"#7F7F7F\"/><hh:topBorder type=\"{t}\" width=\"{w}\" color=\"#7F7F7F\"/><hh:bottomBorder type=\"{t}\" width=\"{w}\" color=\"#7F7F7F\"/>");
+    let bf = |id: u32, inner: String, fill: &str| format!("<hh:borderFill id=\"{id}\" threeD=\"0\" shadow=\"0\" centerLine=\"NONE\" breakCellSeparateLine=\"0\"><hh:slash type=\"NONE\" Crooked=\"0\" isCounter=\"0\"/><hh:backSlash type=\"NONE\" Crooked=\"0\" isCounter=\"0\"/>{inner}<hh:diagonal type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\"/>{fill}</hh:borderFill>");
+    let gray = "<hc:fillBrush><hc:winBrush faceColor=\"#EEF1F5\" hatchColor=\"#999999\" alpha=\"0\"/></hc:fillBrush>";
+    let rule = "<hh:leftBorder type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/><hh:rightBorder type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/><hh:topBorder type=\"NONE\" width=\"0.1 mm\" color=\"#000000\"/><hh:bottomBorder type=\"SOLID\" width=\"0.5 mm\" color=\"#1F3A6B\"/>".to_string();
+    let fills = [bf(1, border("NONE", "0.1 mm"), ""), bf(2, border("SOLID", "0.12 mm"), ""), bf(3, border("SOLID", "0.12 mm"), gray), bf(4, rule, "")].concat();
+    let ch = |id: u32, h: u32, color: &str, bold: bool| format!("<hh:charPr id=\"{id}\" height=\"{h}\" textColor=\"{color}\" shadeColor=\"none\" useFontSpace=\"0\" useKerning=\"0\" symMark=\"NONE\" borderFillIDRef=\"1\"><hh:fontRef hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/><hh:ratio hangul=\"100\" latin=\"100\" hanja=\"100\" japanese=\"100\" other=\"100\" symbol=\"100\" user=\"100\"/><hh:spacing hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/><hh:relSz hangul=\"100\" latin=\"100\" hanja=\"100\" japanese=\"100\" other=\"100\" symbol=\"100\" user=\"100\"/><hh:offset hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/>{}<hh:underline type=\"NONE\" shape=\"SOLID\" color=\"#000000\"/><hh:strikeout shape=\"NONE\" color=\"#000000\"/><hh:outline type=\"NONE\"/><hh:shadow type=\"NONE\" color=\"#B2B2B2\" offsetX=\"10\" offsetY=\"10\"/></hh:charPr>", if bold { "<hh:bold/>" } else { "" });
+    let chars = [ch(0, 1000, "#000000", false), ch(1, 1000, "#000000", true), ch(2, 2000, "#000000", true), ch(3, 1200, "#333333", false), ch(4, 1200, "#000000", true), ch(5, 850, "#666666", false), ch(6, 1500, "#000000", true), ch(7, 1050, "#000000", false)].concat();
+    let pp = |id: u32, align: &str, prev: u32, next: u32, line: u32, bfill: u32| format!("<hh:paraPr id=\"{id}\" tabPrIDRef=\"0\" condense=\"0\" fontLineHeight=\"0\" snapToGrid=\"1\" suppressLineNumbers=\"0\" checked=\"0\"><hh:align horizontal=\"{align}\" vertical=\"BASELINE\"/><hh:heading type=\"NONE\" idRef=\"0\" level=\"0\"/><hh:breakSetting breakLatinWord=\"KEEP_WORD\" breakNonLatinWord=\"KEEP_WORD\" widowOrphan=\"0\" keepWithNext=\"0\" keepLines=\"0\" pageBreakBefore=\"0\" lineWrap=\"BREAK\"/><hh:autoSpacing eAsianEng=\"0\" eAsianNum=\"0\"/><hh:margin><hc:intent value=\"0\" unit=\"HWPUNIT\"/><hc:left value=\"0\" unit=\"HWPUNIT\"/><hc:right value=\"0\" unit=\"HWPUNIT\"/><hc:prev value=\"{prev}\" unit=\"HWPUNIT\"/><hc:next value=\"{next}\" unit=\"HWPUNIT\"/></hh:margin><hh:lineSpacing type=\"PERCENT\" value=\"{line}\" unit=\"HWPUNIT\"/><hh:border borderFillIDRef=\"{bfill}\" offsetLeft=\"0\" offsetRight=\"0\" offsetTop=\"0\" offsetBottom=\"0\" connect=\"0\" ignoreMargin=\"0\"/></hh:paraPr>");
+    let paras = [pp(0, "JUSTIFY", 0, 0, 160, 1), pp(1, "CENTER", 0, 300, 160, 1), pp(2, "RIGHT", 0, 0, 160, 1), pp(3, "LEFT", 1400, 500, 160, 1), pp(4, "CENTER", 0, 0, 150, 1), pp(5, "JUSTIFY", 0, 0, 150, 1), pp(6, "LEFT", 0, 800, 100, 4)].concat();
+    format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><hh:head xmlns:hh=\"http://www.hancom.co.kr/hwpml/2011/head\" xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" xmlns:hp=\"http://www.hancom.co.kr/hwpml/2011/paragraph\" version=\"1.4\" secCnt=\"1\"><hh:beginNum page=\"1\" footnote=\"1\" endnote=\"1\" pic=\"1\" tbl=\"1\" equation=\"1\"/><hh:refList><hh:fontfaces itemCnt=\"7\">{fonts}</hh:fontfaces><hh:borderFills itemCnt=\"4\">{fills}</hh:borderFills><hh:charProperties itemCnt=\"8\">{chars}</hh:charProperties><hh:tabProperties itemCnt=\"1\"><hh:tabPr id=\"0\" autoTabLeft=\"0\" autoTabRight=\"0\"/></hh:tabProperties><hh:paraProperties itemCnt=\"7\">{paras}</hh:paraProperties><hh:styles itemCnt=\"1\"><hh:style id=\"0\" type=\"PARA\" name=\"바탕글\" engName=\"Normal\" paraPrIDRef=\"0\" charPrIDRef=\"0\" nextStyleIDRef=\"0\" langID=\"1042\" lockForm=\"0\"/></hh:styles></hh:refList><hh:compatibleDocument targetProgram=\"HWP201X\"><hh:layoutCompatibility/></hh:compatibleDocument><hh:docOption><hh:linkinfo path=\"\" pageInherit=\"0\" footnoteInherit=\"0\"/></hh:docOption><hh:trackchageConfig flags=\"56\"/></hh:head>")
+}
+pub fn standard_hwpx(d: &ExportDoc) -> Vec<u8> {
+    let mut sec = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><hs:sec xmlns:hs=\"http://www.hancom.co.kr/hwpml/2011/section\" xmlns:hp=\"http://www.hancom.co.kr/hwpml/2011/paragraph\" xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" xmlns:hh=\"http://www.hancom.co.kr/hwpml/2011/head\">");
+    // 첫 문단에 쪽 설정(A4, 여백 상하 25mm·좌우 20mm)을 둔다.
+    sec.push_str("<hp:p id=\"0\" paraPrIDRef=\"1\" styleIDRef=\"0\" pageBreak=\"0\" columnBreak=\"0\" merged=\"0\"><hp:run charPrIDRef=\"2\"><hp:secPr id=\"\" textDirection=\"HORIZONTAL\" spaceColumns=\"1134\" tabStop=\"8000\" tabStopVal=\"4000\" tabStopUnit=\"HWPUNIT\" outlineShapeIDRef=\"0\" memoShapeIDRef=\"0\" textVerticalWidthHead=\"0\" masterPageCnt=\"0\"><hp:grid lineGrid=\"0\" charGrid=\"0\" wonggojiFormat=\"0\"/><hp:startNum pageStartsOn=\"BOTH\" page=\"0\" pic=\"0\" tbl=\"0\" equation=\"0\"/><hp:visibility hideFirstHeader=\"0\" hideFirstFooter=\"0\" hideFirstMasterPage=\"0\" border=\"SHOW_ALL\" fill=\"SHOW_ALL\" hideFirstPageNum=\"0\" hideFirstEmptyLine=\"0\" showLineNumber=\"0\"/><hp:lineNumberShape restartType=\"0\" countBy=\"0\" distance=\"0\" startNumber=\"0\"/><hp:pagePr landscape=\"WIDELY\" width=\"59528\" height=\"84186\" gutterType=\"LEFT_ONLY\"><hp:margin header=\"4252\" footer=\"4252\" gutter=\"0\" left=\"5670\" right=\"5670\" top=\"7087\" bottom=\"4252\"/></hp:pagePr></hp:secPr><hp:t>창업지원사업 지원서</hp:t></hp:run></hp:p>");
+    let mut tables = 0;
+    for b in blocks(d).into_iter().skip(1) {
+        match b {
+            Block::P(s, text) => { let (c, p) = hwp_style(s); sec.push_str(&hwp_p(p, c, &text)); }
+            Block::Rule => sec.push_str(&hwp_p(6, 0, "")),
+            Block::Gap => sec.push_str(&hwp_p(0, 0, "")),
+            Block::Table(rows) => { tables += 1; sec.push_str(&hwp_table(tables, &rows)); }
+        }
+    }
+    sec.push_str("</hs:sec>");
+    let version = b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><hv:HCFVersion xmlns:hv=\"http://www.hancom.co.kr/hwpml/2011/version\" tagetApplication=\"WORDPROCESSOR\" major=\"5\" minor=\"1\" micro=\"0\" buildNumber=\"1\" os=\"1\" xmlVersion=\"1.4\" application=\"Hancom Office Hangul\" appVersion=\"11, 0, 0, 0\"/>";
+    let container = b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><ocf:container xmlns:ocf=\"urn:oasis:names:tc:opendocument:xmlns:container\" xmlns:hpf=\"http://www.hancom.co.kr/schema/2011/hpf\"><ocf:rootfiles><ocf:rootfile full-path=\"Contents/content.hpf\" media-type=\"application/hwpml-package+xml\"/><ocf:rootfile full-path=\"Preview/PrvText.txt\" media-type=\"text/plain\"/></ocf:rootfiles></ocf:container>";
+    let manifest = b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><odf:manifest xmlns:odf=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\"/>";
+    let content = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><opf:package xmlns:opf=\"http://www.idpf.org/2007/opf/\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" version=\"\" unique-identifier=\"\" id=\"\"><opf:metadata><opf:title>{}</opf:title><opf:language>ko</opf:language></opf:metadata><opf:manifest><opf:item id=\"header\" href=\"Contents/header.xml\" media-type=\"application/xml\"/><opf:item id=\"section0\" href=\"Contents/section0.xml\" media-type=\"application/xml\"/><opf:item id=\"settings\" href=\"settings.xml\" media-type=\"application/xml\"/></opf:manifest><opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/><opf:itemref idref=\"section0\" linear=\"yes\"/></opf:spine></opf:package>", escape(&format!("{} 지원서", d.program)));
+    let settings = b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><ha:HWPApplicationSetting xmlns:ha=\"http://www.hancom.co.kr/hwpml/2011/app\" xmlns:config=\"urn:oasis:names:tc:opendocument:xmlns:config:1.0\"><ha:CaretPosition listIDRef=\"0\" paraIDRef=\"0\" pos=\"0\"/></ha:HWPApplicationSetting>";
+    let preview = format!("창업지원사업 지원서\r\n「{}」\r\n{}\r\n", d.program, d.agency);
+    let header = hwp_header();
+    stored_zip(&[
+        ("mimetype", b"application/hwp+zip"),
+        ("version.xml", version),
+        ("Contents/header.xml", header.as_bytes()),
+        ("Contents/section0.xml", sec.as_bytes()),
+        ("Preview/PrvText.txt", preview.as_bytes()),
+        ("settings.xml", settings),
+        ("META-INF/container.xml", container),
+        ("META-INF/manifest.xml", manifest),
+        ("Contents/content.hpf", content.as_bytes()),
+    ])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn doc<'a>(a: &'a [(String, String)], b: &'a [(String, String)]) -> ExportDoc<'a> {
+        ExportDoc { program: "부산 <창업> & 공모", agency: "부산경제진흥원", date: "2026년 11월 28일", applicant: a, body: b }
+    }
     #[test]
-    fn packages_include_escaped_text() {
-        let rows = vec![("A<&".into(), "B\"'".into())];
-        for bytes in [standard_docx("title", "agency", &rows, "footer"), standard_hwpx("title", "agency", &rows, "footer")] {
+    fn both_formats_have_official_layout_and_escaped_text() {
+        let a = vec![("성명".to_string(), String::new())];
+        let b = vec![("사업 개요".to_string(), "첫 줄\n둘째 줄 \"인용\"".to_string())];
+        for bytes in [standard_docx(&doc(&a, &b)), standard_hwpx(&doc(&a, &b))] {
             let text = String::from_utf8_lossy(&bytes);
-            assert!(text.contains("A&lt;&amp;")); assert!(text.contains("B&quot;&apos;"));
+            for want in ["창업지원사업 지원서", "1. 신청인 정보", "2. 사업 내용", "부산경제진흥원 귀하", "(서명 또는 인)", "부산 &lt;창업&gt; &amp; 공모", "&quot;인용&quot;", "둘째 줄"] {
+                assert!(text.contains(want), "missing {want}");
+            }
         }
+        let h = standard_hwpx(&doc(&a, &b));
+        assert_eq!(&h[30..38], b"mimetype", "mimetype is the first entry");
+    }
+    #[test]
+    fn no_applicant_section_when_there_are_no_identity_fields() {
+        let b = vec![("사업 개요".to_string(), "내용".to_string())];
+        let text = String::from_utf8_lossy(&standard_docx(&doc(&[], &b))).into_owned();
+        assert!(!text.contains("신청인 정보") && text.contains("1. 사업 내용"));
     }
 }

@@ -418,16 +418,20 @@ pub async fn export(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     if !["docx", "hwpx"].contains(&format) { return Err(HttpError::bad("format은 docx 또는 hwpx예요")); }
     let p = program(cx, a["programId"].as_str().unwrap_or("")).ok_or_else(|| HttpError::bad("요청을 처리하지 못했어요"))?;
     let mut values = Map::new();
-    let mut rows = Vec::new();
+    let (mut applicant, mut body) = (Vec::new(), Vec::new());
     for f in a["fields"].as_array().into_iter().flatten() {
         let key = f["key"].as_str().unwrap_or("");
         let label = f["label"].as_str().unwrap_or("");
         let value = match a["approval"]["values"].as_object() { Some(m) => m.get(key).and_then(Value::as_str).unwrap_or(""), None => f["value"].as_str().unwrap_or("") };
         if !value.trim().is_empty() { values.insert(label.into(), json!(value)); }
-        rows.push((label.to_owned(), if value.is_empty() && f["identity"] == true { "(직접 작성)".into() } else { value.into() }));
+        // 본인 정보 칸은 비어 있으면 손으로 쓸 수 있게 빈칸으로 둔다.
+        let row = (label.to_owned(), value.to_owned());
+        if f["identity"] == true { applicant.push(row) } else { body.push(row) }
     }
-    let mime = if format == "docx" { "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } else { "application/hwp+zip" };
-    if cx.env("DOC_WORKER") == Some("1") && a["formKind"] == format && a["formUrl"].as_str().is_some_and(|s| !s.is_empty()) {
+    let mime_of = |kind: &str| if kind == "docx" { "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } else { "application/hwp+zip" };
+    // 공고 원본 양식이 채울 수 있는 형식(DOCX·HWPX)이면, 고른 형식과 달라도 원본 양식에 채운다.
+    let form_kind = a["formKind"].as_str().unwrap_or("");
+    if cx.env("DOC_WORKER") == Some("1") && ["docx", "hwpx"].contains(&form_kind) && a["formUrl"].as_str().is_some_and(|s| !s.is_empty()) {
         let ports = cx.ports;
         let attempt = async {
             let dl = ports.doc_worker("/download", &json!({"url":a["formUrl"],"referer":p["url"]})).await?.ok()?;
@@ -437,20 +441,23 @@ pub async fn export(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
             let filled = ports.doc_worker("/fill", &json!({"fileName":name,"fileBase64":data,"values":values})).await?.ok()?;
             if !filled.ok() { return None; }
             let filled = filled.json()?;
+            if filled["filled"].as_array().is_none_or(|x| x.is_empty()) { return None; }
             Some((filled["fileName"].as_str()?.to_owned(), filled["fileBase64"].as_str()?.to_owned()))
         };
         if let Some(Some((file_name, data))) = crate::time::timeout(ports, 30_000, attempt).await {
-            return Resp::ok(json!({"fileName":file_name,"mimeType":mime,"fileBase64":data,"source":"form"}));
+            return Resp::ok(json!({"fileName":file_name,"mimeType":mime_of(form_kind),"fileBase64":data,"source":"form","format":form_kind}));
         }
-        ports.log("warn", "[export] 양식 채우기 실패, 기본 양식을 씁니다");
+        ports.log("warn", "[export] 원본 양식 채우기 실패, 공통 양식을 씁니다");
     }
     let title = p["title"].as_str().unwrap_or("");
     let agency = p["agency"].as_str().unwrap_or("");
-    let date = DateTime::<Utc>::from_timestamp_millis(cx.now + 9 * 3_600_000).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
-    let footer = format!("해보까에서 작성한 초안입니다. 제출 전에 공고 원본 양식과 내용을 확인해 주세요. 작성일 {date}");
-    let data = if format == "docx" { super::export::standard_docx(title, agency, &rows, &footer) } else { super::export::standard_hwpx(title, agency, &rows, &footer) };
+    let date = DateTime::<Utc>::from_timestamp_millis(cx.now + 9 * 3_600_000).map(|d| format!("{}년 {}월 {}일", d.year(), d.month(), d.day())).unwrap_or_default();
+    let doc = super::export::ExportDoc { program: title, agency, date: &date, applicant: &applicant, body: &body };
+    let data = if format == "docx" { super::export::standard_docx(&doc) } else { super::export::standard_hwpx(&doc) };
     let clean: String = title.chars().take(40).map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
-    Resp::ok(json!({"fileName":format!("{clean} 지원서.{format}"),"mimeType":mime,"fileBase64":base64::engine::general_purpose::STANDARD.encode(data),"source":"standard"}))
+    // 원본 양식이 HWP·PDF 처럼 채울 수 없는 형식이면, 그 양식의 항목 이름으로 공통 양식을 만든다.
+    let source = if a["channel"] == "web" { "standard_form_fields" } else { "standard" };
+    Resp::ok(json!({"fileName":format!("{clean} 지원서.{format}"),"mimeType":mime_of(format),"fileBase64":base64::engine::general_purpose::STANDARD.encode(data),"source":source,"format":format}))
 }
 /// POST /api/applications/:id/approve
 pub async fn approve(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {

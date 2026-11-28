@@ -107,9 +107,12 @@ export function Apply() {
       if (app.status === 'drafting') adopt(await api.updateApplication(app.id, { values }));
       const f = await api.exportApplication(app.id, format);
       saveFile(f.fileName, f.mimeType, f.fileBase64);
+      const kind = f.format === 'hwpx' ? '한글(HWPX)' : '워드(DOCX)';
       setExportMsg(f.source === 'form'
-        ? '공고 원본 양식에 내용을 채워 내려받았어요. 빈 칸이 없는지 한 번 더 확인해 주세요.'
-        : '표준 지원서 양식으로 내려받았어요. 공고에 정해진 양식이 있으면 내용을 그 양식에 옮겨 주세요.');
+        ? `공고 원본 양식(${kind})에 내용을 채워 내려받았어요. 빈 칸이 없는지 한 번 더 확인해 주세요.`
+        : f.source === 'standard_form_fields'
+          ? '공고 양식은 바로 채울 수 없는 형식이라, 그 양식의 항목으로 공통 양식(공문 형식)을 만들었어요.'
+          : '공통 양식(공문 형식)으로 내려받았어요. 공고에 정해진 양식이 있으면 내용을 그 양식에 옮겨 주세요.');
     } catch (x) {
       setExportErr(errMessage(x));
     } finally { setExporting(null); }
@@ -231,7 +234,7 @@ export function Apply() {
       <section className="card stack apply-export" aria-labelledby="apply-export-h">
         <h2 id="apply-export-h" style={{ margin: 0 }}>지원서 파일 내려받기</h2>
         <p className="muted" style={{ margin: 0 }}>
-          제출할 파일로 받아 공식 사이트에 직접 올려요. 공고 원본 양식(DOCX·HWPX)을 읽었다면 그 양식에 채우고, 아니면 표준 양식으로 만들어요.
+          제출할 파일로 받아 공식 사이트에 직접 올려요. 공고에 공식 양식(DOCX·HWPX)이 있으면 그 양식에 채우고, 없으면 공문 형식의 공통 양식으로 만들어요.
         </p>
         <div className="row">
           <button className="btn" type="button" disabled={!!exporting || busy} onClick={() => download('hwpx')}>{exporting === 'hwpx' ? '만드는 중...' : '한글(HWPX)'}</button>
