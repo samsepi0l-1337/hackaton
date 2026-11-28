@@ -108,6 +108,7 @@ PR을 머지할 때마다 이 파일을 같이 고친다. `[x]` 완료, `[ ]` �
 - [x] 결과의 추천 공고에 ‘지원서 작성’, 초안을 상담 자료로 미리 채움, 지원서 계정당 7일 2회 (`GET /api/applications/quota`, 429 `application_limit`) (#105)
 - [x] E2E 16개 spec (33-focus-quota 추가, 10-explore-01/02·30-browse-01/02 갱신)
 - [x] E2E 17개 spec (34-apply-polish-export 추가, 10-explore-03·32-applications 갱신) (#121, #122)
+- [x] 지원서 내보내기: 공식 양식(DOCX·HWPX·PPTX) 우선 채우기, 공문 형식 공통 양식, 내가 찾은 양식 올려서 채우기, DocWorker PPTX 채우기 (#124)
 - [x] 문서 반영 (prd §17, features 4-1절)
 - 반영 안 함: 로드맵 강의·분야 추가(콘텐츠 요청, 범위 밖), 질문 세분화(‘직접 적기’로 대응)
 

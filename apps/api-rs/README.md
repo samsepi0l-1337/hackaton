@@ -13,7 +13,8 @@
 - `GET /api/applications/quota`: 로그인한 계정의 `{used, limit, remaining, resetAt, blocked}`. 제한이 없으면 `limit`·`remaining`·`resetAt` 이 null.
 - `POST /api/applications`: 제한을 넘으면 429 `application_limit`. 이메일 인증 전이면 403 `email_unverified`.
 - `POST /api/applications/:id/polish`: Solar 가 칸별 다듬은 글을 제안한다 (저장 안 함). 지원서당 5회(429 `polish_limit`), AI 가 꺼져 있으면 503 `ai_unavailable`.
-- `GET /api/applications/:id/export?format=docx|hwpx`: base64 JSON. DocWorker 가 켜져 있고 원본 양식이 같은 형식이면 원본 양식에 채우고(`source: "form"`), 아니면 표준 파일(`source: "standard"`).
+- `GET /api/applications/:id/export?format=docx|hwpx`: base64 JSON. 원본 양식이 DOCX·HWPX·PPTX 면 원본 양식에 채우고(`source: "form"`, `format` 은 원본 형식), HWP·PDF 면 그 항목 이름으로 공통 양식(`standard_form_fields`), 없으면 공통 양식(`standard`). 공통 양식은 `core/src/api/app/export.rs` 의 공문 형식.
+- `POST /api/applications/:id/form-fill` `{fileName, fileBase64}`: 사용자가 올린 DOCX·HWPX·PPTX 양식(4MB)을 DocWorker `/fill` 로 채운다. 항목 별칭 `LABEL_ALIASES`. 이 경로만 본문 6MB 허용 (`worker/src/lib.rs`).
 
 ## 상담 채팅 횟수
 - 보낸 채팅(답·모르겠어요·건너뛰기) 1개가 1회, 한 주 12회다. 첫 질문은 세지 않는다. 달력 주(일요일 0시 KST)로 센다 (`core/src/api/explore/quota.rs` `week_start`, `chat_quota_config`). 저장 키는 `chat:<계정 id>`. 팀 계정은 제외한다.
