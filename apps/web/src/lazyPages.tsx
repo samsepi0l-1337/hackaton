@@ -2,6 +2,7 @@ import { lazy } from 'react';
 
 export const loadMentor = () => import('./pages/Mentor');
 export const Mentor = lazy(() => loadMentor().then((m) => ({ default: m.Mentor })));
+export const MentorHistory = lazy(() => import('./mentor/History').then((m) => ({ default: m.MentorHistory })));
 export const Bufs = lazy(() => import('./pages/Bufs').then((m) => ({ default: m.Bufs })));
 export const TypeTest = lazy(() => import('./pages/TypeTest').then((m) => ({ default: m.TypeTest })));
 export const Me = lazy(() => import('./pages/Me').then((m) => ({ default: m.Me })));

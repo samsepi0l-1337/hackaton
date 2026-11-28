@@ -14,6 +14,7 @@ import { Progress } from './Common';
 import { patchStore } from './storage';
 import { DeviceNotice, QUOTA_NOTE, QuotaLine } from './Quota';
 import { localAiAvailable } from '../lib/localAi';
+import { PastConsults } from './History';
 
 type Save = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -107,11 +108,12 @@ export function StartStep({ opts, initial, quota, focus, onFocusRemoved, onStart
       <section className="card stack" aria-labelledby="pv">
         <h2 id="pv" style={{ margin: 0 }}>시작 전에 확인해 주세요</h2>
         <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{opts.privacy}</p>
-        <p className="muted">진행 상황은 이 기기에도 저장돼서 새로고침해도 이어져요. 다른 기기나 브라우저에서는 이어지지 않아요. 결과 화면의 '초기화'로 모두 지울 수 있어요.</p>
+        <p className="muted">진행 상황은 이 기기에도 저장돼서 새로고침해도 이어져요. 다른 기기나 브라우저에서는 이어지지 않아요. 결과 화면의 ‘처음부터 새 상담’은 지금 결과를 ‘지난 상담’에 남기고 새로 시작해요. ‘초기화’는 모두 지워요.</p>
         <QuotaLine quota={quota} />
         <p className="muted">{QUOTA_NOTE}</p>
       </section>
       <DeviceNotice aiAvailable={ai} />
+      <PastConsults />
 
       <Field label="지금 상황은 어떤가요?" required error={fieldErr.readiness}>
         <ChipGroup options={opts.readiness.map((o) => o.value)} labels={Object.fromEntries(opts.readiness.map((o) => [o.value, o.label]))} value={start.readiness}

@@ -231,13 +231,16 @@ function conditionLine(c?: UserConditions): string {
   return parts.join(' · ');
 }
 
-export function ResultStep({ summary, problemTitle, conditions, readOnly = false, onEditSummary, onMissingSummary, onBackToStart }: {
+export function ResultStep({ summary, problemTitle, conditions, readOnly: ro = false, archived, onEditSummary, onMissingSummary, onBackToStart }: {
   summary: SummaryV2; problemTitle?: string; conditions?: UserConditions; readOnly?: boolean; onEditSummary: () => void; onMissingSummary: () => void; onBackToStart?: () => void;
+  /** 보관한 지난 상담: 서버에 저장해 둔 결과를 읽기만 한다. */
+  archived?: { title: string; archivedAt: string; result: ExploreResultResponse };
 }) {
+  const readOnly = ro || !!archived;
   const onGo = readOnly ? undefined : (i: number) => (i === 0 ? onBackToStart?.() : onEditSummary());
-  const [res, setRes] = useState<ExploreResultResponse | null>(() => { const st = readStore(); return st.result ? overlay(st.result, st.prepDone) : null; });
+  const [res, setRes] = useState<ExploreResultResponse | null>(() => { if (archived) return archived.result; const st = readStore(); return st.result ? overlay(st.result, st.prepDone) : null; });
   const [offline, setOffline] = useState(false);
-  const [edits, setEdits] = useState<Record<string, string>>(() => readStore().fieldEdits);
+  const [edits, setEdits] = useState<Record<string, string>>(() => (archived ? {} : readStore().fieldEdits));
   const [localReasons, setLocalReasons] = useState<Record<string, string>>({});
   const triedReason = useRef(new Set<string>());
   const [error, setError] = useState<unknown>(null);
@@ -265,6 +268,7 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
   // 팝업은 지금 결과가 쓰는 조건(저장한 값)으로 열고, 저장한 적이 없을 때만 내 정보 기본값을 쓴다.
   const popupCond = savedCond ?? profileCond;
   const [confirm, setConfirm] = useState(false);
+  const [confirmNew, setConfirmNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const tracked = useRef(false);
@@ -309,6 +313,7 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
   const s = res.summary ?? summary;
   const prepAll = res.prep;
   const togglePrep = async (p: PrepItem) => {
+    if (archived) return;
     const done = !p.done;
     const apply = (d: boolean) => setRes((r) => r && ({ ...r, prep: {
       primary: r.prep.primary.id === p.id ? { ...r.prep.primary, done: d } : r.prep.primary,
@@ -337,6 +342,10 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
   async function copy() {
     try { await navigator.clipboard.writeText(toText(s, prepAll)); setNote('요약과 준비사항을 복사했어요.'); } catch { setNote('복사하지 못했어요. 브라우저 권한을 확인해 주세요.'); }
   }
+  async function startNew() {
+    setBusy(true);
+    try { await api.newExplore(); clearSnapshot(); window.location.assign('/mentor'); } catch (e) { setNote(errMessage(e)); setBusy(false); setConfirmNew(false); }
+  }
   async function reset() {
     setBusy(true);
     try { if (!readOnly) await api.resetExplore(); clearSnapshot(); window.location.assign('/mentor'); } catch (e) { setNote(errMessage(e)); setBusy(false); setConfirm(false); }
@@ -344,8 +353,16 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
 
   return (
     <div className="stack">
-      <Progress current={2} onGo={onGo} />
-      <h1>나의 창업 준비 방향</h1>
+      {archived
+        ? <>
+            <p className="muted" style={{ margin: 0 }}><Link to="/mentor">AI 창업 상담</Link> · 지난 상담</p>
+            <h1>{archived.title}</h1>
+            <p className="muted" role="note" style={{ margin: 0 }}>{fmtArchived(archived.archivedAt)}에 보관한 상담이에요. 읽기만 할 수 있고, 공고 모집 상태는 보관한 때 기준이에요.</p>
+          </>
+        : <>
+            <Progress current={2} onGo={onGo} />
+            <h1>나의 창업 준비 방향</h1>
+          </>}
       {offline && <p className="muted" role="status">서버에 연결하지 못해 이 기기에 저장된 결과를 보여줘요. 최신 내용과 다를 수 있어요.</p>}
 
       <section className="card highlight stack next-box" aria-labelledby="nx">
@@ -419,7 +436,7 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
       <FieldQuestions questions={res.fieldQuestions ?? []} edits={edits} problemTitle={problemTitle}
         onEdit={(id, text) => {
           const next = { ...edits }; if (text === null) delete next[id]; else next[id] = text;
-          setEdits(next); patchStore({ fieldEdits: next });
+          setEdits(next); if (!archived) patchStore({ fieldEdits: next });
         }} />
 
       <section className="stack" aria-labelledby="rs">
@@ -471,16 +488,26 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
       {!readOnly && <Feedback />}
 
       <section className="card stack">
-        <h2 style={{ margin: 0 }}>저장과 초기화</h2>
-        <p className="muted">내용은 이 기기에 저장돼요. 다른 기기나 브라우저에서는 이어지지 않아요. 공개 링크로 자동 공유되지 않아요.</p>
+        <h2 style={{ margin: 0 }}>{archived ? '복사' : '새 상담과 초기화'}</h2>
+        {!archived && <p className="muted">‘처음부터 새 상담’을 누르면 지금 결과는 ‘지난 상담’에 남고, 1단계부터 다시 시작해요. 내 조건과 검토 지역은 이어져요. 공개 링크로 자동 공유되지 않아요.</p>}
         <div className="row">
+          {!archived && !ro && <button className="btn primary" onClick={() => setConfirmNew(true)}>처음부터 새 상담</button>}
           <button className="btn" onClick={copy}>요약·준비사항 복사</button>
-          <button className="btn danger" onClick={() => setConfirm(true)}>초기화</button>
+          {!archived && <button className="btn danger" onClick={() => setConfirm(true)}>초기화</button>}
         </div>
         {note && <p className="muted" role="status">{note}</p>}
       </section>
 
       {cond && <ConditionForm initial={popupCond} fromSaved={savedCond !== undefined} onClose={() => setCond(false)} onSave={async (c) => { const r = await api.saveConditions(c); setRes(r); keep(r); setSavedCond(c); setCondSaved(true); setCond(false); }} />}
+      {confirmNew && (
+        <ConfirmDialog title="처음부터 새 상담을 시작할까요?" confirmLabel="새 상담 시작" busy={busy} onConfirm={startNew} onCancel={() => setConfirmNew(false)}>
+          <ul>
+            <li>지금 구상 요약과 준비 안내, 추천 공고는 ‘지난 상담’에 보관돼요. 최근 5개까지 남아요.</li>
+            <li>내 조건과 검토 지역은 새 상담에 그대로 이어져요.</li>
+            <li>대화 내용은 보관하지 않아요. 이번 주 남은 채팅 횟수는 그대로예요.</li>
+          </ul>
+        </ConfirmDialog>
+      )}
       {confirm && (
         <ConfirmDialog title="처음부터 다시 할까요?" confirmLabel="초기화" danger busy={busy} onConfirm={reset} onCancel={() => setConfirm(false)}>
           <p>아래 내용이 지워지고 되돌릴 수 없어요.</p>
@@ -494,4 +521,10 @@ export function ResultStep({ summary, problemTitle, conditions, readOnly = false
       )}
     </div>
   );
+}
+
+function fmtArchived(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '예전';
+  return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }

@@ -3,6 +3,7 @@
 pub mod ai;
 pub mod chat;
 pub mod chat_route;
+pub mod history;
 pub mod quota;
 pub mod resources;
 pub mod result;

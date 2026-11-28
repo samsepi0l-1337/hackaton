@@ -4,7 +4,7 @@ import type { ApiError, ConsultQuota, ErrorCode, FieldError } from '@gil/shared'
 import { localAiHeaderValue } from '../lib/localAi';
 import type {
   AuthResponse, ExploreChatRequest, ExploreChatResponse, ExploreEventType, ExploreFeedbackRequest, ExploreOptionsResponse,
-  ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
+  ExploreHistoryEntry, ExploreHistoryItem, ExploreResultResponse, ExploreSession, ExplorationRequest, LoginRequest, ProblemsResponse, SignupRequest, SignupResponse, StartRequest,
   BasicProfile, BufsFeedbackResponse, StartProfile, VerifyEmailRequest, ChangePasswordRequest, TypeTestRequest, TypeTestResponse,
 } from '@gil/shared';
 import type { ApplicationView, ApproveRequest, CreateApplicationRequest, UpdateApplicationRequest } from '@gil/shared';
@@ -113,6 +113,11 @@ export const api = {
   createSummary: () => post<{ summary: SummaryV2; regional: RegionalContextCard | null }>(ROUTES.exploreSummary),
   saveSummary: (summary: SummaryV2) => put<{ summary: SummaryV2; regional?: RegionalContextCard | null }>(ROUTES.exploreSummary, { summary }),
   exploreResult: () => get<ExploreResultResponse>(ROUTES.exploreResult),
+  /** 지금 상담을 '지난 상담'에 보관하고 처음부터 시작한다. 내 조건·검토 지역은 이어지고 채팅 횟수는 그대로다. */
+  newExplore: () => post<{ ok: true; session: ExploreSession; history: ExploreHistoryItem[] }>(ROUTES.exploreNew),
+  exploreHistory: () => get<{ items: ExploreHistoryItem[] }>(ROUTES.exploreHistory),
+  exploreHistoryEntry: (id: string) => get<ExploreHistoryEntry>(ROUTES.exploreHistoryItem(id)),
+  deleteExploreHistory: (id: string) => del<{ items: ExploreHistoryItem[] }>(ROUTES.exploreHistoryItem(id)),
   saveConditions: (conditions: UserConditions) => put<ExploreResultResponse>(ROUTES.conditions, { conditions }),
   setPrepDone: (id: string, done: boolean) => put<unknown>(ROUTES.prepDone, { id, done }),
   exploreFeedback: (b: ExploreFeedbackRequest) => post<{ ok: true }>(ROUTES.exploreFeedback, b),
