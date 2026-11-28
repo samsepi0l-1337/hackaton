@@ -415,7 +415,7 @@ pub async fn export(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     use base64::Engine;
     let a = own(cx, id)?;
     let format = req.query.iter().find(|(k, _)| k == "format").map(|(_, v)| v.as_str()).unwrap_or("");
-    if !["docx", "hwpx"].contains(&format) { return Err(HttpError::bad("format은 docx 또는 hwpx예요")); }
+    if !["docx", "hwpx", "pptx"].contains(&format) { return Err(HttpError::bad("format은 docx, hwpx, pptx 중 하나예요")); }
     let p = program(cx, a["programId"].as_str().unwrap_or("")).ok_or_else(|| HttpError::bad("요청을 처리하지 못했어요"))?;
     let mut values = Map::new();
     let (mut applicant, mut body) = (Vec::new(), Vec::new());
@@ -453,7 +453,7 @@ pub async fn export(cx: &mut Cx<'_>, req: &Req, id: &str) -> HResult {
     let agency = p["agency"].as_str().unwrap_or("");
     let date = DateTime::<Utc>::from_timestamp_millis(cx.now + 9 * 3_600_000).map(|d| format!("{}년 {}월 {}일", d.year(), d.month(), d.day())).unwrap_or_default();
     let doc = super::export::ExportDoc { program: title, agency, date: &date, applicant: &applicant, body: &body };
-    let data = if format == "docx" { super::export::standard_docx(&doc) } else { super::export::standard_hwpx(&doc) };
+    let data = match format { "docx" => super::export::standard_docx(&doc), "pptx" => super::export::standard_pptx(&doc), _ => super::export::standard_hwpx(&doc) };
     let clean: String = title.chars().take(40).map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
     // 원본 양식이 HWP·PDF 처럼 채울 수 없는 형식이면, 그 양식의 항목 이름으로 공통 양식을 만든다.
     let source = if a["channel"] == "web" { "standard_form_fields" } else { "standard" };

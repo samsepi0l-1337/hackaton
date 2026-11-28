@@ -205,6 +205,144 @@ pub fn standard_hwpx(d: &ExportDoc) -> Vec<u8> {
     ])
 }
 
+
+// ---------- PPTX (16:9 슬라이드, 같은 내용) ----------
+const EMU_IN: i64 = 914_400;
+const SLIDE_W: i64 = 12_192_000;
+const SLIDE_H: i64 = 6_858_000;
+const BG: &str = "<p:bg><p:bgPr><a:solidFill><a:srgbClr val=\"FFFFFF\"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>";
+/// 글상자 문단: (글, 크기 pt*100, 굵게, 색, 정렬 l|ctr|r)
+type PPara<'a> = (&'a str, u32, bool, &'a str, &'a str);
+fn p_run(text: &str, sz: u32, bold: bool, color: &str) -> String {
+    format!("<a:r><a:rPr lang=\"ko-KR\" sz=\"{sz}\" b=\"{}\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"{color}\"/></a:solidFill><a:latin typeface=\"{FONT}\"/><a:ea typeface=\"{FONT}\"/></a:rPr><a:t>{}</a:t></a:r>", if bold { 1 } else { 0 }, escape(text))
+}
+fn p_paras(paras: &[PPara]) -> String {
+    let mut out = String::new();
+    for (text, sz, bold, color, algn) in paras {
+        for line in text.split('\n') {
+            out.push_str(&format!("<a:p><a:pPr algn=\"{algn}\"><a:lnSpc><a:spcPct val=\"115000\"/></a:lnSpc></a:pPr>{}</a:p>", p_run(line, *sz, *bold, color)));
+        }
+    }
+    out
+}
+fn p_box(id: u32, x: i64, y: i64, w: i64, h: i64, paras: &[PPara]) -> String {
+    format!("<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"Text {id}\"/><p:cNvSpPr txBox=\"1\"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{w}\" cy=\"{h}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap=\"square\" lIns=\"0\" tIns=\"0\" rIns=\"0\" bIns=\"0\"><a:normAutofit/></a:bodyPr><a:lstStyle/>{}</p:txBody></p:sp>", p_paras(paras))
+}
+fn p_rule(id: u32, y: i64) -> String {
+    format!("<p:cxnSp><p:nvCxnSpPr><p:cNvPr id=\"{id}\" name=\"Line {id}\"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm><a:off x=\"{}\" y=\"{y}\"/><a:ext cx=\"{}\" cy=\"0\"/></a:xfrm><a:prstGeom prst=\"line\"><a:avLst/></a:prstGeom><a:ln w=\"22225\"><a:solidFill><a:srgbClr val=\"1F3A6B\"/></a:solidFill></a:ln></p:spPr></p:cxnSp>", EMU_IN / 2, SLIDE_W - EMU_IN)
+}
+fn p_cell(text: &str, label: bool) -> String {
+    let ln = |tag: &str| format!("<a:{tag} w=\"9525\"><a:solidFill><a:srgbClr val=\"7F7F7F\"/></a:solidFill></a:{tag}>");
+    let fill = if label { "<a:solidFill><a:srgbClr val=\"EEF1F5\"/></a:solidFill>" } else { "<a:noFill/>" };
+    let paras = p_paras(&[(text, if label { 1300 } else { 1200 }, label, "000000", if label { "ctr" } else { "l" })]);
+    format!("<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>{paras}</a:txBody><a:tcPr marL=\"91440\" marR=\"91440\" marT=\"54864\" marB=\"54864\" anchor=\"ctr\">{}{}{}{}{fill}</a:tcPr></a:tc>", ln("lnL"), ln("lnR"), ln("lnT"), ln("lnB"))
+}
+fn p_table(id: u32, y: i64, rows: &[(String, String)], row_h: i64) -> String {
+    let (x, w) = (EMU_IN / 2, SLIDE_W - EMU_IN);
+    let lw = 2_286_000;
+    let mut t = format!("<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id=\"{id}\" name=\"Table {id}\"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp=\"1\"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{w}\" cy=\"{}\"/></p:xfrm><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/table\"><a:tbl><a:tblPr firstRow=\"0\" bandRow=\"0\"/><a:tblGrid><a:gridCol w=\"{lw}\"/><a:gridCol w=\"{}\"/></a:tblGrid>", row_h * rows.len() as i64, w - lw);
+    for (label, value) in rows {
+        t.push_str(&format!("<a:tr h=\"{row_h}\">{}{}</a:tr>", p_cell(label, true), p_cell(value, false)));
+    }
+    t.push_str("</a:tbl></a:graphicData></a:graphic></p:graphicFrame>");
+    t
+}
+fn p_slide(shapes: &str) -> String {
+    format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><p:sld xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val=\"FFFFFF\"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/><a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"0\" cy=\"0\"/></a:xfrm></p:grpSpPr>{shapes}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>")
+}
+fn p_heading(text: &str) -> String {
+    p_box(2, EMU_IN / 2, 380_000, SLIDE_W - EMU_IN, 520_000, &[(text, 2200, true, "000000", "l")]) + &p_rule(3, 960_000)
+}
+/// 사업 내용 칸을 한 장에 넣을 만큼 나눈다 (글자 수 기준).
+fn p_chunks(rows: &[(String, String)]) -> Vec<Vec<(String, String)>> {
+    let (mut out, mut cur, mut used) = (Vec::new(), Vec::new(), 0usize);
+    for r in rows {
+        let cost = 80 + r.1.chars().count();
+        if !cur.is_empty() && used + cost > 700 { out.push(std::mem::take(&mut cur)); used = 0; }
+        used += cost; cur.push(r.clone());
+    }
+    if !cur.is_empty() { out.push(cur); }
+    out
+}
+pub fn standard_pptx(d: &ExportDoc) -> Vec<u8> {
+    let mut slides = Vec::new();
+    // 1. 표지
+    let mut cover = p_box(2, EMU_IN / 2, 900_000, SLIDE_W - EMU_IN, 900_000, &[("창업지원사업 지원서", 3600, true, "000000", "ctr")]);
+    cover.push_str(&p_box(3, EMU_IN / 2, 1_850_000, SLIDE_W - EMU_IN, 500_000, &[(&format!("「{}」", d.program), 2000, false, "333333", "ctr")]));
+    cover.push_str(&p_rule(4, 2_500_000));
+    cover.push_str(&p_table(5, 2_800_000, &[("사업명".into(), d.program.into()), ("주관기관".into(), d.agency.into()), ("작성일".into(), d.date.into())], 480_000));
+    cover.push_str(&p_box(6, EMU_IN / 2, SLIDE_H - 700_000, SLIDE_W - EMU_IN, 300_000, &[(DISCLAIMER, 1000, false, "666666", "l")]));
+    slides.push(p_slide(&cover));
+    let mut n = 1;
+    if !d.applicant.is_empty() {
+        slides.push(p_slide(&(p_heading(&format!("{n}. 신청인 정보")) + &p_table(4, 1_200_000, d.applicant, 520_000))));
+        n += 1;
+    }
+    let chunks = p_chunks(d.body);
+    let total = chunks.len();
+    for (i, rows) in chunks.iter().enumerate() {
+        let title = if total > 1 { format!("{n}. 사업 내용 ({}/{total})", i + 1) } else { format!("{n}. 사업 내용") };
+        let row_h = ((SLIDE_H - 1_700_000) / rows.len().max(1) as i64).min(1_600_000);
+        slides.push(p_slide(&(p_heading(&title) + &p_table(4, 1_200_000, rows, row_h))));
+    }
+    // 마지막 장: 확인 문장, 날짜, 서명, 귀하
+    let agency = if d.agency.is_empty() { "주관기관" } else { d.agency };
+    let mut last = p_box(2, EMU_IN, 1_500_000, SLIDE_W - 2 * EMU_IN, 800_000, &[(&format!("위와 같이 「{}」에 지원하며,\n작성한 내용이 사실임을 확인합니다.", d.program), 2000, false, "000000", "ctr")]);
+    last.push_str(&p_box(3, EMU_IN, 2_800_000, SLIDE_W - 2 * EMU_IN, 450_000, &[(d.date, 2000, false, "000000", "ctr")]));
+    last.push_str(&p_box(4, EMU_IN, 3_600_000, SLIDE_W - 2 * EMU_IN, 450_000, &[("신청인                              (서명 또는 인)", 2000, false, "000000", "r")]));
+    last.push_str(&p_box(5, EMU_IN, 4_600_000, SLIDE_W - 2 * EMU_IN, 600_000, &[(&format!("{agency} 귀하"), 2800, true, "000000", "l")]));
+    slides.push(p_slide(&last));
+
+    let ns_p = "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"";
+    let rel = |id: &str, ty: &str, target: &str| format!("<Relationship Id=\"{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{ty}\" Target=\"{target}\"/>");
+    let rels = |inner: String| format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">{inner}</Relationships>");
+    let mut types = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/ppt/presentation.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml\"/><Override PartName=\"/ppt/slideMasters/slideMaster1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml\"/><Override PartName=\"/ppt/slideLayouts/slideLayout1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml\"/><Override PartName=\"/ppt/theme/theme1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.theme+xml\"/>");
+    let mut pres_rels = rel("rId1", "slideMaster", "slideMasters/slideMaster1.xml") + &rel("rId2", "theme", "theme/theme1.xml");
+    let mut sld_ids = String::new();
+    for i in 0..slides.len() {
+        types.push_str(&format!("<Override PartName=\"/ppt/slides/slide{}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\"/>", i + 1));
+        pres_rels.push_str(&rel(&format!("rId{}", i + 3), "slide", &format!("slides/slide{}.xml", i + 1)));
+        sld_ids.push_str(&format!("<p:sldId id=\"{}\" r:id=\"rId{}\"/>", 256 + i, i + 3));
+    }
+    types.push_str("</Types>");
+    let pres = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><p:presentation {ns_p} saveSubsetFonts=\"1\"><p:sldMasterIdLst><p:sldMasterId id=\"2147483648\" r:id=\"rId1\"/></p:sldMasterIdLst><p:sldIdLst>{sld_ids}</p:sldIdLst><p:sldSz cx=\"{SLIDE_W}\" cy=\"{SLIDE_H}\"/><p:notesSz cx=\"6858000\" cy=\"9144000\"/></p:presentation>");
+    let empty_tree = "<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>";
+    let master = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><p:sldMaster {ns_p}>{}<p:clrMap bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/><p:sldLayoutIdLst><p:sldLayoutId id=\"2147483649\" r:id=\"rId1\"/></p:sldLayoutIdLst></p:sldMaster>", empty_tree.replace("<p:cSld>", &format!("<p:cSld>{BG}")));
+    let layout = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><p:sldLayout {ns_p} preserve=\"1\">{}<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>", empty_tree.replace("<p:cSld>", "<p:cSld name=\"Blank\">"));
+    let theme = pptx_theme();
+    let master_rels = rels(rel("rId1", "slideLayout", "../slideLayouts/slideLayout1.xml") + &rel("rId2", "theme", "../theme/theme1.xml"));
+    let layout_rels = rels(rel("rId1", "slideMaster", "../slideMasters/slideMaster1.xml"));
+    let slide_rels = rels(rel("rId1", "slideLayout", "../slideLayouts/slideLayout1.xml"));
+    let root_rels = rels(rel("rId1", "officeDocument", "ppt/presentation.xml"));
+    let pres_rels = rels(pres_rels);
+    let mut entries: Vec<(String, Vec<u8>)> = vec![
+        ("[Content_Types].xml".into(), types.into_bytes()),
+        ("_rels/.rels".into(), root_rels.into_bytes()),
+        ("ppt/presentation.xml".into(), pres.into_bytes()),
+        ("ppt/_rels/presentation.xml.rels".into(), pres_rels.into_bytes()),
+        ("ppt/slideMasters/slideMaster1.xml".into(), master.into_bytes()),
+        ("ppt/slideMasters/_rels/slideMaster1.xml.rels".into(), master_rels.into_bytes()),
+        ("ppt/slideLayouts/slideLayout1.xml".into(), layout.into_bytes()),
+        ("ppt/slideLayouts/_rels/slideLayout1.xml.rels".into(), layout_rels.into_bytes()),
+        ("ppt/theme/theme1.xml".into(), theme.into_bytes()),
+    ];
+    for (i, s) in slides.into_iter().enumerate() {
+        entries.push((format!("ppt/slides/slide{}.xml", i + 1), s.into_bytes()));
+        entries.push((format!("ppt/slides/_rels/slide{}.xml.rels", i + 1), slide_rels.clone().into_bytes()));
+    }
+    let refs: Vec<(&str, &[u8])> = entries.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+    stored_zip(&refs)
+}
+fn pptx_theme() -> String {
+    let clr = |name: &str, v: &str| format!("<a:{name}><a:srgbClr val=\"{v}\"/></a:{name}>");
+    let colors = [clr("dk1", "000000"), clr("lt1", "FFFFFF"), clr("dk2", "1F3A6B"), clr("lt2", "EEF1F5"), clr("accent1", "2563EB"), clr("accent2", "1F3A6B"), clr("accent3", "7F7F7F"), clr("accent4", "F59E0B"), clr("accent5", "10B981"), clr("accent6", "EF4444"), clr("hlink", "2563EB"), clr("folHlink", "7C3AED")].concat();
+    let font = format!("<a:latin typeface=\"{FONT}\"/><a:ea typeface=\"{FONT}\"/><a:cs typeface=\"\"/>");
+    let solid = "<a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill>";
+    let ln = |w: u32| format!("<a:ln w=\"{w}\"><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:ln>");
+    let eff = "<a:effectStyle><a:effectLst/></a:effectStyle>";
+    format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Haeboka\"><a:themeElements><a:clrScheme name=\"Haeboka\">{colors}</a:clrScheme><a:fontScheme name=\"Haeboka\"><a:majorFont>{font}</a:majorFont><a:minorFont>{font}</a:minorFont></a:fontScheme><a:fmtScheme name=\"Haeboka\"><a:fillStyleLst>{solid}{solid}{solid}</a:fillStyleLst><a:lnStyleLst>{}{}{}</a:lnStyleLst><a:effectStyleLst>{eff}{eff}{eff}</a:effectStyleLst><a:bgFillStyleLst>{solid}{solid}{solid}</a:bgFillStyleLst></a:fmtScheme></a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>", ln(6350), ln(12700), ln(19050))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +359,9 @@ mod tests {
                 assert!(text.contains(want), "missing {want}");
             }
         }
+        let pp = standard_pptx(&doc(&a, &b));
+        let text = String::from_utf8_lossy(&pp);
+        for want in ["창업지원사업 지원서", "1. 신청인 정보", "2. 사업 내용", "부산경제진흥원 귀하", "ppt/slides/slide4.xml", "&quot;인용&quot;"] { assert!(text.contains(want), "pptx missing {want}"); }
         let h = standard_hwpx(&doc(&a, &b));
         assert_eq!(&h[30..38], b"mimetype", "mimetype is the first entry");
     }

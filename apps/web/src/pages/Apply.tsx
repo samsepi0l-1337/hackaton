@@ -108,7 +108,7 @@ export function Apply() {
       if (app.status === 'drafting') adopt(await api.updateApplication(app.id, { values }));
       const f = await api.exportApplication(app.id, format);
       saveFile(f.fileName, f.mimeType, f.fileBase64);
-      const kind = f.format === 'hwpx' ? '한글(HWPX)' : '워드(DOCX)';
+      const kind = { hwpx: '한글(HWPX)', docx: '워드(DOCX)', pptx: '파워포인트(PPTX)' }[f.format];
       setExportMsg(f.source === 'form'
         ? `공고 원본 양식(${kind})에 내용을 채워 내려받았어요. 빈 칸이 없는지 한 번 더 확인해 주세요.`
         : f.source === 'standard_form_fields'
@@ -252,11 +252,12 @@ export function Apply() {
       <section className="card stack apply-export" aria-labelledby="apply-export-h">
         <h2 id="apply-export-h" style={{ margin: 0 }}>지원서 파일 내려받기</h2>
         <p className="muted" style={{ margin: 0 }}>
-          제출할 파일로 받아 공식 사이트에 직접 올려요. 공고에 공식 양식(DOCX·HWPX)이 있으면 그 양식에 채우고, 없으면 공문 형식의 공통 양식으로 만들어요.
+          제출할 파일로 받아 공식 사이트에 직접 올려요. 워드·파워포인트·한글 중 원하는 형식으로 받아요. 공고에 공식 양식(DOCX·PPTX·HWPX)이 있으면 그 양식에 채우고, 없으면 같은 내용의 공문 형식 공통 양식으로 만들어요.
         </p>
         <div className="row">
-          <button className="btn" type="button" disabled={!!exporting || busy} onClick={() => download('hwpx')}>{exporting === 'hwpx' ? '만드는 중...' : '한글(HWPX)'}</button>
           <button className="btn" type="button" disabled={!!exporting || busy} onClick={() => download('docx')}>{exporting === 'docx' ? '만드는 중...' : '워드(DOCX)'}</button>
+          <button className="btn" type="button" disabled={!!exporting || busy} onClick={() => download('pptx')}>{exporting === 'pptx' ? '만드는 중...' : '파워포인트(PPTX)'}</button>
+          <button className="btn" type="button" disabled={!!exporting || busy} onClick={() => download('hwpx')}>{exporting === 'hwpx' ? '만드는 중...' : '한글(HWPX)'}</button>
           <button className="btn" type="button" disabled={!!exporting} onClick={() => window.print()}>PDF로 저장</button>
         </div>
         <p className="apply-note">HWPX는 한글 2014 이상에서 열려요. HWP 파일이 필요하면 한글에서 열고 'HWP로 저장'을 눌러 주세요. PDF는 인쇄 창에서 'PDF로 저장'을 골라 주세요.</p>
@@ -264,7 +265,7 @@ export function Apply() {
         {exportErr && <p className="error-text" role="alert">{exportErr}</p>}
         <div className="apply-myform">
           <h3>내가 찾은 제출 양식에 채우기</h3>
-          <p className="muted">공고 사이트에서 받은 신청서 양식(DOCX·HWPX·PPTX)을 올리면, 항목 이름에 맞춰 지금까지 쓴 내용을 채워 돌려드려요. HWP·PDF·PPT 양식은 한글·워드·파워포인트에서 새 형식으로 저장한 뒤 올려 주세요.</p>
+          <p className="muted">공고 사이트에서 받은 신청서 양식(DOCX·PPTX·HWPX)을 올리면, 항목 이름에 맞춰 지금까지 쓴 내용을 채워 돌려드려요. HWP·PDF·PPT 양식은 한글·워드·파워포인트에서 새 형식으로 저장한 뒤 올려 주세요.</p>
           <label className="btn">
             {myForm.busy ? '양식을 채우는 중...' : '양식 파일 올리기'}
             <input type="file" accept=".docx,.hwpx,.pptx" className="sr-only" disabled={myForm.busy || busy}

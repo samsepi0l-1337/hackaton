@@ -18,8 +18,8 @@ export type StartWithFocus = StartProfile & { focusResourceId?: string | null };
 export type FocusSession = ExploreSession & { focus?: FocusInfo | null };
 export interface PolishSuggestion { key: string; before: string; after: string }
 export interface PolishResponse { suggestions: PolishSuggestion[]; remaining: number }
-export type ExportFormat = 'docx' | 'hwpx';
-export interface ExportResponse { fileName: string; mimeType: string; fileBase64: string; source: 'form' | 'standard' | 'standard_form_fields'; format: ExportFormat | 'pptx' }
+export type ExportFormat = 'docx' | 'pptx' | 'hwpx';
+export interface ExportResponse { fileName: string; mimeType: string; fileBase64: string; source: 'form' | 'standard' | 'standard_form_fields'; format: ExportFormat }
 export interface FormFillResponse { fileName: string; mimeType: string; fileBase64: string; filled: string[]; format: string }
 export interface ApplicationQuota { used: number; limit: number | null; remaining: number | null; resetAt: string | null; blocked: boolean }
 
