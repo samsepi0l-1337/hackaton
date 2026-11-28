@@ -29,6 +29,10 @@ pub async fn dispatch(cx: &mut Cx<'_>, req: &Req) -> HResult {
         ("GET", ["api", "explore", "problems"]) => {
             crate::api::explore::start::problems(cx, req).await
         }
+        ("POST", ["api", "explore", "new"]) => crate::api::explore::history::new_session(cx, req).await,
+        ("GET", ["api", "explore", "history"]) => crate::api::explore::history::list(cx, req).await,
+        ("GET", ["api", "explore", "history", id]) => crate::api::explore::history::get(cx, req, id).await,
+        ("DELETE", ["api", "explore", "history", id]) => crate::api::explore::history::delete(cx, req, id).await,
         ("GET", ["api", "explore", "session"]) => {
             crate::api::explore::start::get_session(cx, req).await
         }

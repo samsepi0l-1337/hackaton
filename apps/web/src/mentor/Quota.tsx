@@ -32,7 +32,7 @@ export function DeviceNotice({ aiAvailable }: { aiAvailable: boolean }) {
       <summary><strong>이 기기에 저장되는 내용</strong></summary>
       <div className="stack" style={{ marginTop: 12 }}>
         <p>{STORED_ITEMS.join(', ')}.</p>
-        <p className="muted">다른 기기나 브라우저에서는 이어지지 않아요. '초기화'를 누르면 모두 지워져요.</p>
+        <p className="muted">다른 기기나 브라우저에서는 이어지지 않아요. ‘처음부터 새 상담’은 지금 결과를 지난 상담에 남기고, ‘초기화’는 모두 지워요.</p>
         <label className="check">
           <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); setLocalAiEnabled(e.target.checked); }} />
           이 기기의 AI로 문장 다듬기 {on && aiAvailable ? '(사용 중)' : '(이 브라우저에서는 쓸 수 없으면 자동으로 서버 문장을 써요)'}

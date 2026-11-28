@@ -121,6 +121,7 @@ impl<'a> Store<'a> {
             "user:",
             "mentor:",
             "explore:",
+            "explore_hist:",
             "recovery:",
             "profile:",
             "likes:",
@@ -506,7 +507,7 @@ pub fn init(kv: &mut MemKv, now: i64, opts: &AppOpts, ports: &dyn Ports) {
                 store.kv.delete(&key);
             }
         }
-        for prefix in ["mentor:", "explore:", "profile:", "likes:", "recent_views:"] {
+        for prefix in ["mentor:", "explore:", "explore_hist:", "profile:", "likes:", "recent_views:"] {
             for key in store.kv.keys(prefix) {
                 if !live.contains(&key[prefix.len()..]) {
                     store.kv.delete(&key);

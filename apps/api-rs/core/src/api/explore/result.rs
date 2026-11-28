@@ -13,7 +13,7 @@ fn context(cx: &mut Cx<'_>, id: &str, resources: &[Value]) -> (Value, Option<Lik
     let liked:Vec<_>=resources.iter().filter(|r|ids.contains(&r["id"])).cloned().collect();
     (defaults,(!ids.is_empty()).then(||likes::like_profile(&liked)))
 }
-fn result(cx: &mut Cx<'_>, id: &str, s: &Value) -> Value {
+pub(crate) fn result(cx: &mut Cx<'_>, id: &str, s: &Value) -> Value {
     let resources=crate::api::explore::state::resources_now(cx); let (defaults,prefs)=context(cx,id,&resources); let ids=Store::new(cx.kv,cx.now).recent_views(id); let seen:Vec<_>=resources.iter().filter(|r| ids.as_array().is_some_and(|a|a.contains(&r["id"]))).cloned().collect(); let views=(!seen.is_empty()).then(||likes::like_profile(&seen)); compute_result(s,cx.now,&resources,&defaults,prefs.as_ref(),views.as_ref())
 }
 fn summary(s: &Value) -> Value { if s["summary"].is_null(){rules::build_summary(&json!({"start":s["start"],"exploration":s["exploration"],"answers":s["answers"]}))}else{s["summary"].clone()} }

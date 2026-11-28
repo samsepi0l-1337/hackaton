@@ -37,3 +37,14 @@
 /* 하단 고정 줄 */
 .mentor-page .bottom-bar { background: #fff; border-top: 1px solid var(--panel-line); }
 .mentor-page .bottom-bar-inner { max-width: var(--content-width); }
+
+/* 지난 상담: 시작 화면의 보관 목록. 메인의 마감 임박 목록과 같은 줄 간격과 구분선을 쓴다. */
+.past-list { margin: 0; padding: 0; list-style: none; }
+.past-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
+.past-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.past-list a { display: grid; gap: 2px; min-width: 0; color: inherit; text-decoration: none; }
+.past-list a:hover strong { color: var(--color-primary); text-decoration: underline; }
+.past-list strong, .past-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.past-list strong { font-size: 15px; font-weight: 650; }
+.past-list small { font-size: 12px; }
+.past-list .btn { flex: none; }

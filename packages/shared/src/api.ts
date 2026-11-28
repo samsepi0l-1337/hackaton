@@ -82,6 +82,9 @@ export const ROUTES = {
   exploreChat: '/api/explore/chat', // POST ExploreChatRequest → ExploreChatResponse (기본 3문항, 이어서 최대 12문항). 사용자 답변마다 1회 → 초과 시 429 limit
   exploreSummary: '/api/explore/summary', // POST → { summary, regional } 생성, PUT { summary } → 수정 (준비 완료 표시 초기화)
   exploreResult: '/api/explore/result', // GET → ExploreResultResponse
+  exploreNew: '/api/explore/new', // POST → { ok, session, history } 지금 결과를 '지난 상담'에 보관하고 처음부터 (내 조건·지역은 이어짐, 채팅 횟수는 그대로)
+  exploreHistory: '/api/explore/history', // GET → { items: ExploreHistoryItem[] } (최근 5개)
+  exploreHistoryItem: (id: string) => `/api/explore/history/${encodeURIComponent(id)}`, // GET → ExploreHistoryEntry, DELETE → { items }
   conditions: '/api/explore/conditions', // PUT { conditions: UserConditions } → ExploreResultResponse ('모름' 허용)
   prepDone: '/api/explore/prep', // PUT { id, done } → { prep }
   exploreFeedback: '/api/explore/feedback', // POST ExploreFeedbackRequest → { ok: true }
@@ -146,6 +149,10 @@ export interface ExploreChatResponse {
   suggestions: string[]; // AI 제안 (선택 전까지 사용자 선택 아님)
   failed: boolean; // AI 장애 → 웹은 재시도·직접 정리 양식을 보여준다
 }
+/** 보관한 지난 상담 (읽기 전용). */
+export interface ExploreHistoryItem { id: string; archivedAt: string; title: string; problemTitle: string | null }
+export interface ExploreHistoryEntry extends ExploreHistoryItem { result: ExploreResultResponse }
+
 export interface ExploreResultResponse {
   summary: SummaryV2 | null;
   regional: RegionalContextCard | null; // 선택 필드
