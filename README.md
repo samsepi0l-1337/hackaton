@@ -12,7 +12,7 @@ ICT INNOHACK 2026 (동남권 이노베이션 해커톤) 참가 프로젝트. 기
 - `gil-core` (`apps/api-rs/core`): 플랫폼 독립 로직. `worker` 의존이 없다.
 - `gil-worker` (`apps/api-rs/worker`): workers-rs 어댑터.
   - Durable Object `GilApp`: API 와 저장소(Durable Object 안의 KV).
-  - cron: 매일 K-Startup 공고를 수집한다.
+  - cron: 매일 K-Startup 공고를 수집한다. 메인의 모집 중 건수·마감 임박 공고도 이 공고로 계산한다.
   - `DocWorker`: 공고 첨부 문서를 처리하는 컨테이너. Upstage Document Parse 를 쓴다.
 - AI: Upstage Solar 와 Document Parse. 모든 호출이 Cloudflare AI Gateway 를 지난다.
 - 웹 (`apps/web`): React + Vite. 해보까 포털 디자인([DESIGN.md](DESIGN.md)). 빌드 결과를 Worker assets 로 배포한다.
