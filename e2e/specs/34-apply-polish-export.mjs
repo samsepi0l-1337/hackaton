@@ -23,7 +23,7 @@ await step('AI off: polish shows a clear message and keeps the count', async () 
 await step('export returns zip files for docx and hwpx', async () => {
   const bad = await api('GET', `/api/applications/${encodeURIComponent(appId)}/export?format=pdf`);
   eq(bad.status, 400, 'pdf is not a server format');
-  for (const format of ['docx', 'hwpx']) {
+  for (const format of ['docx', 'pptx', 'hwpx']) {
     const r = await api('GET', `/api/applications/${encodeURIComponent(appId)}/export?format=${format}`);
     eq(r.status, 200, format + ' status');
     assert(r.body.fileName.endsWith('.' + format), format + ' file name');
