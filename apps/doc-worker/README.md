@@ -9,7 +9,7 @@ Cloudflare Container 에서 도는 문서 작업 서버입니다. Python 3.12, �
 | `GET /health` | | `200 ok` |
 | `POST /discover` | `{ pageUrl }` | `{ pageUrl, title, attachments: [{ name, url, kind }] }` 공고 페이지의 hwp/hwpx/docx/pdf 링크와 `fileDownload`·`download` 링크 |
 | `POST /download` | `{ url, referer? }` | `{ fileName, kind, bytes, fileBase64 }` Content-Disposition 파일명(RFC 5987, EUC-KR, 퍼센트 인코딩) 처리 |
-| `POST /fill` | `{ fileBase64, fileName, values }` | `{ fileName, fileBase64, filled, missing }` DOCX·HWPX 만. 표에서 라벨 칸 다음의 빈 칸에 값을 넣고, 표에 없으면 라벨 문단 뒤에 문단을 넣는다. 이미 값이 있는 칸은 덮어쓰지 않는다 |
+| `POST /fill` | `{ fileBase64, fileName, values }` | `{ fileName, fileBase64, filled, missing }` DOCX·HWPX·PPTX. 표에서 라벨 칸 다음의 빈 칸에 값을 넣고, 표에 없으면 라벨 문단 뒤에 문단을 넣는다 (PPTX 는 ‘라벨:’ 문단 끝에 값을 붙인다). 이미 값이 있는 칸은 덮어쓰지 않는다 |
 
 오류: `4xx/5xx` + `{ error: { code, message } }`. 코드는 `bad_request`, `unsupported`(HWP·PDF 채우기, 422), `fetch_failed`(502), `too_large`(413), `internal`.
 
